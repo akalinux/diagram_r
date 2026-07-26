@@ -7,17 +7,19 @@ pub struct Node {
     pub label: String,
     pub opt: u32,
     pub id: u32,
+    pub groups: Vec<u32>,
 }
 
 #[wasm_bindgen]
 impl Node {
     #[wasm_bindgen(constructor)]
-    pub fn new(id: u32, layout: Square, label: String, opt: u32) -> Self {
+    pub fn new(id: u32, layout: Square, label: String, opt: u32, groups: Vec<u32>) -> Self {
         Self {
             label,
             layout,
             opt,
             id,
+            groups,
         }
     }
 }

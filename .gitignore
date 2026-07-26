@@ -1,0 +1,22 @@
+dist/*
+node_modules/*
+.project
+yarn.lock
+package-lock.json
+index.js
+.settings/*
+*.swp
+token.txt
+*.bak
+.yarn*
+.yarn/*
+/target
+/.vscode
+/pkg
+/Cargo.lock
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target

@@ -1,0 +1,94 @@
+pub mod bsp;
+pub mod constants;
+pub mod diagram;
+pub mod link;
+pub mod node;
+pub mod square;
+pub mod utils;
+use wasm_bindgen::prelude::*;
+
+use crate::{constants::DEFAULT_COLOR, utils::to_map_xy};
+
+#[wasm_bindgen(inspectable)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Transform {
+    pub x: f64,
+    pub y: f64,
+    pub k: f64,
+}
+
+#[wasm_bindgen]
+impl Transform {
+    #[wasm_bindgen(constructor)]
+    pub fn new(x: f64, y: f64, k: f64) -> Self {
+        Self { x, y, k }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug)]
+pub enum LabelPosition {
+    Top,
+    Center,
+    Bottom,
+}
+
+#[wasm_bindgen(inspectable, getter_with_clone)]
+#[derive(Clone, Debug)]
+pub struct ElementOpt {
+    pub id: u32,
+    pub img: String,
+    pub color: String,
+    pub label_position: LabelPosition,
+}
+#[wasm_bindgen]
+impl ElementOpt {
+    #[wasm_bindgen(constructor)]
+    pub fn new(id: u32, img: String, color: String, label_position: LabelPosition) -> Self {
+        Self {
+            id,
+            img,
+            label_position,
+            color,
+        }
+    }
+}
+
+impl ElementOpt {
+    pub fn defaults() -> Self {
+        return Self {
+            id: 0,
+            img: String::from(""),
+            color: String::from(DEFAULT_COLOR),
+            label_position: LabelPosition::Top,
+        };
+    }
+}
+#[wasm_bindgen(inspectable)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Point {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl Point {
+    pub fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
+    }
+    pub fn to_map_xy(&self, t: &Transform) -> Self {
+        to_map_xy(&self, t)
+    }
+    pub fn idx(&self, step: i64) -> (i64, i64) {
+        let mut x = self.x as i64;
+        let mut y = self.y as i64;
+        for i in [&mut x, &mut y] {
+            let m = *i % step;
+            if m < 0 {
+                *i -= step + m;
+            } else {
+                *i -= m;
+            }
+        }
+        (x, y)
+    }
+}

@@ -126,23 +126,6 @@ pub struct Diagram {
     pub node_links: HashMap<u32, HashSet<u64>>,
 }
 
-enum ElContainer {
-    Node(Node),
-    Box(Node),
-    Lc(LinkContainer),
-}
-
-impl ElContainer {
-    fn get_link(&self) -> Option<&LinkContainer> {
-        match self {
-            ElContainer::Lc(lc) => Some(lc),
-            _ => None,
-        }
-    }
-    fn link(&self) -> &LinkContainer {
-        unsafe { self.get_link().unwrap_unchecked() }
-    }
-}
 #[wasm_bindgen]
 impl Diagram {
     #[wasm_bindgen(constructor)]

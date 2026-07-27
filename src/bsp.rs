@@ -73,11 +73,30 @@ impl ScreenIndex {
     pub fn contains_point(&self, p: &Point, d: &Diagram) -> LookupPointResult {
         let (x, y) = p.idx(self.step);
         if let Some(yi) = self.x.get(&x)
-            && let Some(screen) = yi.get(&x)
+            && let Some(screen) = yi.get(&y)
         {
-            for node in screen.nodes.iter() {}
+            for id in screen.nodes.iter() {
+                let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.unwrap();
+                if node.layout.contains_point(p) {
+                    return LookupPointResult::Node(*id);
+                }
+            }
+            for id in screen.links.iter() {
+                let lc = unsafe { d.links.get(id).unwrap_unchecked() };
+                match lc.contains_point(p) {
+                    LookupPointResult::Bundle(data) => return LookupPointResult::Bundle(data),
+                    LookupPointResult::Link(data) => return LookupPointResult::Link(data),
+                    _ => (),
+                }
+            }
+            for id in screen.boxes.iter() {
+                let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.unwrap();
+                if node.layout.contains_point(p) {
+                    return LookupPointResult::Box(*id);
+                }
+            }
         }
-        LookupPointResult::NoMatch
+        LookupPointResult::Screen
     }
     pub fn manage(&mut self, dst: &ScreenSlot, points: IndexXY, action: IdxBoxAction) {
         let (px, py) = points;

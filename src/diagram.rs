@@ -104,21 +104,28 @@ impl NodeLayer {
 pub struct Diagram {
     #[wasm_bindgen(skip)]
     pub el_ops: HashMap<u32, ElementOpt>,
+
     #[wasm_bindgen(skip)]
     pub nodes: HashMap<u32, NodeLayer>,
+
     #[wasm_bindgen(skip)]
     pub links: HashMap<u64, LinkContainer>,
+
     #[wasm_bindgen(skip)]
     pub idx: ScreenIndex,
 
     #[wasm_bindgen(skip)]
     pub render_order: Vec<ScreenSlot>,
+
     #[wasm_bindgen(skip)]
     pub render_ops: DiagramOpt,
+
     #[wasm_bindgen(skip)]
     pub center: Point,
+
     #[wasm_bindgen(skip)]
     pub transform: Transform,
+
     #[wasm_bindgen(skip)]
     pub groups: HashMap<u32, HashSet<u32>>, // group_id,set->node_ids
 

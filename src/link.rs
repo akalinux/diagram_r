@@ -7,7 +7,10 @@ use crate::{
     diagram::DiagramOpt,
     node::Node,
     square::Square,
-    utils::{compute_line_box, create_container_id, get_angle, get_distance, get_xy},
+    utils::{
+        compute_line_box, create_container_id, full_box_from, get_angle, get_distance, get_xy,
+        inside_box,
+    },
 };
 pub type AnimationLink = (Point, Point, f64);
 #[wasm_bindgen]
@@ -19,7 +22,7 @@ pub enum Animation {
     None,  // Do not animate
 }
 #[wasm_bindgen(inspectable, getter_with_clone)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Link {
     pub src: u32,
     pub dst: u32,
@@ -44,7 +47,7 @@ impl Link {
     }
 }
 #[wasm_bindgen(inspectable, getter_with_clone)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Bundle {
     pub src: u32,
     pub dst: u32,
@@ -69,6 +72,7 @@ impl Bundle {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct DrawData {
     pub line_width: f64,
 
@@ -78,6 +82,14 @@ pub struct DrawData {
     pub animations: Vec<AnimationLink>,
     pub index: Square,
 }
+impl DrawData {
+    pub fn bundle_draw_box(&self, i: usize) -> Square {
+        let side = self.bundle_side;
+        let offset = side * 0.5;
+        let p = &self.bundles[i];
+        Square::new(p.x - offset, p.y - offset, side, side)
+    }
+}
 pub struct LinkContainer {
     pub links: Vec<Link>,
     pub bundles: Vec<Bundle>,
@@ -85,7 +97,36 @@ pub struct LinkContainer {
     pub id: u64,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum PointInLink {
+    Bundle((Bundle, usize)),
+    Link((Link, usize)),
+    NoMatch,
+}
+
 impl LinkContainer {
+    pub fn contains_point(&self, p: &Point) -> PointInLink {
+        match &self.draw_data {
+            Some(dd) => {
+                // first check bundles
+                for (i, b) in self.bundles.iter().enumerate() {
+                    let square = dd.bundle_draw_box(i);
+                    if square.contains_point(p) {
+                        return PointInLink::Bundle((b.clone(), i));
+                    }
+                }
+                for (i, l) in self.links.iter().enumerate() {
+                    let lp = &dd.links[i];
+                    let (pb, _) = full_box_from(&lp.0, &lp.1, dd.line_width);
+                    if inside_box(&pb, p) {
+                        return PointInLink::Link((l.clone(), i));
+                    }
+                }
+                return PointInLink::NoMatch;
+            }
+            None => PointInLink::NoMatch,
+        }
+    }
     pub fn new(id: u64) -> Self {
         Self {
             links: Vec::new(),
@@ -110,34 +151,25 @@ impl LinkContainer {
         self.bundles.push(bundle);
         Ok(())
     }
+
     pub fn update(&mut self, src: &Node, dst: &Node, opt: &DiagramOpt) {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
-        let angle = get_angle(src_p.x, src_p.y, dst_p.x, dst_p.y);
-        let north = angle + 90.0;
-        let south = north + 180.0;
-        let r = src.layout.smallest_side(&dst.layout) * 0.5;
-
-        let mut ne = get_xy(src_p.x, src_p.y, r, north);
-        let mut nw = get_xy(dst_p.x, dst_p.y, r, north);
-        let se = get_xy(src_p.x, src_p.y, r, south);
-        let sw = get_xy(dst_p.x, dst_p.y, r, south);
+        let smallest_side = src.layout.smallest_side(&dst.layout);
+        let r = smallest_side * 0.5;
+        let ((nw, ne, sw, se), (_, north, south)) = full_box_from(&src_p, &dst_p, r);
         let idx = Square::from(compute_line_box(&ne, [&nw, &se, &sw]));
-        let (width, step, init_step) = self.compute_line_width(opt.link_scale, r, self.links.len());
-        ne = get_xy(ne.x, ne.y, r, angle + 180.0);
-        nw = get_xy(nw.x, nw.y, r, angle);
+        let (width, step, init_step) =
+            self.compute_line_width(opt.link_scale, smallest_side, self.links.len());
 
         let mut animations = Vec::new(); // no way to know how big this will be :/
         let mut bundles = Vec::with_capacity(self.bundles.len());
         let mut links = Vec::with_capacity(self.links.len());
-        ne = get_xy(ne.x, ne.y, r, angle + 180.0);
-        nw = get_xy(nw.x, nw.y, r, angle);
-        let bundle_side = r * 2.0 * opt.link_scale;
 
         for (i, link) in self.links.iter().enumerate() {
             let inc_by = init_step + step * (i as f64);
-            let start = get_xy(ne.x, ne.y, inc_by, south);
-            let end = get_xy(nw.x, nw.y, inc_by, south);
+            let start = get_xy(nw.x, nw.y, inc_by, south);
+            let end = get_xy(ne.x, ne.y, inc_by, south);
             let clink = (start, end);
             self.compute_animation(link, &clink, &mut animations, width, north, south);
 
@@ -147,12 +179,39 @@ impl LinkContainer {
 
         self.draw_data = Some(DrawData {
             line_width: width,
-            bundle_side,
+            bundle_side: smallest_side * opt.link_scale,
             bundles,
             links,
             animations,
             index: idx,
         })
+    }
+
+    pub fn get_center(&self, check: &PointInLink) -> Point {
+        let dd = unsafe { self.draw_data.as_ref().unwrap_unchecked() };
+        match check {
+            PointInLink::NoMatch => {
+                let mut x = 0.0;
+                let mut y = 0.0;
+                for (a, b) in &dd.links {
+                    x += a.x + b.x;
+                    y += a.y + b.y;
+                }
+                let count = (self.links.len() * 2) as f64;
+                Point {
+                    x: x / count,
+                    y: y / count,
+                }
+            }
+            PointInLink::Link((_, i)) => {
+                let (a, b) = dd.links[*i];
+                Point {
+                    x: (a.x + b.x) / 2.0,
+                    y: (a.y + b.y) / 2.0,
+                }
+            }
+            PointInLink::Bundle((_, i)) => dd.bundles[*i],
+        }
     }
 
     pub fn compute_bunlde_points(

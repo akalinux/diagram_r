@@ -6,6 +6,7 @@ use crate::{
     square::Corners,
 };
 
+pub type AngleNorthSouth = (f64, f64, f64);
 pub type FullBox = (Point, Point, Point, Point);
 pub fn to_map_xy(p: &Point, t: &Transform) -> Point {
     let px = p.x - t.x;
@@ -70,6 +71,17 @@ pub fn compute_line_box(ne: &Point, points: [&Point; 3]) -> Corners {
         }
     }
     (min_x, max_x, min_y, max_y)
+}
+
+pub fn full_box_from(a: &Point, b: &Point, r: f64) -> (FullBox, AngleNorthSouth) {
+    let angle = get_angle(a.x, a.y, b.x, b.y);
+    let north = angle + 90.0;
+    let south = north + 180.0;
+    let nw = get_xy(a.x, a.y, r, north);
+    let ne = get_xy(b.x, b.y, r, north);
+    let sw = get_xy(a.x, a.y, r, south);
+    let se = get_xy(b.x, b.y, r, south);
+    ((nw, ne, sw, se), (angle, north, south))
 }
 
 pub fn inside_box(pbox: &FullBox, p: &Point) -> bool {

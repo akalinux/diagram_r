@@ -42,8 +42,8 @@ impl Square {
     }
     pub fn get_center(&self) -> Point {
         Point {
-            x: self.x + self.width * 0.5,
-            y: self.y + self.height * 0.5,
+            x: self.x + (self.width * 0.5),
+            y: self.y + (self.height * 0.5),
         }
     }
     pub fn area(&self) -> f64 {
@@ -52,7 +52,7 @@ impl Square {
     pub fn contains_point(&self, p: &Point) -> bool {
         let dx = (p.x - self.x).abs();
         let dy = (p.y - self.y).abs();
-        return !(dx > self.width * 0.5 || dy > self.height * 0.5);
+        return !(dx > self.width || dy > self.height);
     }
     pub fn max_x(&self) -> f64 {
         self.x + self.width

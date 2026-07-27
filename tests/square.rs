@@ -1,19 +1,9 @@
 #![cfg(test)]
 
-use diagram_r::{Point, square::Square};
+use diagram_r::{Point, constants::ZERO_POINT, square::Square};
 
-fn square_a() -> Square {
-    Square::new(0.0, 0.0, 5.0, 5.0)
-}
-fn square_b() -> Square {
-    Square::new(0.0, 0.0, 10.0, 10.0)
-}
-fn square_c() -> Square {
-    Square::new(-1.0, 0.0, 10.0, 10.0)
-}
-fn square_d() -> Square {
-    Square::new(0.0, -1.0, 10.0, 10.0)
-}
+mod common;
+use common::*;
 #[test]
 fn get_center() {
     let a = square_a();
@@ -60,4 +50,14 @@ fn screen_center() {
     assert_eq!(c.center(&b), Point { x: 5.0, y: 5.0 });
     assert_eq!(c.center(&c), Point { x: 5.0, y: 5.0 });
     assert_eq!(b.center(&c), Point { x: 10.0, y: 10.0 });
+}
+
+#[test]
+fn contains_point() {
+    let s = Square::new(0.0, 0.0, 2.0, 2.0);
+    assert!(s.contains_point(&ZERO_POINT));
+    let max = Point::new(s.max_x(), s.max_y());
+
+    assert!(s.contains_point(&max));
+    assert!(!s.contains_point(&Point::new(3.0, 3.0)));
 }

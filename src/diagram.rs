@@ -227,14 +227,10 @@ impl Diagram {
             let src = unsafe { self.nodes.get(&a).unwrap_unchecked().unwrap() };
             let dst = unsafe { self.nodes.get(&b).unwrap_unchecked().unwrap() };
             lc.update(src, dst, opt);
-            match &lc.draw_data {
-                Some(dd) => {
-                    let points = dd.index.idx(step);
-                    self.idx
-                        .manage(&ScreenSlot::Link(lc.id), points, IdxBoxAction::Add);
-                }
-                None => (),
-            }
+            let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
+            let points = dd.index.idx(step);
+            self.idx
+                .manage(&ScreenSlot::Link(lc.id), points, IdxBoxAction::Add);
         }
         Ok(())
     }

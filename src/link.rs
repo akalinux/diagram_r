@@ -4,6 +4,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     Point,
+    bsp::LookupPointResult,
+    constants::ZERO_POINT,
     diagram::DiagramOpt,
     node::Node,
     square::Square,
@@ -97,34 +99,27 @@ pub struct LinkContainer {
     pub id: u64,
 }
 
-#[derive(PartialEq, Debug)]
-pub enum PointInLink {
-    Bundle((Bundle, usize)),
-    Link((Link, usize)),
-    NoMatch,
-}
-
 impl LinkContainer {
-    pub fn contains_point(&self, p: &Point) -> PointInLink {
+    pub fn contains_point(&self, p: &Point) -> LookupPointResult {
         match &self.draw_data {
             Some(dd) => {
                 // first check bundles
                 for (i, b) in self.bundles.iter().enumerate() {
                     let square = dd.bundle_draw_box(i);
                     if square.contains_point(p) {
-                        return PointInLink::Bundle((b.clone(), i));
+                        return LookupPointResult::Bundle((b.clone(), i));
                     }
                 }
                 for (i, l) in self.links.iter().enumerate() {
                     let lp = &dd.links[i];
                     let (pb, _) = full_box_from(&lp.0, &lp.1, dd.line_width);
                     if inside_box(&pb, p) {
-                        return PointInLink::Link((l.clone(), i));
+                        return LookupPointResult::Link((l.clone(), i));
                     }
                 }
-                return PointInLink::NoMatch;
+                return LookupPointResult::NoMatch;
             }
-            None => PointInLink::NoMatch,
+            None => LookupPointResult::NoMatch,
         }
     }
     pub fn new(id: u64) -> Self {
@@ -187,10 +182,10 @@ impl LinkContainer {
         })
     }
 
-    pub fn get_center(&self, check: &PointInLink) -> Point {
+    pub fn get_center(&self, check: &LookupPointResult) -> Point {
         let dd = unsafe { self.draw_data.as_ref().unwrap_unchecked() };
         match check {
-            PointInLink::NoMatch => {
+            LookupPointResult::NoMatch => {
                 let mut x = 0.0;
                 let mut y = 0.0;
                 for (a, b) in &dd.links {
@@ -203,14 +198,15 @@ impl LinkContainer {
                     y: y / count,
                 }
             }
-            PointInLink::Link((_, i)) => {
+            LookupPointResult::Link((_, i)) => {
                 let (a, b) = dd.links[*i];
                 Point {
                     x: (a.x + b.x) / 2.0,
                     y: (a.y + b.y) / 2.0,
                 }
             }
-            PointInLink::Bundle((_, i)) => dd.bundles[*i],
+            LookupPointResult::Bundle((_, i)) => dd.bundles[*i],
+            _ => ZERO_POINT,
         }
     }
 

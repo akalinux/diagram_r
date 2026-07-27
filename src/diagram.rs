@@ -84,10 +84,13 @@ impl DiagramOpt {
         res
     }
 }
+
+#[derive(Hash, PartialEq)]
 pub enum NodeLayer {
     Box(Node),
     Node(Node),
 }
+impl Eq for NodeLayer {}
 impl NodeLayer {
     pub fn unwrap(&self) -> &Node {
         match self {
@@ -96,6 +99,7 @@ impl NodeLayer {
         }
     }
 }
+
 #[wasm_bindgen]
 pub struct Diagram {
     #[wasm_bindgen(skip)]
@@ -108,7 +112,7 @@ pub struct Diagram {
     pub idx: ScreenIndex,
 
     #[wasm_bindgen(skip)]
-    pub render_order: Vec<u32>,
+    pub render_order: Vec<ScreenSlot>,
     #[wasm_bindgen(skip)]
     pub render_ops: DiagramOpt,
     #[wasm_bindgen(skip)]
@@ -120,6 +124,24 @@ pub struct Diagram {
 
     #[wasm_bindgen(skip)]
     pub node_links: HashMap<u32, HashSet<u64>>,
+}
+
+enum ElContainer {
+    Node(Node),
+    Box(Node),
+    Lc(LinkContainer),
+}
+
+impl ElContainer {
+    fn get_link(&self) -> Option<&LinkContainer> {
+        match self {
+            ElContainer::Lc(lc) => Some(lc),
+            _ => None,
+        }
+    }
+    fn link(&self) -> &LinkContainer {
+        unsafe { self.get_link().unwrap_unchecked() }
+    }
 }
 #[wasm_bindgen]
 impl Diagram {
@@ -170,7 +192,7 @@ impl Diagram {
         let mut y = 0.0;
         self.nodes.reserve(nodes.len() + boxes.len());
         for n in nodes {
-            self.render_order.push(n.id);
+            self.render_order.push(ScreenSlot::Node(n.id));
             self.update_groups(&n.groups, n.id);
             let points = n.layout.idx(step);
             x += n.layout.x;
@@ -185,7 +207,7 @@ impl Diagram {
         for b in boxes {
             x += b.layout.x;
             y += b.layout.y;
-            self.render_order.push(b.id);
+            self.render_order.push(ScreenSlot::Box(b.id));
             self.update_groups(&b.groups, b.id);
             let points = b.layout.idx(step);
             self.idx
@@ -244,6 +266,7 @@ impl Diagram {
 
         self.links.insert(id, LinkContainer::new(id));
         let res = unsafe { self.links.get_mut(&id).unwrap_unchecked() };
+        self.render_order.push(ScreenSlot::Link(id));
 
         let (src, dst) = res.get_src_dst();
         for id in [src, dst] {

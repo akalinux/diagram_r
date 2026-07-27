@@ -3,13 +3,31 @@ use std::{
     ops::RangeInclusive,
 };
 
+use crate::{
+    Point,
+    diagram::Diagram,
+    link::{Bundle, Link},
+};
+
 pub type IndexXY = (RangeInclusive<i64>, RangeInclusive<i64>);
+
+#[derive(PartialEq, Debug)]
+pub enum LookupPointResult {
+    Bundle((Bundle, usize)),
+    Link((Link, usize)),
+    Node(u32),
+    Box(u32),
+    Screen,
+    NoMatch,
+}
 
 enum IdxBoxIterSection {
     Old,
     New,
     Done,
 }
+
+#[derive(Clone, Copy, Hash, Debug)]
 pub enum ScreenSlot {
     Node(u32),
     Box(u32),
@@ -51,6 +69,15 @@ impl ScreenIndex {
             let points = (x..=x, y..=y);
             self.manage(dst, points, action);
         }
+    }
+    pub fn contains_point(&self, p: &Point, d: &Diagram) -> LookupPointResult {
+        let (x, y) = p.idx(self.step);
+        if let Some(yi) = self.x.get(&x)
+            && let Some(screen) = yi.get(&x)
+        {
+            for node in screen.nodes.iter() {}
+        }
+        LookupPointResult::NoMatch
     }
     pub fn manage(&mut self, dst: &ScreenSlot, points: IndexXY, action: IdxBoxAction) {
         let (px, py) = points;

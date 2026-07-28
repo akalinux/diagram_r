@@ -37,7 +37,7 @@ pub struct DiagramOpt {
 }
 
 #[wasm_bindgen(inspectable, getter_with_clone)]
-pub struct MovedElements {
+pub struct MovedNodes {
     pub nodes: Vec<MovedNode>,
     pub boxes: Vec<MovedNode>,
 }
@@ -285,10 +285,10 @@ impl DiagramCore {
     ) -> Result<(), JsValue> {
         self.clear();
         for node in boxes {
-            self.add_node(node, true)?;
+            self.add_node(node, false)?;
         }
         for node in nodes {
-            self.add_node(node, false)?;
+            self.add_node(node, true)?;
         }
         for link in links {
             self.add_link(link)?
@@ -361,7 +361,7 @@ impl DiagramCore {
         ids.into_iter().collect()
     }
 
-    pub fn move_nodes(&mut self, distance: &Point, node_ids: &[u32]) -> MovedElements {
+    pub fn move_nodes(&mut self, distance: &Point, node_ids: &[u32]) -> MovedNodes {
         let mut nodes = Vec::new();
         let mut boxes = Vec::new();
         let mut links = HashSet::new();
@@ -374,24 +374,22 @@ impl DiagramCore {
                 }
             }
 
-            let node: &mut Node;
-            match unsafe { self.nodes.get_mut(node_id).unwrap_unchecked() } {
+            let t = unsafe { self.nodes.get_mut(node_id).unwrap_unchecked() };
+            t.get_mut().layout.move_distance(distance);
+            match t {
                 NodeCanvasTarget::Box(n) => {
                     boxes.push(MovedNode {
                         id: n.id,
                         layout: n.layout,
                     });
-                    node = n;
                 }
                 NodeCanvasTarget::Node(n) => {
                     nodes.push(MovedNode {
                         id: n.id,
                         layout: n.layout,
                     });
-                    node = n;
                 }
             }
-            node.layout.move_distance(distance);
         }
 
         for lid in links {
@@ -401,6 +399,6 @@ impl DiagramCore {
             let dst = unsafe { self.nodes.get(&b).unwrap_unchecked().get() };
             lc.update(src, dst, &self.render_ops);
         }
-        MovedElements { nodes, boxes }
+        MovedNodes { nodes, boxes }
     }
 }

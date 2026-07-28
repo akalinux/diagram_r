@@ -128,6 +128,13 @@ impl Square {
         self.y += distance.y;
     }
 
+    pub fn get_distance(&self, p: &Point) -> Point {
+        Point {
+            x: p.x - self.x,
+            y: p.y - self.y,
+        }
+    }
+
     pub fn center(&self, screen: &Self) -> Point {
         let inlay_point = screen.get_center();
         let host_point = self.get_center();

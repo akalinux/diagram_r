@@ -61,3 +61,13 @@ fn contains_point() {
     assert!(s.contains_point(&max));
     assert!(!s.contains_point(&Point::new(3.0, 3.0)));
 }
+
+#[test]
+fn distance_tests() {
+    let mut p = square_a();
+    let m = Point::new(2.0, 2.0);
+    assert_eq!(p.get_distance(&m), m);
+    p.move_distance(&m);
+    assert_eq!(p.x, 2.0);
+    assert_eq!(p.y, 2.0);
+}

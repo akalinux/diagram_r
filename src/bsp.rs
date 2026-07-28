@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     Point,
-    diagram::Diagram,
+    diagram::DiagramCore,
     link::{Bundle, Link},
 };
 
@@ -70,13 +70,13 @@ impl ScreenIndex {
             self.manage(dst, points, action);
         }
     }
-    pub fn contains_point(&self, p: &Point, d: &Diagram) -> LookupPointResult {
+    pub fn contains_point(&self, p: &Point, d: &DiagramCore) -> LookupPointResult {
         let (x, y) = p.idx(self.step);
         if let Some(yi) = self.x.get(&x)
             && let Some(screen) = yi.get(&y)
         {
             for id in screen.nodes.iter() {
-                let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.unwrap();
+                let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.get();
                 if node.layout.contains_point(p) {
                     return LookupPointResult::Node(*id);
                 }
@@ -90,7 +90,7 @@ impl ScreenIndex {
                 }
             }
             for id in screen.boxes.iter() {
-                let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.unwrap();
+                let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.get();
                 if node.layout.contains_point(p) {
                     return LookupPointResult::Box(*id);
                 }

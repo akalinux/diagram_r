@@ -49,7 +49,12 @@ pub const ZERO_TRANSFORM: Transform = Transform {
 pub const DEFAULT_SCREEN_ZOOM: f64 = 0.05;
 pub const DEFAULT_HIGHLIGHT_SCALE: f64 = 1.10;
 pub const DEFAULT_HIGHLIGHT_ALPHA: f64 = 0.5;
-pub const DEFAULT_FONT_FAMILY: &'static str = "10px Arial";
+pub const DEFAULT_FONT_FAMILY: &'static str = "Arial";
+pub const NODE_FONT_SCALE: f64 = 0.6;
 pub const DEFAULT_TEXT_ALIGN: &'static str = "center";
 pub const DEFAULT_IDX_STEP: i64 = 768;
 pub const NODE_ADD_ERROR: &'static str = "Cannot Add duplicate Nodes";
+pub const LINK_ADD_ERROR: &'static str = "Cannot Add Link to Box Layer";
+pub const DEFAULT_ELEMENT_ID: &'static str = "Diagram-r";
+
+pub const BULK_LOAD_ERROR: &'static str = "Section Clodsed";

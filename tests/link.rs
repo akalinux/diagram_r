@@ -8,7 +8,7 @@ use diagram_r::{Point, bsp::LookupPointResult, constants::ZERO_POINT, diagram::D
 fn link_container_update_tests() {
     let mut lc = test_lc_b1_l2();
     let (a, b) = nodes_a_b();
-    let mut opt = DiagramOpt::defaults();
+    let mut opt = DiagramOpt::new();
     opt.link_scale = 1.0;
     lc.update(&a, &b, &opt);
     // 2 links act as 4

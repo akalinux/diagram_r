@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use wasm_bindgen::prelude::*;
 
 use crate::{Point, bsp::IndexXY, constants::SCREEN_EPSILON};
@@ -31,7 +33,42 @@ pub type Corners = (
     f64, // min_y
     f64, // max_y
 );
+
+impl PartialOrd for Square {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.x < other.x {
+            return Some(Ordering::Less);
+        } else if other.x < self.x {
+            return Some(Ordering::Greater);
+        } else if self.max_x() > other.max_x() {
+            return Some(Ordering::Less);
+        } else if other.max_x() > self.max_x() {
+            return Some(Ordering::Greater);
+        } else
+        // if we got here.. then both min and max x are equal
+        if self.y < other.y {
+            return Some(Ordering::Less);
+        } else if other.y < self.y {
+            return Some(Ordering::Greater);
+        } else if self.max_y() > other.max_y() {
+            return Some(Ordering::Less);
+        } else if other.max_y() > self.max_y() {
+            return Some(Ordering::Less);
+            // if we got here.. then x and y axis are equal.. we just sort based on id
+        }
+        Some(Ordering::Equal)
+    }
+}
+impl Eq for Square {}
+impl Ord for Square {
+    fn cmp(&self, other: &Self) -> Ordering {
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
+}
 impl Square {
+    pub fn corners(&self) -> Corners {
+        (self.x, self.max_x(), self.y, self.max_y())
+    }
     pub fn from(c: Corners) -> Self {
         Self {
             x: c.0,
@@ -85,6 +122,10 @@ impl Square {
             }
         }
         (x..=x2, y..=y2)
+    }
+    pub fn move_distance(&mut self, distance: &Point) {
+        self.x += distance.x;
+        self.y += distance.y;
     }
 
     pub fn center(&self, screen: &Self) -> Point {

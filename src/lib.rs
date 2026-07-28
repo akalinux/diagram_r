@@ -1,15 +1,17 @@
 pub mod bsp;
 pub mod constants;
 pub mod diagram;
+pub mod imgcache;
 pub mod link;
 pub mod node;
+pub mod render;
 pub mod square;
 pub mod utils;
 use wasm_bindgen::prelude::*;
 
 use crate::{constants::DEFAULT_COLOR, utils::to_map_xy};
 
-#[wasm_bindgen(inspectable)]
+#[wasm_bindgen]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Transform {
     pub x: f64,
@@ -33,7 +35,7 @@ pub enum LabelPosition {
     Bottom,
 }
 
-#[wasm_bindgen(inspectable, getter_with_clone)]
+#[wasm_bindgen(getter_with_clone)]
 #[derive(Clone, Debug)]
 pub struct ElementOpt {
     pub id: u32,
@@ -64,7 +66,7 @@ impl ElementOpt {
         };
     }
 }
-#[wasm_bindgen(inspectable)]
+#[wasm_bindgen()]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Point {
     pub x: f64,

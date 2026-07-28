@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     mem,
-    rc::{Rc, Weak},
+    rc::Rc,
 };
 
 use crate::{
@@ -13,6 +13,7 @@ use crate::{
     link::{Bundle, Link, LinkContainer},
     node::Node,
     render::Render,
+    square::Square,
 };
 use js_sys::{Array, Function};
 use wasm_bindgen::prelude::*;
@@ -33,6 +34,18 @@ pub struct DiagramOpt {
     pub index_step: i64,
     pub id: String,
     pub node_font_scale: f64,
+}
+
+#[wasm_bindgen(inspectable, getter_with_clone)]
+pub struct MovedElements {
+    pub nodes: Vec<MovedNode>,
+    pub boxes: Vec<MovedNode>,
+}
+#[wasm_bindgen]
+#[derive(Copy, Clone)]
+pub struct MovedNode {
+    pub id: u32,
+    pub layout: Square,
 }
 
 #[wasm_bindgen]
@@ -109,13 +122,6 @@ pub struct DiagramCore {
     pub node_links: HashMap<u32, HashSet<u64>>,
     pub img_cache: Rc<RefCell<ImgCache>>,
     pub render: Rc<RefCell<Render>>,
-    this: Weak<RefCell<Self>>,
-}
-
-pub enum MovedElements {
-    Node(u32),
-    Box(u32),
-    Link(u64),
 }
 
 #[wasm_bindgen]
@@ -123,86 +129,6 @@ pub struct Diagram {
     core: Rc<RefCell<DiagramCore>>,
 }
 
-#[wasm_bindgen]
-pub struct DiagramBulkLoad {
-    diagram: Rc<RefCell<DiagramCore>>,
-    done: bool,
-}
-
-#[wasm_bindgen]
-impl DiagramBulkLoad {
-    pub fn nodes(&self, nodes: Vec<Node>) -> Result<(), JsValue> {
-        let mut diagram = self.diagram.borrow_mut();
-        diagram.nodes.reserve(nodes.len());
-        for node in nodes {
-            self._add_node(NodeCanvasTarget::Node(node))?;
-        }
-        Ok(())
-    }
-    pub fn boxes(&self, boxes: Vec<Node>) -> Result<(), JsValue> {
-        let mut diagram = self.diagram.borrow_mut();
-        diagram.nodes.reserve(boxes.len());
-        for node in boxes {
-            self._add_node(NodeCanvasTarget::Box(node))?;
-        }
-        Ok(())
-    }
-    fn _add_node(&self, n: NodeCanvasTarget) -> Result<(), JsValue> {
-        self.done_check()?;
-        self.diagram.borrow_mut().add_node(n)
-    }
-    pub fn links(&self, links: Vec<Link>) -> Result<(), JsValue> {
-        self.done_check()?;
-        let mut diagram = self.diagram.borrow_mut();
-        diagram.links.reserve(links.len());
-        for link in links {
-            diagram.add_link(link)?
-        }
-        Ok(())
-    }
-
-    pub fn eloptions(&self, el_ops: Vec<ElementOpt>) -> Result<(), JsValue> {
-        self.done_check()?;
-        self.diagram.borrow_mut().set_element_options(el_ops);
-        Ok(())
-    }
-    pub fn bundles(&self, bundles: Vec<Bundle>) -> Result<(), JsValue> {
-        self.done_check()?;
-        let mut diagram = self.diagram.borrow_mut();
-        for bundle in bundles {
-            diagram.add_bundle(bundle)?;
-        }
-        Ok(())
-    }
-    fn done_check(&self) -> Result<(), JsValue> {
-        match self.done {
-            true => Err(JsValue::from(BULK_LOAD_ERROR)),
-            false => Ok(()),
-        }
-    }
-
-    pub fn done(&mut self) -> Result<(), JsValue> {
-        if self.done {
-            return Ok(());
-        }
-        self.done = true;
-        self.diagram.borrow_mut().finish_bulk_load()
-    }
-}
-impl Drop for DiagramBulkLoad {
-    fn drop(&mut self) {
-        let _ = self.done();
-    }
-}
-
-impl DiagramBulkLoad {
-    pub fn new(diagram: Rc<RefCell<DiagramCore>>) -> Self {
-        Self {
-            diagram,
-            done: false,
-        }
-    }
-}
 #[wasm_bindgen]
 impl Diagram {
     pub fn new(render_ops: DiagramOpt) -> Self {
@@ -220,8 +146,16 @@ impl Diagram {
     pub fn set_element_options(&self, el_ops: Vec<ElementOpt>) {
         self.core.borrow_mut().set_element_options(el_ops);
     }
-    pub fn create_loader(&self) -> DiagramBulkLoad {
-        self.core.borrow_mut().startbulk_load()
+    pub fn set_data(
+        &self,
+        boxes: Vec<Node>,
+        nodes: Vec<Node>,
+        links: Vec<Link>,
+        bundles: Vec<Bundle>,
+    ) -> Result<(), JsValue> {
+        self.core
+            .borrow_mut()
+            .set_data(boxes, nodes, links, bundles)
     }
 }
 impl DiagramCore {
@@ -256,7 +190,6 @@ impl DiagramCore {
         }
         self.links.shrink_to_fit();
         self.nodes.shrink_to_fit();
-        self.el_ops.shrink_to_fit();
         self.node_links.shrink_to_fit();
         self.groups.shrink_to_fit();
         Ok(())
@@ -297,12 +230,10 @@ impl DiagramCore {
             node_links: HashMap::new(),
             img_cache: ImgCache::new(Rc::clone(&render)),
             render,
-            this: Weak::new(),
         };
 
         let this = Rc::new(RefCell::new(res));
         this.borrow_mut().render.borrow_mut().diagram = Rc::downgrade(&this);
-        this.borrow_mut().this = Rc::downgrade(&this);
 
         this
     }
@@ -315,37 +246,59 @@ impl DiagramCore {
     }
     pub fn set_element_options(&mut self, el_ops: Vec<ElementOpt>) {
         let mut cache = self.img_cache.borrow_mut();
+        self.el_ops.reserve(el_ops.len());
+        cache.cache.reserve(el_ops.len());
         for opt in el_ops {
             cache.load_img(&opt.img);
             self.el_ops.insert(opt.id, opt);
         }
+
+        cache.cache.shrink_to_fit();
+        self.el_ops.shrink_to_fit();
     }
 
-    pub fn add_node(&mut self, n: NodeCanvasTarget) -> Result<(), JsValue> {
-        let id;
-        {
-            let node = n.get();
-            self.center.x += node.layout.x;
-            self.center.y += node.layout.x;
-            id = node.id;
-            let ss;
-            match &n {
-                NodeCanvasTarget::Box(_) => ss = ScreenSlot::Box(id),
-                NodeCanvasTarget::Node(_) => ss = ScreenSlot::Node(id),
-            }
-            self.update_groups(&node.groups, id);
-            let points = node.layout.idx(self.render_ops.index_step);
-            self.idx.manage(&ss, points, IdxBoxAction::Add);
-            self.render_order.push(ss);
+    pub fn add_node(&mut self, node: Node, as_node: bool) -> Result<(), JsValue> {
+        let id = node.id;
+        self.center.x += node.layout.x;
+        self.center.y += node.layout.x;
+
+        self.update_groups(&node.groups, id);
+        let (n, ss);
+        let points = node.layout.idx(self.render_ops.index_step);
+        match as_node {
+            true => (n, ss) = (NodeCanvasTarget::Node(node), ScreenSlot::Node(id)),
+            false => (n, ss) = (NodeCanvasTarget::Box(node), ScreenSlot::Box(id)),
         }
+        self.idx.manage(&ss, points, IdxBoxAction::Add);
+        self.render_order.push(ss);
         match self.nodes.insert(id, n) {
             Some(_) => Err(JsValue::from(NODE_ADD_ERROR)),
             None => Ok(()),
         }
     }
-    pub fn startbulk_load(&mut self) -> DiagramBulkLoad {
+    pub fn set_data(
+        &mut self,
+        boxes: Vec<Node>,
+        nodes: Vec<Node>,
+        links: Vec<Link>,
+        bundles: Vec<Bundle>,
+    ) -> Result<(), JsValue> {
         self.clear();
-        DiagramBulkLoad::new(unsafe { self.this.upgrade().unwrap_unchecked() })
+        for node in boxes {
+            self.add_node(node, true)?;
+        }
+        for node in nodes {
+            self.add_node(node, false)?;
+        }
+        for link in links {
+            self.add_link(link)?
+        }
+        for bundle in bundles {
+            self.add_bundle(bundle)?;
+        }
+        self.finish_bulk_load()?;
+
+        Ok(())
     }
     fn get_lc<'l>(&'l mut self, id: u64) -> &'l mut LinkContainer {
         if let Some(c) = self.links.get_mut(&id) {
@@ -408,9 +361,10 @@ impl DiagramCore {
         ids.into_iter().collect()
     }
 
-    pub fn move_nodes(&mut self, distance: &Point, node_ids: &[u32]) -> Vec<MovedElements> {
+    pub fn move_nodes(&mut self, distance: &Point, node_ids: &[u32]) -> MovedElements {
+        let mut nodes = Vec::new();
+        let mut boxes = Vec::new();
         let mut links = HashSet::new();
-        let mut moved = Vec::with_capacity(node_ids.len());
 
         for node_id in node_ids {
             if let Some(moved) = self.node_links.get(node_id) {
@@ -423,27 +377,30 @@ impl DiagramCore {
             let node: &mut Node;
             match unsafe { self.nodes.get_mut(node_id).unwrap_unchecked() } {
                 NodeCanvasTarget::Box(n) => {
-                    moved.push(MovedElements::Box(n.id));
+                    boxes.push(MovedNode {
+                        id: n.id,
+                        layout: n.layout,
+                    });
                     node = n;
                 }
                 NodeCanvasTarget::Node(n) => {
-                    moved.push(MovedElements::Node(n.id));
+                    nodes.push(MovedNode {
+                        id: n.id,
+                        layout: n.layout,
+                    });
                     node = n;
                 }
             }
             node.layout.move_distance(distance);
         }
 
-        moved.reserve(links.len());
         for lid in links {
             let lc = unsafe { self.links.get_mut(&lid).unwrap_unchecked() };
             let (a, b) = lc.get_src_dst();
             let src = unsafe { self.nodes.get(&a).unwrap_unchecked().get() };
             let dst = unsafe { self.nodes.get(&b).unwrap_unchecked().get() };
             lc.update(src, dst, &self.render_ops);
-            moved.push(MovedElements::Link(lid));
         }
-
-        moved
+        MovedElements { nodes, boxes }
     }
 }

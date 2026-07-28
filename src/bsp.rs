@@ -46,9 +46,14 @@ pub struct ScreenBoundY {
     pub links: HashSet<u64>,
 }
 
+#[derive(Hash, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
+pub struct XY {
+    x: i64,
+    y: i64,
+}
 pub struct ScreenIndex {
     pub step: i64,
-    x: HashMap<i64, HashMap<i64, ScreenBoundY>>,
+    x: HashMap<XY, ScreenBoundY>,
 }
 
 impl ScreenIndex {
@@ -72,9 +77,8 @@ impl ScreenIndex {
     }
     pub fn contains_point(&self, p: &Point, d: &DiagramCore) -> LookupPointResult {
         let (x, y) = p.idx(self.step);
-        if let Some(yi) = self.x.get(&x)
-            && let Some(screen) = yi.get(&y)
-        {
+        let z = XY { x, y };
+        if let Some(screen) = self.x.get(&z) {
             for id in screen.nodes.iter() {
                 let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.get();
                 if node.layout.contains_point(p) {
@@ -102,39 +106,26 @@ impl ScreenIndex {
         let (px, py) = points;
         let step = self.step();
         for x in px.step_by(step) {
-            let ty;
-            if let Some(t) = self.x.get_mut(&x) {
-                ty = t;
-            } else {
-                match action {
-                    IdxBoxAction::Remove => continue,
-                    _ => (),
-                }
-                self.x.insert(x, HashMap::new());
-                ty = unsafe { self.x.get_mut(&x).unwrap_unchecked() }
-            }
             for y in py.clone().step_by(step) {
                 let tx;
-                if let Some(t) = ty.get_mut(&y) {
+                let y = XY { x, y };
+                if let Some(t) = self.x.get_mut(&y) {
                     tx = t
                 } else {
                     match action {
                         IdxBoxAction::Remove => continue,
                         _ => (),
                     }
-                    ty.insert(y, ScreenBoundY::new());
-                    tx = unsafe { ty.get_mut(&y).unwrap_unchecked() }
+                    self.x.insert(y, ScreenBoundY::new());
+                    tx = unsafe { self.x.get_mut(&y).unwrap_unchecked() }
                 }
                 match action {
                     IdxBoxAction::Add => tx.add(dst),
                     IdxBoxAction::Remove => tx.remove(dst),
                 }
                 if tx.is_empty() {
-                    ty.remove(&y);
+                    self.x.remove(&y);
                 }
-            }
-            if ty.is_empty() {
-                self.x.remove(&x);
             }
         }
     }

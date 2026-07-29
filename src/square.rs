@@ -74,7 +74,7 @@ impl Square {
             x: c.0,
             y: c.2,
             width: c.1 - c.0,
-            height: c.3 - c.1,
+            height: c.3 - c.2,
         }
     }
     pub fn get_center(&self) -> Point {

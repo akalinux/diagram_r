@@ -77,4 +77,19 @@ fn in_point_tests() {
             .contains_point(&Point { x: 5.0, y: 0.5 }, &*diagram.borrow()),
         LookupPointResult::Bundle((bundle.clone(), 0))
     );
+    assert_eq!(
+        diagram
+            .borrow()
+            .idx
+            .contains_point(&Point { x: 2.5, y: 0.21 }, &*diagram.borrow()),
+        LookupPointResult::Link((link_a.clone(), 0))
+    );
+
+    assert_eq!(
+        diagram
+            .borrow()
+            .idx
+            .contains_point(&Point { x: 2.5, y: 0.66 }, &*diagram.borrow()),
+        LookupPointResult::Link((link_b.clone(), 1))
+    );
 }

@@ -60,6 +60,15 @@ fn contains_point() {
 
     assert!(s.contains_point(&max));
     assert!(!s.contains_point(&Point::new(3.0, 3.0)));
+    let s = Square {
+        x: 4.575,
+        y: 0.0749999999999989,
+        width: 0.85,
+        height: 0.85,
+    };
+    let p = Point { x: 5.0, y: 0.0 };
+
+    assert!(!s.contains_point(&p));
 }
 
 #[test]

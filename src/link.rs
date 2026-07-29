@@ -112,7 +112,7 @@ impl LinkContainer {
                 }
                 for (i, l) in self.links.iter().enumerate() {
                     let lp = &dd.links[i];
-                    let (pb, _) = full_box_from(&lp.0, &lp.1, dd.line_width);
+                    let (pb, _) = full_box_from(&lp.0, &lp.1, dd.line_width * 0.5);
                     if inside_box(&pb, p) {
                         return LookupPointResult::Link((l.clone(), i));
                     }

@@ -52,7 +52,9 @@ pub const DEFAULT_HIGHLIGHT_ALPHA: f64 = 0.5;
 pub const DEFAULT_FONT_FAMILY: &'static str = "Arial";
 pub const NODE_FONT_SCALE: f64 = 0.6;
 pub const DEFAULT_TEXT_ALIGN: &'static str = "center";
-pub const DEFAULT_IDX_STEP: i64 = 768;
+/// This is the size of the index in pixels.
+/// Most monitors modern monitors default to width: 1920, height: 1080, so we assum half the width, or 960.
+pub const DEFAULT_IDX_STEP: i64 = 960;
 pub const NODE_ADD_ERROR: &'static str = "Cannot Add duplicate Nodes";
 pub const LINK_ADD_ERROR: &'static str = "Cannot Add Link to Box Layer";
 pub const DEFAULT_ELEMENT_ID: &'static str = "Diagram-r";

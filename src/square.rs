@@ -86,10 +86,19 @@ impl Square {
     pub fn area(&self) -> f64 {
         self.width * self.height
     }
+
+    pub fn contains_x(&self, x: f64) -> bool {
+        self.x <= x && self.max_x() >= x
+    }
+    pub fn contains_y(&self, y: f64) -> bool {
+        self.y <= y && self.max_y() >= y
+    }
     pub fn contains_point(&self, p: &Point) -> bool {
-        let dx = (p.x - self.x).abs();
-        let dy = (p.y - self.y).abs();
-        return !(dx > self.width || dy > self.height);
+        // This code is optimal.. but does not handle zero properly!
+        // let dx = (p.x - self.x).abs();
+        // let dy = (p.y - self.y).abs();
+        // return !(dx > self.width || dy > self.height);
+        self.contains_x(p.x) && self.contains_y(p.y)
     }
     pub fn max_x(&self) -> f64 {
         self.x + self.width

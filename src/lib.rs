@@ -81,12 +81,16 @@ impl Point {
         to_map_xy(&self, t)
     }
     /// Using self as the starting point, how far did we move to get to: p?
-    pub fn move_distance(&self, p: &Self) -> Self {
+    pub fn get_move_distance(&self, p: &Self) -> Self {
         Self {
             x: p.x - self.x,
             y: p.y - self.y,
         }
     }
+    pub fn move_distance(&self, distance: &Point) -> Point {
+        Self::new(self.x + distance.x, self.y + distance.y)
+    }
+
     pub fn idx(&self, step: i64) -> (i64, i64) {
         let mut x = self.x as i64;
         let mut y = self.y as i64;

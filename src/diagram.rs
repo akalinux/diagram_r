@@ -182,7 +182,7 @@ impl DiagramCore {
                 NodeCanvasTarget::Box(_) => return Err(JsValue::from_str(LINK_ADD_ERROR)),
                 NodeCanvasTarget::Node(node) => dst = node,
             }
-            lc.update(src, dst, opt);
+            lc.build_draw_data(src, dst, opt);
             let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
             let points = dd.index.idx(step);
             self.idx

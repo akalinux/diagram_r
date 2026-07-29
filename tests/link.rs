@@ -10,7 +10,7 @@ fn link_container_update_tests() {
     let (a, b) = nodes_a_b();
     let mut opt = DiagramOpt::new();
     opt.link_scale = 1.0;
-    lc.update(&a, &b, &opt);
+    lc.build_draw_data(&a, &b, &opt);
     // 2 links act as 4
     let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
     let center = Point::new(5.0, 0.5);

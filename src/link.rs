@@ -77,13 +77,13 @@ impl Bundle {
 #[derive(Debug, PartialEq)]
 pub struct DrawData {
     pub line_width: f64,
-
     pub bundle_side: f64,
     pub bundles: Vec<Point>,
     pub links: Vec<(Point, Point)>,
     pub animations: Vec<AnimationLink>,
     pub index: Square,
 }
+
 impl DrawData {
     pub fn bundle_draw_box(&self, i: usize) -> Square {
         let side = self.bundle_side;
@@ -162,7 +162,7 @@ impl LinkContainer {
         Ok(())
     }
 
-    pub fn update(&mut self, src: &Node, dst: &Node, opt: &DiagramOpt) {
+    pub fn build_draw_data(&mut self, src: &Node, dst: &Node, opt: &DiagramOpt) {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
         let smallest_side = src.layout.smallest_side(&dst.layout);
@@ -283,7 +283,6 @@ impl LinkContainer {
         //let lc = self.compute_node_scale(nodes) as f64;
         let offset;
         match nodes {
-            0 => offset = 0,
             1 => offset = 0,
             _ => offset = 1,
         }

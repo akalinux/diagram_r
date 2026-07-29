@@ -91,6 +91,21 @@ impl DrawData {
         let p = &self.bundles[i];
         Square::new(p.x - offset, p.y - offset, side, side)
     }
+
+    pub fn move_distance(&mut self, distance: &Point) {
+        self.index.move_distance(distance);
+        for link in &mut self.links {
+            link.0 = link.0.move_distance(distance);
+            link.1 = link.1.move_distance(distance);
+        }
+        for bundle in &mut self.bundles {
+            *bundle = bundle.move_distance(distance);
+        }
+        for animation in &mut self.animations {
+            animation.0 = animation.0.move_distance(distance);
+            animation.1 = animation.1.move_distance(distance);
+        }
+    }
 }
 pub struct LinkContainer {
     pub links: Vec<Link>,

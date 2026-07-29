@@ -365,6 +365,7 @@ impl DiagramCore {
         let mut nodes = Vec::new();
         let mut boxes = Vec::new();
         let mut links = HashSet::new();
+        let step = self.idx.step;
 
         for node_id in node_ids {
             if let Some(moved) = self.node_links.get(node_id) {
@@ -375,29 +376,38 @@ impl DiagramCore {
             }
 
             let t = unsafe { self.nodes.get_mut(node_id).unwrap_unchecked() };
-            t.get_mut().layout.move_distance(distance);
+            let (old, new);
+            {
+                let node = t.get_mut();
+                old = node.layout.idx(step);
+                node.layout.move_distance(distance);
+                new = node.layout.idx(step);
+            }
             match t {
                 NodeCanvasTarget::Box(n) => {
                     boxes.push(MovedNode {
                         id: n.id,
                         layout: n.layout,
                     });
+                    self.idx.update(&ScreenSlot::Box(*node_id), old, new);
                 }
                 NodeCanvasTarget::Node(n) => {
                     nodes.push(MovedNode {
                         id: n.id,
                         layout: n.layout,
                     });
+                    self.idx.update(&ScreenSlot::Node(*node_id), old, new);
                 }
             }
         }
 
         for lid in links {
             let lc = unsafe { self.links.get_mut(&lid).unwrap_unchecked() };
-            let (a, b) = lc.get_src_dst();
-            let src = unsafe { self.nodes.get(&a).unwrap_unchecked().get() };
-            let dst = unsafe { self.nodes.get(&b).unwrap_unchecked().get() };
-            lc.update(src, dst, &self.render_ops);
+            let dd = unsafe { lc.draw_data.as_mut().unwrap_unchecked() };
+            let old = dd.index.idx(step);
+            dd.move_distance(distance);
+            let new = dd.index.idx(step);
+            self.idx.update(&ScreenSlot::Link(lid), old, new);
         }
         MovedNodes { nodes, boxes }
     }

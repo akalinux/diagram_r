@@ -13,7 +13,9 @@ use crate::common::{box_a, data_lc_b1_l2, nodes_a_b};
 mod common;
 
 pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
-    let ct = DiagramCore::new(DiagramOpt::new());
+    let mut ops = DiagramOpt::new();
+    ops.index_step = 1;
+    let ct = DiagramCore::new(ops);
 
     let (node_a, node_b) = nodes_a_b();
     let box_a = box_a();
@@ -34,7 +36,9 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
 
 #[test]
 fn buld_ok_test() {
-    DiagramCore::new(DiagramOpt::new());
+    let mut ops = DiagramOpt::new();
+    ops.index_step = 1;
+    DiagramCore::new(ops);
 }
 
 #[test]
@@ -132,16 +136,7 @@ fn test_move_box() {
     let diagram = reload_data();
     test_points(Rc::clone(&diagram), ZERO_POINT);
     let distance = &Point { x: 5.0, y: 5.0 };
-    println!("{:?}", unsafe {
-        diagram
-            .borrow()
-            .nodes
-            .get(&2)
-            .unwrap_unchecked()
-            .get()
-            .clone()
-            .layout
-    });
+
     diagram.borrow_mut().move_nodes(distance, &[0, 1, 2]);
 
     test_points(diagram, *distance);

@@ -34,6 +34,26 @@ pub enum ScreenSlot {
     Link(u64),
 }
 
+impl ScreenSlot {
+    pub fn get_link_id(&self) -> Option<&u64> {
+        if let ScreenSlot::Link(id) = self {
+            return Some(id);
+        }
+        None
+    }
+    pub fn get_box_id(&self) -> Option<&u32> {
+        if let ScreenSlot::Box(id) = self {
+            return Some(id);
+        }
+        None
+    }
+    pub fn get_node_id(&self) -> Option<&u32> {
+        if let ScreenSlot::Node(id) = self {
+            return Some(id);
+        }
+        None
+    }
+}
 pub struct IdxBoxIter {
     old: IndexXY,
     new: IndexXY,

@@ -66,6 +66,21 @@ impl Ord for Square {
     }
 }
 impl Square {
+    pub fn render_points(&self) -> (f64, f64, f64, f64) {
+        (self.x, self.y, self.width, self.height)
+    }
+    pub fn scale(&self, scale: f64) -> Self {
+        let width = self.width * scale;
+        let height = self.height * scale;
+        let x = self.x - (self.width - width) * 0.5;
+        let y = self.y - (self.height - height) * 0.5;
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
     pub fn corners(&self) -> Corners {
         (self.x, self.max_x(), self.y, self.max_y())
     }

@@ -34,6 +34,7 @@ pub struct DiagramOpt {
     pub index_step: i64,
     pub id: String,
     pub node_font_scale: f64,
+    pub animation_color: String,
 }
 
 #[wasm_bindgen(inspectable, getter_with_clone)]
@@ -67,6 +68,7 @@ impl DiagramOpt {
             index_step: DEFAULT_IDX_STEP,
             id: String::from(DEFAULT_ELEMENT_ID),
             node_font_scale: NODE_FONT_SCALE,
+            animation_color: String::from(DEFAULT_ANIMATION_COLOR),
         }
     }
 }
@@ -120,8 +122,9 @@ pub struct DiagramCore {
     pub transform: Transform,
     pub groups: HashMap<u32, HashSet<u32>>, // group_id,set->node_ids
     pub node_links: HashMap<u32, HashSet<u64>>,
-    pub img_cache: Rc<RefCell<ImgCache>>,
+    pub img_cache: ImgCache,
     pub render: Rc<RefCell<Render>>,
+    pub animation_order: Vec<u64>,
 }
 
 #[wasm_bindgen]
@@ -157,9 +160,16 @@ impl Diagram {
             .borrow_mut()
             .set_data(boxes, nodes, links, bundles)
     }
+
+    pub fn mount(&self, width: u32, height: u32, id: String) -> Result<(), JsValue> {
+        self.core.borrow().mount(width, height, id)
+    }
+    pub fn unmount(&self) {
+        self.core.borrow().unmount();
+    }
 }
 impl DiagramCore {
-    pub fn finish_bulk_load(&mut self) -> Result<(), JsValue> {
+    fn finish_bulk_load(&mut self, start: usize) -> Result<(), JsValue> {
         let total = self.nodes.len();
         if total == 0 {
             return Ok(());
@@ -169,24 +179,35 @@ impl DiagramCore {
         let step = opt.index_step;
         self.center.x = self.center.x / total;
         self.center.y = self.center.y / total;
-        for (_, lc) in self.links.iter_mut() {
-            let (a, b) = lc.get_src_dst();
-            let x = unsafe { self.nodes.get(&a).unwrap_unchecked() };
-            let y = unsafe { self.nodes.get(&b).unwrap_unchecked() };
-            let (src, dst);
-            match x {
-                NodeCanvasTarget::Box(_) => return Err(JsValue::from_str(LINK_ADD_ERROR)),
-                NodeCanvasTarget::Node(node) => src = node,
+        for i in start..self.render_order.len() {
+            let lid = unsafe { self.render_order[i].get_link_id().unwrap_unchecked() };
+            {
+                let lc = unsafe { self.links.get_mut(lid).unwrap_unchecked() };
+                let (a, b) = lc.get_src_dst();
+                let x = unsafe { self.nodes.get(&a).unwrap_unchecked() };
+                let y = unsafe { self.nodes.get(&b).unwrap_unchecked() };
+                let src = match x {
+                    NodeCanvasTarget::Box(_) => return Err(JsValue::from_str(LINK_ADD_ERROR)),
+                    NodeCanvasTarget::Node(node) => node,
+                };
+                let dst = match y {
+                    NodeCanvasTarget::Box(_) => return Err(JsValue::from_str(LINK_ADD_ERROR)),
+                    NodeCanvasTarget::Node(node) => node,
+                };
+                lc.build_draw_data(src, dst, opt);
+                let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
+                if !dd.animations.len() == 0 {
+                    self.animation_order.push(lc.id);
+                }
+                let points = dd.index.idx(step);
+                self.idx
+                    .manage(&ScreenSlot::Link(lc.id), points, IdxBoxAction::Add);
             }
-            match y {
-                NodeCanvasTarget::Box(_) => return Err(JsValue::from_str(LINK_ADD_ERROR)),
-                NodeCanvasTarget::Node(node) => dst = node,
-            }
-            lc.build_draw_data(src, dst, opt);
-            let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
-            let points = dd.index.idx(step);
-            self.idx
-                .manage(&ScreenSlot::Link(lc.id), points, IdxBoxAction::Add);
+
+            let lc = unsafe { self.links.get(lid).unwrap_unchecked() };
+            self.render
+                .borrow()
+                .render_link(lc, self, &self.render_ops, &self.img_cache)?;
         }
         self.links.shrink_to_fit();
         self.nodes.shrink_to_fit();
@@ -198,7 +219,7 @@ impl DiagramCore {
         if link.src == link.dst
             || !self.nodes.contains_key(&link.src) && !self.nodes.contains_key(&link.dst)
         {
-            return Err(JsValue::from("Cannot add Link to node that does not exist"));
+            return Err(JsValue::from(LINK_NODE_MISSING_ERROR));
         }
         self.get_lc(link.link_id()).add_link(link);
         Ok(())
@@ -208,19 +229,17 @@ impl DiagramCore {
         if bundle.src == bundle.dst
             || !self.nodes.contains_key(&bundle.src) && !self.nodes.contains_key(&bundle.dst)
         {
-            return Err(JsValue::from(
-                "Cannot add Bundle to node that does not exist",
-            ));
+            return Err(JsValue::from(LINK_BUNDLE_MISSING_ERROR));
         }
         self.get_lc(bundle.link_id()).add_bundle(bundle)?;
         Ok(())
     }
     pub fn new(render_ops: DiagramOpt) -> Rc<RefCell<Self>> {
-        let render = Rc::new(RefCell::new(Render::new()));
+        let render = Render::new();
         let res = Self {
             nodes: HashMap::new(),
             links: HashMap::new(),
-            el_ops: HashMap::new(),
+            el_ops: HashMap::from([(0, ElementOpt::defaults())]),
             idx: ScreenIndex::new(render_ops.index_step),
             render_order: Vec::new(),
             render_ops,
@@ -230,12 +249,20 @@ impl DiagramCore {
             node_links: HashMap::new(),
             img_cache: ImgCache::new(Rc::clone(&render)),
             render,
+            animation_order: Vec::new(),
         };
 
         let this = Rc::new(RefCell::new(res));
         this.borrow_mut().render.borrow_mut().diagram = Rc::downgrade(&this);
 
         this
+    }
+
+    pub fn get_opt(&self, id: u32) -> &ElementOpt {
+        match self.el_ops.get(&id) {
+            Some(opt) => opt,
+            None => unsafe { self.el_ops.get(&0).unwrap_unchecked() },
+        }
     }
 
     pub fn set_transform(&mut self, t: Transform) {
@@ -245,15 +272,14 @@ impl DiagramCore {
         self.transform
     }
     pub fn set_element_options(&mut self, el_ops: Vec<ElementOpt>) {
-        let mut cache = self.img_cache.borrow_mut();
         self.el_ops.reserve(el_ops.len());
-        cache.cache.reserve(el_ops.len());
+        self.img_cache.cache.borrow_mut().imgs.reserve(el_ops.len());
         for opt in el_ops {
-            cache.load_img(&opt.img);
+            self.img_cache.load_img(&opt.img);
             self.el_ops.insert(opt.id, opt);
         }
 
-        cache.cache.shrink_to_fit();
+        self.img_cache.cache.borrow_mut().imgs.shrink_to_fit();
         self.el_ops.shrink_to_fit();
     }
 
@@ -263,12 +289,11 @@ impl DiagramCore {
         self.center.y += node.layout.x;
 
         self.update_groups(&node.groups, id);
-        let (n, ss);
         let points = node.layout.idx(self.render_ops.index_step);
-        match as_node {
-            true => (n, ss) = (NodeCanvasTarget::Node(node), ScreenSlot::Node(id)),
-            false => (n, ss) = (NodeCanvasTarget::Box(node), ScreenSlot::Box(id)),
-        }
+        let (n, ss) = match as_node {
+            true => (NodeCanvasTarget::Node(node), ScreenSlot::Node(id)),
+            false => (NodeCanvasTarget::Box(node), ScreenSlot::Box(id)),
+        };
         self.idx.manage(&ss, points, IdxBoxAction::Add);
         self.render_order.push(ss);
         match self.nodes.insert(id, n) {
@@ -284,19 +309,28 @@ impl DiagramCore {
         bundles: Vec<Bundle>,
     ) -> Result<(), JsValue> {
         self.clear();
+        self.render.borrow().clear()?;
+
         for node in boxes {
+            self.render
+                .borrow()
+                .render_node(&node, &self, &self.img_cache, false)?;
             self.add_node(node, false)?;
         }
         for node in nodes {
+            self.render
+                .borrow()
+                .render_node(&node, &self, &self.img_cache, true)?;
             self.add_node(node, true)?;
         }
+        let start = self.render_order.len();
         for link in links {
             self.add_link(link)?
         }
         for bundle in bundles {
             self.add_bundle(bundle)?;
         }
-        self.finish_bulk_load()?;
+        self.finish_bulk_load(start)?;
 
         Ok(())
     }
@@ -344,6 +378,7 @@ impl DiagramCore {
         self.groups.clear();
         self.node_links.clear();
         self.center = ZERO_POINT;
+        self.animation_order.clear();
     }
 
     pub fn get_related_nodes(&self, node_ids: &[u32]) -> Vec<u32> {
@@ -366,6 +401,8 @@ impl DiagramCore {
         let mut boxes = Vec::new();
         let mut links = HashSet::new();
         let step = self.idx.step;
+        self.center.x += distance.x * node_ids.len() as f64;
+        self.center.y += distance.y * node_ids.len() as f64;
 
         for node_id in node_ids {
             if let Some(moved) = self.node_links.get(node_id) {
@@ -410,5 +447,13 @@ impl DiagramCore {
             self.idx.update(&ScreenSlot::Link(lid), old, new);
         }
         MovedNodes { nodes, boxes }
+    }
+
+    pub fn mount(&self, width: u32, height: u32, id: String) -> Result<(), JsValue> {
+        self.render.borrow_mut().mount(width, height, id)
+    }
+
+    pub fn unmount(&self) {
+        self.render.borrow_mut().unmount();
     }
 }

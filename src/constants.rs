@@ -59,4 +59,9 @@ pub const NODE_ADD_ERROR: &'static str = "Cannot Add duplicate Nodes";
 pub const LINK_ADD_ERROR: &'static str = "Cannot Add Link to Box Layer";
 pub const DEFAULT_ELEMENT_ID: &'static str = "Diagram-r";
 
-pub const BULK_LOAD_ERROR: &'static str = "Section Clodsed";
+pub const CANVAS_ERROR: &'static str = "Unknown error manipulating canvas";
+pub const WINDOW_ERROR: &'static str = "No global `window` exists";
+pub const DOM_ERROR: &'static str = "No `document` exists";
+pub const EL_ERROR: &'static str = "No Element by the given `id`, exists";
+pub const LINK_NODE_MISSING_ERROR: &'static str = "Cannot add Link to node that does not exist";
+pub const LINK_BUNDLE_MISSING_ERROR: &'static str = "Cannot add Bundle to node that does not exist";

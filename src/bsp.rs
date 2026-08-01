@@ -1,7 +1,5 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    ops::RangeInclusive,
-};
+use rustc_hash::FxHashMap;
+use std::{collections::BTreeSet, ops::RangeInclusive};
 pub mod iter;
 use crate::{
     Point,
@@ -125,7 +123,7 @@ pub struct XY {
 }
 pub struct ScreenIndex {
     pub step: i64,
-    x: HashMap<XY, ScreenBoundY>,
+    x: FxHashMap<XY, ScreenBoundY>,
 }
 
 impl ScreenIndex {
@@ -135,7 +133,7 @@ impl ScreenIndex {
     pub fn new(step: i64) -> Self {
         Self {
             step,
-            x: HashMap::new(),
+            x: FxHashMap::default(),
         }
     }
     fn step(&self) -> usize {

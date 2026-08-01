@@ -1,9 +1,5 @@
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-    mem,
-    rc::Rc,
-};
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::{cell::RefCell, mem, rc::Rc};
 
 use crate::{
     ElementOpt, Point, Transform,
@@ -112,17 +108,17 @@ impl NodeCanvasTarget {
     }
 }
 pub struct DiagramCore {
-    pub el_ops: HashMap<u32, ElementOpt>,
-    pub nodes: HashMap<u32, NodeCanvasTarget>,
-    pub links: HashMap<u64, LinkContainer>,
+    pub el_ops: FxHashMap<u32, ElementOpt>,
+    pub nodes: FxHashMap<u32, NodeCanvasTarget>,
+    pub links: FxHashMap<u64, LinkContainer>,
     pub idx: ScreenIndex,
     pub render_order: Vec<ScreenSlot>,
     pub render_ops: DiagramOpt,
     pub center: Point,
 
     pub transform: Transform,
-    pub groups: HashMap<u32, HashSet<u32>>, // group_id,set->node_ids
-    pub node_links: HashMap<u32, HashSet<u64>>,
+    pub groups: FxHashMap<u32, FxHashSet<u32>>, // group_id,set->node_ids
+    pub node_links: FxHashMap<u32, FxHashSet<u64>>,
     pub img_cache: ImgCache,
     pub render: Rc<RefCell<Render>>,
     pub animation_order: Vec<u64>,
@@ -237,22 +233,23 @@ impl DiagramCore {
     }
     pub fn new(render_ops: DiagramOpt) -> Rc<RefCell<Self>> {
         let render = Render::new();
-        let res = Self {
-            nodes: HashMap::new(),
-            links: HashMap::new(),
-            el_ops: HashMap::from([(0, ElementOpt::defaults())]),
+        let mut res = Self {
+            nodes: FxHashMap::default(),
+            links: FxHashMap::default(),
+            el_ops: FxHashMap::default(),
             idx: ScreenIndex::new(render_ops.index_step),
             render_order: Vec::new(),
             render_ops,
             center: ZERO_POINT,
             transform: ZERO_TRANSFORM,
-            groups: HashMap::new(),
-            node_links: HashMap::new(),
+            groups: FxHashMap::default(),
+            node_links: FxHashMap::default(),
             img_cache: ImgCache::new(Rc::clone(&render)),
             render,
             animation_order: Vec::new(),
         };
 
+        res.el_ops.insert(0, ElementOpt::defaults());
         let this = Rc::new(RefCell::new(res));
         this.borrow_mut().render.borrow_mut().diagram = Rc::downgrade(&this);
 
@@ -349,7 +346,8 @@ impl DiagramCore {
             if let Some(l) = self.node_links.get_mut(&id) {
                 l.insert(res.id);
             } else {
-                let l = HashSet::from([res.id]);
+                let mut l = FxHashSet::default();
+                l.insert(res.id);
                 self.node_links.insert(id, l);
             }
         }
@@ -363,7 +361,7 @@ impl DiagramCore {
             if let Some(s) = self.groups.get_mut(group) {
                 set = s;
             } else {
-                let s = HashSet::new();
+                let s = FxHashSet::default();
                 self.groups.insert(*group, s);
                 set = unsafe { self.groups.get_mut(group).unwrap_unchecked() }
             }
@@ -383,7 +381,8 @@ impl DiagramCore {
     }
 
     pub fn get_related_nodes(&self, node_ids: &[u32]) -> Vec<u32> {
-        let mut ids = HashSet::with_capacity(node_ids.len());
+        let mut ids = FxHashSet::default();
+        ids.reserve(node_ids.len());
         for node_id in node_ids {
             ids.insert(*node_id);
             let node = unsafe { self.nodes.get(node_id).unwrap_unchecked().get() };
@@ -400,7 +399,7 @@ impl DiagramCore {
     pub fn move_nodes(&mut self, distance: &Point, node_ids: &[u32]) -> MovedNodes {
         let mut nodes = Vec::new();
         let mut boxes = Vec::new();
-        let mut links = HashSet::new();
+        let mut links = FxHashSet::default();
         let step = self.idx.step;
         self.center.x += distance.x * node_ids.len() as f64;
         self.center.y += distance.y * node_ids.len() as f64;

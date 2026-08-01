@@ -1,4 +1,5 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use rustc_hash::FxHashMap;
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use web_sys::{ErrorEvent, HtmlImageElement};
 
@@ -21,7 +22,7 @@ pub struct ImgCache {
     pub cache: Rc<RefCell<Cache>>,
 }
 pub struct Cache {
-    pub imgs: HashMap<String, CacheState>,
+    pub imgs: FxHashMap<String, CacheState>,
     loading: u32,
 }
 
@@ -30,7 +31,7 @@ impl ImgCache {
         Self {
             render,
             cache: Rc::new(RefCell::new(Cache {
-                imgs: HashMap::new(),
+                imgs: FxHashMap::default(),
                 loading: 0,
             })),
         }

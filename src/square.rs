@@ -145,7 +145,7 @@ impl Square {
                 *i -= m;
             }
         }
-        (x..=x2, y..=y2)
+        (x..=x2, y..=y2, self.area())
     }
     pub fn move_distance(&mut self, distance: &Point) {
         self.x += distance.x;

@@ -1,15 +1,80 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     ops::RangeInclusive,
 };
-
+pub mod iter;
 use crate::{
     Point,
-    diagram::DiagramCore,
+    bsp::iter::{IdxBoxAction, IdxBoxIter},
+    diagram::{DiagramCore, NodeCanvasTarget},
     link::{Bundle, Link},
 };
 
-pub type IndexXY = (RangeInclusive<i64>, RangeInclusive<i64>);
+pub type IndexXY = (RangeInclusive<i64>, RangeInclusive<i64>, f64);
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub enum Slot {
+    Node,
+    Link,
+    Box,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub enum Id {
+    Link(u64),
+    Node(u32),
+}
+
+impl Id {
+    fn get_link(&self) -> Option<u64> {
+        match self {
+            Id::Link(id) => Some(*id),
+            _ => None,
+        }
+    }
+    fn get_node(&self) -> Option<u32> {
+        match self {
+            Id::Node(id) => Some(*id),
+            _ => None,
+        }
+    }
+    fn link(&self) -> u64 {
+        unsafe { self.get_link().unwrap_unchecked() }
+    }
+    fn node(&self) -> u32 {
+        unsafe { self.get_node().unwrap_unchecked() }
+    }
+}
+#[derive(Debug, Clone, Copy)]
+pub struct XYSet {
+    slot: Slot,
+    size: f64,
+    id: Id,
+}
+impl PartialEq for XYSet {
+    fn eq(&self, other: &Self) -> bool {
+        self.slot == other.slot && self.size == other.size && self.id == other.id
+    }
+}
+impl Eq for XYSet {}
+impl PartialOrd for XYSet {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.slot.partial_cmp(&other.slot) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.size.partial_cmp(&other.size) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl Ord for XYSet {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
+}
 
 #[derive(PartialEq, Debug)]
 pub enum LookupPointResult {
@@ -19,12 +84,6 @@ pub enum LookupPointResult {
     Box(u32),
     Screen,
     NoMatch,
-}
-
-enum IdxBoxIterSection {
-    Old,
-    New,
-    Done,
 }
 
 #[derive(Clone, Copy, Hash, Debug)]
@@ -54,19 +113,12 @@ impl ScreenSlot {
         None
     }
 }
-pub struct IdxBoxIter {
-    old: IndexXY,
-    new: IndexXY,
-    step: i64,
-    next: Option<(i64, i64, IdxBoxIterSection)>,
-}
+
 pub struct ScreenBoundY {
-    pub nodes: HashSet<u32>,
-    pub boxes: HashSet<u32>,
-    pub links: HashSet<u64>,
+    pub nodes: BTreeSet<XYSet>,
 }
 
-#[derive(Hash, PartialEq, PartialOrd, Eq, Ord, Copy, Clone)]
+#[derive(Hash, PartialEq, PartialOrd, Eq, Ord, Copy, Clone, Debug)]
 pub struct XY {
     x: i64,
     y: i64,
@@ -90,40 +142,50 @@ impl ScreenIndex {
         self.step as usize
     }
     pub fn update(&mut self, dst: &ScreenSlot, old: IndexXY, new: IndexXY) {
-        for (x, y, action) in IdxBoxIter::new(old, new, self.step) {
-            let points = (x..=x, y..=y);
+        for (x, y, action, area) in IdxBoxIter::new(old, new, self.step) {
+            let points = (x..=x, y..=y, area);
             self.manage(dst, points, action);
         }
     }
     pub fn contains_point(&self, p: &Point, d: &DiagramCore) -> LookupPointResult {
         let (x, y) = p.idx(self.step);
         let z = XY { x, y };
+        println!("In Index: {:?}", &z);
         if let Some(screen) = self.x.get(&z) {
-            for id in screen.nodes.iter() {
-                let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.get();
-                if node.layout.contains_point(p) {
-                    return LookupPointResult::Node(*id);
-                }
-            }
-            for id in screen.links.iter() {
-                let lc = unsafe { d.links.get(id).unwrap_unchecked() };
-                match lc.contains_point(p) {
-                    LookupPointResult::Bundle(data) => return LookupPointResult::Bundle(data),
-                    LookupPointResult::Link(data) => return LookupPointResult::Link(data),
-                    _ => (),
-                }
-            }
-            for id in screen.boxes.iter() {
-                let node = unsafe { d.nodes.get(id).unwrap_unchecked() }.get();
-                if node.layout.contains_point(p) {
-                    return LookupPointResult::Box(*id);
+            for set in screen.nodes.iter() {
+                match set.slot {
+                    Slot::Link => {
+                        println!("Link: {:?} for: {:?}", set, p);
+                        let lid = set.id.link();
+                        if let LookupPointResult::Link(res) =
+                            unsafe { d.links.get(&lid).unwrap_unchecked() }.contains_point(p)
+                        {
+                            return LookupPointResult::Link(res);
+                        }
+                    }
+                    Slot::Box | Slot::Node => {
+                        match unsafe { d.nodes.get(&set.id.node()).unwrap_unchecked() } {
+                            NodeCanvasTarget::Box(node) => {
+                                println!("Box: {:?} for: {:?}", set, p);
+                                if node.layout.contains_point(p) {
+                                    return LookupPointResult::Box(node.id);
+                                }
+                            }
+                            NodeCanvasTarget::Node(node) => {
+                                if node.layout.contains_point(p) {
+                                    println!("Node: {:?} for: {:?}", set, p);
+                                    return LookupPointResult::Node(node.id);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         LookupPointResult::Screen
     }
     pub fn manage(&mut self, dst: &ScreenSlot, points: IndexXY, action: IdxBoxAction) {
-        let (px, py) = points;
+        let (px, py, area) = points;
         let step = self.step();
         for x in px.step_by(step) {
             for y in py.clone().step_by(step) {
@@ -140,8 +202,8 @@ impl ScreenIndex {
                     tx = unsafe { self.x.get_mut(&y).unwrap_unchecked() }
                 }
                 match action {
-                    IdxBoxAction::Add => tx.add(dst),
-                    IdxBoxAction::Remove => tx.remove(dst),
+                    IdxBoxAction::Add => tx.add(dst, area),
+                    IdxBoxAction::Remove => tx.remove(dst, area),
                 }
                 if tx.is_empty() {
                     self.x.remove(&y);
@@ -154,109 +216,49 @@ impl ScreenIndex {
 impl ScreenBoundY {
     pub fn new() -> Self {
         Self {
-            nodes: HashSet::new(),
-            boxes: HashSet::new(),
-            links: HashSet::new(),
+            nodes: BTreeSet::new(),
         }
     }
     pub fn is_empty(&self) -> bool {
-        return self.nodes.is_empty() && self.links.is_empty() && self.boxes.is_empty();
+        return self.nodes.is_empty();
     }
 
-    pub fn add(&mut self, t: &ScreenSlot) {
+    pub fn add(&mut self, t: &ScreenSlot, area: f64) {
         match t {
-            ScreenSlot::Link(l) => self.links.insert(*l),
-            ScreenSlot::Node(n) => self.nodes.insert(*n),
-            ScreenSlot::Box(n) => self.boxes.insert(*n),
+            ScreenSlot::Link(l) => self.nodes.insert(XYSet {
+                slot: Slot::Link,
+                size: area,
+                id: Id::Link(*l),
+            }),
+            ScreenSlot::Node(n) => self.nodes.insert(XYSet {
+                slot: Slot::Node,
+                size: area,
+                id: Id::Node(*n),
+            }),
+            ScreenSlot::Box(n) => self.nodes.insert(XYSet {
+                slot: Slot::Box,
+                size: area,
+                id: Id::Node(*n),
+            }),
         };
     }
-    pub fn remove(&mut self, t: &ScreenSlot) {
+    pub fn remove(&mut self, t: &ScreenSlot, area: f64) {
         match t {
-            ScreenSlot::Link(l) => self.links.remove(l),
-            ScreenSlot::Node(n) => self.nodes.remove(n),
-            ScreenSlot::Box(n) => self.boxes.remove(n),
+            ScreenSlot::Link(l) => self.nodes.remove(&XYSet {
+                slot: Slot::Link,
+                size: area,
+                id: Id::Link(*l),
+            }),
+            ScreenSlot::Node(n) => self.nodes.remove(&XYSet {
+                slot: Slot::Node,
+                size: area,
+                id: Id::Node(*n),
+            }),
+            ScreenSlot::Box(n) => self.nodes.remove(&XYSet {
+                slot: Slot::Box,
+                size: area,
+                id: Id::Node(*n),
+            }),
         };
-    }
-}
-impl IdxBoxIter {
-    pub fn new(old: IndexXY, new: IndexXY, step: i64) -> Self {
-        if old.0 == new.0 && old.1 == new.1 {
-            return Self {
-                old,
-                new,
-                step,
-                next: None,
-            };
-        }
-        let x = *old.0.start();
-        let y = *old.1.start();
-        Self {
-            old,
-            new,
-            step,
-            next: Some((x, y, IdxBoxIterSection::Old)),
-        }
-    }
-    fn h_next(x: &mut i64, y: &mut i64, s: &mut IdxBoxIterSection, n: &IndexXY) {
-        match s {
-            IdxBoxIterSection::Old => {
-                *x = *n.0.start();
-                *y = *n.1.start();
-                *s = IdxBoxIterSection::New;
-            }
-            _ => *s = IdxBoxIterSection::Done,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum IdxBoxAction {
-    Add,
-    Remove,
-}
-impl Iterator for IdxBoxIter {
-    type Item = (i64, i64, IdxBoxAction);
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match &mut self.next {
-                Some((cx, cy, s)) => {
-                    let a;
-                    let b;
-                    let t;
-                    match s {
-                        IdxBoxIterSection::Old => {
-                            a = &self.old;
-                            b = &self.new;
-                            t = IdxBoxAction::Remove;
-                        }
-                        IdxBoxIterSection::New => {
-                            a = &self.new;
-                            b = &self.old;
-                            t = IdxBoxAction::Add;
-                        }
-                        IdxBoxIterSection::Done => return None,
-                    }
-                    let x = *cx;
-                    let y = *cy;
-                    let (cmp_x, cmp_y) = b;
-                    if cmp_x.contains(&x) && cmp_y.contains(&y) {
-                        *cx = cmp_x.end() + self.step;
-                        continue;
-                    }
-
-                    if x > *a.0.end() {
-                        *cx = *a.0.start();
-                        *cy += self.step;
-                        continue;
-                    } else if y > *a.1.end() {
-                        Self::h_next(cx, cy, s, b);
-                        continue;
-                    }
-                    *cx += self.step;
-                    return Some((x, y, t));
-                }
-                None => return None,
-            }
-        }
     }
 }

@@ -7,7 +7,8 @@ use std::{
 
 use crate::{
     ElementOpt, Point, Transform,
-    bsp::{IdxBoxAction, ScreenIndex, ScreenSlot},
+    bsp::iter::IdxBoxAction,
+    bsp::{ScreenIndex, ScreenSlot},
     constants::*,
     imgcache::ImgCache,
     link::{Bundle, Link, LinkContainer},

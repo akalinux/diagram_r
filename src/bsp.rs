@@ -150,30 +150,28 @@ impl ScreenIndex {
     pub fn contains_point(&self, p: &Point, d: &DiagramCore) -> LookupPointResult {
         let (x, y) = p.idx(self.step);
         let z = XY { x, y };
-        println!("In Index: {:?}", &z);
         if let Some(screen) = self.x.get(&z) {
             for set in screen.nodes.iter() {
                 match set.slot {
                     Slot::Link => {
-                        println!("Link: {:?} for: {:?}", set, p);
                         let lid = set.id.link();
-                        if let LookupPointResult::Link(res) =
-                            unsafe { d.links.get(&lid).unwrap_unchecked() }.contains_point(p)
-                        {
-                            return LookupPointResult::Link(res);
+                        match unsafe { d.links.get(&lid).unwrap_unchecked() }.contains_point(p) {
+                            LookupPointResult::Link(res) => return LookupPointResult::Link(res),
+                            LookupPointResult::Bundle(res) => {
+                                return LookupPointResult::Bundle(res);
+                            }
+                            _ => (),
                         }
                     }
                     Slot::Box | Slot::Node => {
                         match unsafe { d.nodes.get(&set.id.node()).unwrap_unchecked() } {
                             NodeCanvasTarget::Box(node) => {
-                                println!("Box: {:?} for: {:?}", set, p);
                                 if node.layout.contains_point(p) {
                                     return LookupPointResult::Box(node.id);
                                 }
                             }
                             NodeCanvasTarget::Node(node) => {
                                 if node.layout.contains_point(p) {
-                                    println!("Node: {:?} for: {:?}", set, p);
                                     return LookupPointResult::Node(node.id);
                                 }
                             }

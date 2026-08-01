@@ -5,7 +5,6 @@ use crate::{
     constants::{RAD2DEG, TRIANGLE_MARGINE_FOR_ERROR},
     square::Corners,
 };
-use rustc_hash::FxHasher;
 
 pub type AngleNorthSouth = (f64, f64, f64);
 pub type FullBox = (Point, Point, Point, Point);

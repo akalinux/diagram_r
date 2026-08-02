@@ -84,7 +84,7 @@ pub enum LookupPointResult {
     NoMatch,
 }
 
-#[derive(Clone, Copy, Hash, Debug)]
+#[derive(Clone, Copy, Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ScreenSlot {
     Node(u32),
     Box(u32),

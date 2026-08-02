@@ -3,8 +3,7 @@ use std::{cell::RefCell, mem, rc::Rc};
 
 use crate::{
     ElementOpt, Point, Transform,
-    bsp::iter::IdxBoxAction,
-    bsp::{ScreenIndex, ScreenSlot},
+    bsp::{IndexXY, ScreenIndex, ScreenSlot, iter::IdxBoxAction},
     constants::*,
     imgcache::ImgCache,
     link::{Bundle, Link, LinkContainer},
@@ -115,6 +114,7 @@ pub struct DiagramCore {
     pub render_order: Vec<ScreenSlot>,
     pub render_ops: DiagramOpt,
     pub center: Point,
+    pending_updates: FxHashMap<ScreenSlot, IndexXY>,
 
     pub transform: Transform,
     pub groups: FxHashMap<u32, FxHashSet<u32>>, // group_id,set->node_ids
@@ -245,6 +245,7 @@ impl DiagramCore {
             groups: FxHashMap::default(),
             node_links: FxHashMap::default(),
             img_cache: ImgCache::new(Rc::clone(&render)),
+            pending_updates: FxHashMap::default(),
             render,
             animation_order: Vec::new(),
         };
@@ -396,9 +397,7 @@ impl DiagramCore {
         ids.into_iter().collect()
     }
 
-    pub fn move_nodes(&mut self, distance: &Point, node_ids: &[u32]) -> MovedNodes {
-        let mut nodes = Vec::new();
-        let mut boxes = Vec::new();
+    pub fn move_nodes(&mut self, distance: &Point, node_ids: &[u32]) {
         let mut links = FxHashSet::default();
         let step = self.idx.step;
         self.center.x += distance.x * node_ids.len() as f64;
@@ -412,41 +411,75 @@ impl DiagramCore {
                 }
             }
 
-            let t = unsafe { self.nodes.get_mut(node_id).unwrap_unchecked() };
-            let (old, new);
-            {
-                let node = t.get_mut();
-                old = node.layout.idx(step);
-                node.layout.move_distance(distance);
-                new = node.layout.idx(step);
-            }
-            match t {
+            match unsafe { self.nodes.get_mut(node_id).unwrap_unchecked() } {
                 NodeCanvasTarget::Box(n) => {
-                    boxes.push(MovedNode {
-                        id: n.id,
-                        layout: n.layout,
-                    });
-                    self.idx.update(&ScreenSlot::Box(*node_id), old, new);
+                    let ss = ScreenSlot::Box(*node_id);
+                    if !self.pending_updates.contains_key(&ss) {
+                        self.pending_updates.insert(ss, n.layout.idx(step));
+                    }
+                    n.layout.move_distance(distance);
                 }
                 NodeCanvasTarget::Node(n) => {
-                    nodes.push(MovedNode {
-                        id: n.id,
-                        layout: n.layout,
-                    });
-                    self.idx.update(&ScreenSlot::Node(*node_id), old, new);
+                    let ss = ScreenSlot::Node(*node_id);
+                    if !self.pending_updates.contains_key(&ss) {
+                        self.pending_updates.insert(ss, n.layout.idx(step));
+                    }
+                    n.layout.move_distance(distance);
                 }
-            }
+            };
         }
 
         for lid in links {
             let lc = unsafe { self.links.get_mut(&lid).unwrap_unchecked() };
             let dd = unsafe { lc.draw_data.as_mut().unwrap_unchecked() };
-            let old = dd.index.idx(step);
+            let ss = ScreenSlot::Link(lid);
+
+            if !self.pending_updates.contains_key(&ss) {
+                self.pending_updates.insert(ss, dd.index.idx(step));
+            }
             dd.move_distance(distance);
-            let new = dd.index.idx(step);
-            self.idx.update(&ScreenSlot::Link(lid), old, new);
         }
-        MovedNodes { nodes, boxes }
+    }
+    pub fn finish_move(&mut self) {
+        let mut keys = Vec::with_capacity(self.pending_updates.len());
+        for id in self.pending_updates.keys() {
+            keys.push(*id);
+        }
+        keys.sort();
+        let step = self.idx.step;
+        for ss in keys {
+            let old = unsafe { self.pending_updates.remove(&ss).unwrap_unchecked() };
+            match ss {
+                ScreenSlot::Box(b) => {
+                    let new = unsafe { self.nodes.get(&b).unwrap_unchecked() }
+                        .get()
+                        .layout
+                        .idx(step);
+                    self.idx.update(&ScreenSlot::Box(b), old, new);
+                }
+                ScreenSlot::Node(b) => {
+                    let new = unsafe { self.nodes.get(&b).unwrap_unchecked() }
+                        .get()
+                        .layout
+                        .idx(step);
+                    self.idx.update(&ScreenSlot::Node(b), old, new);
+                }
+                ScreenSlot::Link(b) => {
+                    let new = unsafe {
+                        self.links
+                            .get(&b)
+                            .unwrap_unchecked()
+                            .draw_data
+                            .as_ref()
+                            .unwrap_unchecked()
+                    }
+                    .index
+                    .idx(step);
+                    self.idx.update(&ScreenSlot::Link(b), old, new);
+                }
+            }
+        }
+        self.pending_updates.clear();
     }
 
     pub fn mount(&self, width: u32, height: u32, id: String) -> Result<(), JsValue> {

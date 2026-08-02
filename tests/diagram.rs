@@ -138,6 +138,7 @@ fn test_move_box() {
     let distance = &Point { x: 5.0, y: 5.0 };
 
     diagram.borrow_mut().move_nodes(distance, &[0, 1, 2]);
+    diagram.borrow_mut().finish_move();
 
     test_points(diagram, *distance);
 }

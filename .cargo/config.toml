@@ -5,3 +5,5 @@ rustflags = ["-C", "target-feature=+simd128"]
 #rustflags = ["-C", "link-arg=-zstack-size=16384"]
 [target.wasm32-wasi]
 rustflags = ["-C", "target-feature=+simd128"]
+#[build]
+#target = "wasm32-wasi"

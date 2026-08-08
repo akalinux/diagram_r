@@ -21,7 +21,6 @@ pub fn square_d() -> Square {
 
 pub fn box_a() -> Node {
     Node::new(
-        2,
         Square::new(0.0, 0.0, 10.0, 2.0),
         String::from("box-a"),
         0,
@@ -31,14 +30,12 @@ pub fn box_a() -> Node {
 pub fn nodes_a_b() -> (Node, Node) {
     (
         Node::new(
-            0,
             Square::new(0.0, 0.0, 1.0, 1.0),
             String::from("node-a"),
             0,
             vec![0],
         ),
         Node::new(
-            1,
             Square::new(9.0, 0.0, 1.0, 1.0),
             String::from("node-b"),
             0,
@@ -54,9 +51,9 @@ pub fn full_testbox() -> (FullBox, AngleNorthSouth) {
 }
 
 pub fn data_lc_b1_l2() -> (Link, Link, Bundle) {
-    let c = Bundle::new(0, 1, 0, String::from("test bundle"), vec![0, 1]);
-    let a = Link::new(0, 1, 0, String::from("link a"), Animation::ToDst);
-    let b = Link::new(1, 0, 0, String::from("link b"), Animation::ToDst);
+    let c = Bundle::new(1, 2, 0, String::from("test bundle"), vec![0, 1]);
+    let a = Link::new(1, 2, 0, String::from("link a"), Animation::ToDst);
+    let b = Link::new(2, 1, 0, String::from("link b"), Animation::ToDst);
     (a, b, c)
 }
 pub fn test_lc_b1_l2() -> LinkContainer {

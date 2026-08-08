@@ -162,15 +162,16 @@ impl ScreenIndex {
                         }
                     }
                     Slot::Box | Slot::Node => {
-                        match unsafe { d.nodes.get(&set.id.node()).unwrap_unchecked() } {
+                        let id = &set.id.node();
+                        match &d.nodes[*id as usize] {
                             NodeCanvasTarget::Box(node) => {
                                 if node.layout.contains_point(p) {
-                                    return LookupPointResult::Box(node.id);
+                                    return LookupPointResult::Box(*id);
                                 }
                             }
                             NodeCanvasTarget::Node(node) => {
                                 if node.layout.contains_point(p) {
-                                    return LookupPointResult::Node(node.id);
+                                    return LookupPointResult::Node(*id);
                                 }
                             }
                         }

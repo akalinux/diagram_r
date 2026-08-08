@@ -7,38 +7,36 @@ pub struct Node {
     pub layout: Square,
     pub label: String,
     pub opt: u32,
-    pub id: u32,
     pub groups: Vec<u32>,
 }
 
 #[wasm_bindgen]
 impl Node {
     #[wasm_bindgen(constructor)]
-    pub fn new(id: u32, layout: Square, label: String, opt: u32, groups: Vec<u32>) -> Self {
+    pub fn new(layout: Square, label: String, opt: u32, groups: Vec<u32>) -> Self {
         Self {
             label,
             layout,
             opt,
-            id,
             groups,
         }
     }
 }
 impl Hash for Node {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
+        self.label.hash(state);
     }
 }
 impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        self.label == other.label
     }
 }
 impl Eq for Node {}
 
 impl PartialOrd for Node {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let cmp = self.id.cmp(&other.id);
+        let cmp = self.label.cmp(&other.label);
         match cmp {
             Ordering::Equal => Some(Ordering::Equal),
             _ => {

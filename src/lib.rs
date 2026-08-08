@@ -38,7 +38,6 @@ pub enum LabelPosition {
 #[wasm_bindgen(getter_with_clone)]
 #[derive(Clone, Debug)]
 pub struct ElementOpt {
-    pub id: u32,
     pub img: String,
     pub color: String,
     pub label_position: LabelPosition,
@@ -46,9 +45,8 @@ pub struct ElementOpt {
 #[wasm_bindgen]
 impl ElementOpt {
     #[wasm_bindgen(constructor)]
-    pub fn new(id: u32, img: String, color: String, label_position: LabelPosition) -> Self {
+    pub fn new(img: String, color: String, label_position: LabelPosition) -> Self {
         Self {
-            id,
             img,
             label_position,
             color,
@@ -59,7 +57,6 @@ impl ElementOpt {
 impl ElementOpt {
     pub fn defaults() -> Self {
         return Self {
-            id: 0,
             img: String::from(""),
             color: String::from(DEFAULT_COLOR),
             label_position: LabelPosition::Top,

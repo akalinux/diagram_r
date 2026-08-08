@@ -47,14 +47,12 @@ fn set_data_test() {
 }
 
 fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
-    let (node_a, node_b) = nodes_a_b();
-
     assert_eq!(
         diagram
             .borrow()
             .idx
             .contains_point(&(ZERO_POINT.move_distance(&p)), &*diagram.borrow()),
-        LookupPointResult::Node(node_a.id)
+        LookupPointResult::Node(1)
     );
 
     assert_eq!(
@@ -62,15 +60,14 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
             &Point { x: 10.0, y: 0.000 }.move_distance(&p),
             &*diagram.borrow()
         ),
-        LookupPointResult::Node(node_b.id)
+        LookupPointResult::Node(2)
     );
-    let box_a = box_a();
     assert_eq!(
         diagram.borrow().idx.contains_point(
             &Point { x: 5.0, y: 0.0 }.move_distance(&p),
             &*diagram.borrow()
         ),
-        LookupPointResult::Box(box_a.id)
+        LookupPointResult::Box(0)
     );
     let (link_a, link_b, bundle) = data_lc_b1_l2();
     assert_eq!(

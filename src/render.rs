@@ -249,20 +249,18 @@ impl Render {
         let opt = &diagram.render_ops;
         animations.set_line_dash_offset(self.frame_tick);
         let ro = &diagram.render_order;
-        let node_hash = &diagram.nodes;
+        let node_vec = &diagram.nodes;
         let link_hash = &diagram.links;
         for target in ro {
             match target {
-                ScreenSlot::Box(id) | ScreenSlot::Node(id) => {
-                    match unsafe { node_hash.get(id).unwrap_unchecked() } {
-                        NodeCanvasTarget::Node(node) => {
-                            self.draw_node(nodes, node, diagram, cache, false)?;
-                        }
-                        NodeCanvasTarget::Box(node) => {
-                            self.draw_node(boxes, node, diagram, cache, false)?;
-                        }
+                ScreenSlot::Box(id) | ScreenSlot::Node(id) => match &node_vec[*id as usize] {
+                    NodeCanvasTarget::Node(node) => {
+                        self.draw_node(nodes, node, diagram, cache, false)?;
                     }
-                }
+                    NodeCanvasTarget::Box(node) => {
+                        self.draw_node(boxes, node, diagram, cache, false)?;
+                    }
+                },
                 ScreenSlot::Link(id) => {
                     let link = unsafe { link_hash.get(id).unwrap_unchecked() };
                     self.draw_link(links, animations, link, diagram, opt, cache)?;

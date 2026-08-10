@@ -1,8 +1,10 @@
 #![cfg(test)]
 
 use diagram_r::bsp::iter::{IdxBoxAction, IdxBoxIter};
+use wasm_bindgen_test::wasm_bindgen_test;
 
 #[test]
+#[wasm_bindgen_test]
 fn iter_box_same_area_tests() {
     let mut iter = IdxBoxIter::new((1..=1, 1..=1, 0.0), (1..=1, 1..=1, 0.0), 1);
     assert!(iter.next().is_none());
@@ -17,6 +19,7 @@ fn iter_box_same_area_tests() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn iter_no_overlap() {
     let mut iter = IdxBoxIter::new((1..=1, 1..=1, 0.0), (2..=2, 2..=2, 0.0), 1);
     assert_eq!(iter.next(), Some((1, 1, IdxBoxAction::Remove, 0.0)));
@@ -29,6 +32,7 @@ fn iter_no_overlap() {
     assert!(iter.next().is_none());
 }
 #[test]
+#[wasm_bindgen_test]
 fn iter_box_diff_area_tests() {
     let mut iter = IdxBoxIter::new((1..=1, 1..=1, 2.0), (1..=1, 1..=1, 1.0), 1);
     assert_eq!(iter.next(), Some((1, 1, IdxBoxAction::Add, 1.0)));

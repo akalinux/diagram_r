@@ -4,13 +4,16 @@ use diagram_r::{Point, constants::ZERO_POINT, square::Square};
 
 mod common;
 use common::*;
+use wasm_bindgen_test::wasm_bindgen_test;
 #[test]
+#[wasm_bindgen_test]
 fn get_center() {
     let a = square_a();
     assert_eq!(a.get_center(), Point::new(2.5, 2.5));
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn index_tests() {
     assert_eq!(square_a().idx(5), (0..=5, 0..=5, 25.0));
     assert_eq!(square_b().idx(5), (0..=10, 0..=10, 100.0));
@@ -19,12 +22,14 @@ fn index_tests() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn from_min_max() {
     let a = Square::from((1.0, 2.0, 2.0, 3.0));
     assert_eq!(a, Square::new(1.0, 2.0, 1.0, 1.0));
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn screen_center() {
     let a = Square {
         width: 5.0,
@@ -53,6 +58,7 @@ fn screen_center() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn contains_point() {
     let s = Square::new(0.0, 0.0, 2.0, 2.0);
     assert!(s.contains_point(&ZERO_POINT));
@@ -72,6 +78,7 @@ fn contains_point() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn distance_tests() {
     let mut p = square_a();
     let m = Point::new(2.0, 2.0);

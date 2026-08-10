@@ -4,15 +4,16 @@ mod common;
 use approx::assert_relative_eq;
 use common::*;
 use diagram_r::{Point, bsp::LookupPointResult, constants::ZERO_POINT, diagram::DiagramOpt};
+use wasm_bindgen_test::wasm_bindgen_test;
 #[test]
+#[wasm_bindgen_test]
 fn link_container_update_tests() {
-    let mut lc = test_lc_b1_l2();
-    let (a, b) = nodes_a_b();
     let mut opt = DiagramOpt::new();
     opt.link_scale = 1.0;
-    lc.build_draw_data(&a, &b, &opt);
+    let (a, b) = nodes_a_b();
+    let mut lc = test_lc_b1_l2(&a, &b, &opt, 0, (0, 1));
     // 2 links act as 4
-    let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
+    let dd = &lc.draw_data;
     let center = Point::new(5.0, 0.5);
     assert_relative_eq!(dd.bundles[0].x, center.x, epsilon = 0.001);
     assert_relative_eq!(dd.bundles[0].y, center.y, epsilon = 0.001);
@@ -33,11 +34,17 @@ fn link_container_update_tests() {
     assert_relative_eq!(cmp.x, center.x, epsilon = 0.001);
     assert_relative_eq!(cmp.y, center.y, epsilon = 0.001);
     let mut res = lc.contains_point(&center);
-    assert_eq!(&res, &LookupPointResult::Bundle((lc.bundles[0].clone(), 0)));
+    assert_eq!(
+        &res,
+        &LookupPointResult::Bundle((lc.ls.bundles[0].clone(), 0, 0))
+    );
     assert_relative_eq!(lc.get_center(&res).x, center.x, epsilon = 0.001);
     assert_relative_eq!(lc.get_center(&res).y, center.y, epsilon = 0.001);
     res = lc.contains_point(&Point::new(1.0, 0.25));
-    assert_eq!(&res, &LookupPointResult::Link((lc.links[0].clone(), 0)));
+    assert_eq!(
+        &res,
+        &LookupPointResult::Link((lc.ls.links[0].clone(), 0, 0))
+    );
     left.y = 0.25;
     left.x = 5.0;
     assert_relative_eq!(lc.get_center(&res).x, left.x, epsilon = 0.001);

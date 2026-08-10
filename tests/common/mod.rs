@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 use diagram_r::{
     Point,
-    link::{Animation, Bundle, Link, LinkContainer},
+    diagram::DiagramOpt,
+    link::{Animation, Bundle, Link, LinkContainer, LinkSet},
     node::Node,
     square::Square,
     utils::{AngleNorthSouth, FullBox, full_box_from},
@@ -51,17 +52,22 @@ pub fn full_testbox() -> (FullBox, AngleNorthSouth) {
 }
 
 pub fn data_lc_b1_l2() -> (Link, Link, Bundle) {
-    let c = Bundle::new(1, 2, 0, String::from("test bundle"), vec![0, 1]);
-    let a = Link::new(1, 2, 0, String::from("link a"), Animation::ToDst);
-    let b = Link::new(2, 1, 0, String::from("link b"), Animation::ToDst);
+    let c = Bundle::new(1, String::from("test bundle"), vec![0, 1]);
+    let a = Link::new(1, String::from("link a"), Animation::ToDst);
+    let b = Link::new(2, String::from("link b"), Animation::ToDst);
     (a, b, c)
 }
-pub fn test_lc_b1_l2() -> LinkContainer {
-    let (a, b, c) = data_lc_b1_l2();
-    let mut res = LinkContainer::new(b.link_id());
-    res.add_link(a);
-    res.add_link(b);
-    let _ = res.add_bundle(c);
 
-    res
+pub fn default_link_set(ids: (usize, usize)) -> LinkSet {
+    let (a, b, c) = data_lc_b1_l2();
+    LinkSet::new(vec![a, b], vec![c], ids.0, ids.1)
+}
+pub fn test_lc_b1_l2(
+    src: &Node,
+    dst: &Node,
+    opt: &DiagramOpt,
+    id: usize,
+    ids: (usize, usize),
+) -> LinkContainer {
+    LinkContainer::new(default_link_set(ids), src, dst, opt, id)
 }

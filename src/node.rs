@@ -6,14 +6,14 @@ use wasm_bindgen::prelude::*;
 pub struct Node {
     pub layout: Square,
     pub label: String,
-    pub opt: u32,
+    pub opt: usize,
     pub groups: Vec<u32>,
 }
 
 #[wasm_bindgen]
 impl Node {
     #[wasm_bindgen(constructor)]
-    pub fn new(layout: Square, label: String, opt: u32, groups: Vec<u32>) -> Self {
+    pub fn new(layout: Square, label: String, opt: usize, groups: Vec<u32>) -> Self {
         Self {
             label,
             layout,

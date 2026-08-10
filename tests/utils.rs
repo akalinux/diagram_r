@@ -8,6 +8,8 @@ use diagram_r::{
     constants::ZERO_POINT,
     utils::{get_angle, inside_box},
 };
+use wasm_bindgen_test::wasm_bindgen_test;
+#[wasm_bindgen_test]
 #[test]
 fn angle_test() {
     let start = ZERO_POINT;
@@ -17,6 +19,7 @@ fn angle_test() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn full_box_from_tests() {
     let ((nw, ne, sw, se), (angle, north, south)) = full_testbox();
     assert_relative_eq!(angle, 180.0, epsilon = 0.001);
@@ -34,6 +37,7 @@ fn full_box_from_tests() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn inside_box_tests() {
     let (pbox, _) = full_testbox();
     // top left

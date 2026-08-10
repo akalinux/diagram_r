@@ -11,7 +11,7 @@ pub mod targets;
 
 use crate::{
     ElementOpt, Point,
-    bsp::{LookupPointResult, ScreenSlot},
+    bsp::LookupPointResult,
     diagram::{DiagramCore, DiagramOpt, NodeCanvasTarget},
     imgcache::ImgCache,
     link::LinkContainer,
@@ -185,16 +185,16 @@ impl Render {
         opt: &DiagramOpt,
         cache: &ImgCache,
     ) -> Result<(), JsValue> {
-        let data = unsafe { link.draw_data.as_ref().unwrap_unchecked() };
+        let data = &link.draw_data;
         let width = data.line_width;
-        for (i, ld) in link.links.iter().enumerate() {
+        for (i, ld) in link.ls.links.iter().enumerate() {
             let (a, b) = &data.links[i];
             self.draw_line(links, a, b, width, &diagram.get_opt(ld.opt).color);
         }
         for (a, b, width) in &data.animations {
             self.draw_line(animations, a, b, *width, &opt.animation_color);
         }
-        for (i, bundle) in link.bundles.iter().enumerate() {
+        for (i, bundle) in link.ls.bundles.iter().enumerate() {
             let target = data.bundle_draw_box(i);
             self.draw_box(
                 links,
@@ -248,24 +248,20 @@ impl Render {
         let cache = &diagram.img_cache;
         let opt = &diagram.render_ops;
         animations.set_line_dash_offset(self.frame_tick);
-        let ro = &diagram.render_order;
         let node_vec = &diagram.nodes;
-        let link_hash = &diagram.links;
-        for target in ro {
+        let link_vec = &diagram.links;
+        for target in node_vec {
             match target {
-                ScreenSlot::Box(id) | ScreenSlot::Node(id) => match &node_vec[*id as usize] {
-                    NodeCanvasTarget::Node(node) => {
-                        self.draw_node(nodes, node, diagram, cache, false)?;
-                    }
-                    NodeCanvasTarget::Box(node) => {
-                        self.draw_node(boxes, node, diagram, cache, false)?;
-                    }
-                },
-                ScreenSlot::Link(id) => {
-                    let link = unsafe { link_hash.get(id).unwrap_unchecked() };
-                    self.draw_link(links, animations, link, diagram, opt, cache)?;
+                NodeCanvasTarget::Box((node, _)) => {
+                    self.draw_node(boxes, node, diagram, cache, false)?;
+                }
+                NodeCanvasTarget::Node((node, _)) => {
+                    self.draw_node(nodes, node, diagram, cache, false)?;
                 }
             }
+        }
+        for link in link_vec {
+            self.draw_link(links, animations, link, diagram, opt, cache)?;
         }
         Ok(())
     }

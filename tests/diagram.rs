@@ -8,8 +8,9 @@ use diagram_r::{
     constants::ZERO_POINT,
     diagram::{DiagramCore, DiagramOpt},
 };
+use wasm_bindgen_test::wasm_bindgen_test;
 
-use crate::common::{box_a, data_lc_b1_l2, nodes_a_b};
+use crate::common::{box_a, data_lc_b1_l2, default_link_set, nodes_a_b};
 mod common;
 
 pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
@@ -18,15 +19,12 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
     let ct = DiagramCore::new(ops);
 
     let (node_a, node_b) = nodes_a_b();
-    let box_a = box_a();
-    let (link_a, link_b, bundle) = data_lc_b1_l2();
+    let links = vec![default_link_set((1, 2))];
 
-    match ct.borrow_mut().set_data(
-        vec![box_a],
-        vec![node_a, node_b],
-        vec![link_a, link_b],
-        vec![bundle],
-    ) {
+    match ct
+        .borrow_mut()
+        .set_data(vec![box_a()], vec![node_a, node_b], links)
+    {
         Err(_) => panic!("Setting data failed!"),
         Ok(_) => (),
     };
@@ -35,6 +33,7 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn buld_ok_test() {
     let mut ops = DiagramOpt::new();
     ops.index_step = 1;
@@ -42,6 +41,7 @@ fn buld_ok_test() {
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn set_data_test() {
     base_diagram();
 }
@@ -75,14 +75,14 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
             &Point { x: 5.0, y: 0.5 }.move_distance(&p),
             &*diagram.borrow()
         ),
-        LookupPointResult::Bundle((bundle.clone(), 0))
+        LookupPointResult::Bundle((bundle.clone(), 0, 0))
     );
     assert_eq!(
         diagram.borrow().idx.contains_point(
             &Point { x: 2.5, y: 0.21 }.move_distance(&p),
             &*diagram.borrow()
         ),
-        LookupPointResult::Link((link_a.clone(), 0))
+        LookupPointResult::Link((link_a.clone(), 0, 0))
     );
 
     assert_eq!(
@@ -90,10 +90,11 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
             &Point { x: 2.5, y: 0.66 }.move_distance(&p),
             &*diagram.borrow()
         ),
-        LookupPointResult::Link((link_b.clone(), 1))
+        LookupPointResult::Link((link_b.clone(), 1, 0))
     );
 }
 #[test]
+#[wasm_bindgen_test]
 fn in_point_tests() {
     let diagram = base_diagram();
     test_points(diagram, ZERO_POINT);
@@ -104,31 +105,32 @@ fn reload_data() -> Rc<RefCell<DiagramCore>> {
 
     let (node_a, node_b) = nodes_a_b();
     let box_a = box_a();
-    let (link_a, link_b, bundle) = data_lc_b1_l2();
+    let links = vec![default_link_set((1, 2))];
 
-    match diagram.borrow_mut().set_data(
-        vec![box_a],
-        vec![node_a, node_b],
-        vec![link_a, link_b],
-        vec![bundle],
-    ) {
+    match diagram
+        .borrow_mut()
+        .set_data(vec![box_a], vec![node_a, node_b], links)
+    {
         Err(_) => panic!("Setting data failed!"),
         Ok(_) => (),
     };
     diagram
 }
 #[test]
+#[wasm_bindgen_test]
 fn reload_data_test() {
     reload_data();
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn test_reloaded_points() {
     let diagram = reload_data();
     test_points(diagram, ZERO_POINT);
 }
 
 #[test]
+#[wasm_bindgen_test]
 fn test_move_box() {
     let diagram = reload_data();
     test_points(Rc::clone(&diagram), ZERO_POINT);

@@ -1,12 +1,12 @@
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{cell::RefCell, mem, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ElementOpt, Point, Transform,
     bsp::{IndexXY, ScreenIndex, ScreenSlot, iter::IdxBoxAction},
     constants::*,
     imgcache::ImgCache,
-    link::{Bundle, Link, LinkContainer},
+    link::{LinkContainer, LinkSet},
     node::Node,
     render::Render,
     square::Square,
@@ -79,46 +79,51 @@ impl DiagramOpt {
     }
 }
 
-#[derive(Hash, PartialEq)]
+pub type NodeSet = (Node, Vec<usize>);
 pub enum NodeCanvasTarget {
-    Box(Node),
-    Node(Node),
+    Box(NodeSet),
+    Node(NodeSet),
+}
+
+impl PartialEq for NodeCanvasTarget {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Box(_), Self::Box(_)) => self.get().0.label == other.get().0.label,
+            (Self::Node(_), Self::Node(_)) => self.get().0.label == other.get().0.label,
+            _ => false,
+        }
+    }
 }
 impl Eq for NodeCanvasTarget {}
 impl NodeCanvasTarget {
-    pub fn unwrap(self) -> Node {
+    pub fn unwrap(self) -> NodeSet {
         match self {
-            NodeCanvasTarget::Box(node) => node,
-            NodeCanvasTarget::Node(node) => node,
+            NodeCanvasTarget::Box(set) | NodeCanvasTarget::Node(set) => set,
         }
     }
 
-    pub fn get(&self) -> &Node {
+    pub fn get(&self) -> &NodeSet {
         match self {
-            NodeCanvasTarget::Box(node) => node,
-            NodeCanvasTarget::Node(node) => node,
+            NodeCanvasTarget::Box(set) | NodeCanvasTarget::Node(set) => set,
         }
     }
-    pub fn get_mut(&mut self) -> &mut Node {
+    pub fn get_mut(&mut self) -> &mut NodeSet {
         match self {
-            NodeCanvasTarget::Box(node) => node,
-            NodeCanvasTarget::Node(node) => node,
+            NodeCanvasTarget::Box(set) | NodeCanvasTarget::Node(set) => set,
         }
     }
 }
 pub struct DiagramCore {
     pub el_ops: Vec<ElementOpt>,
     pub nodes: Vec<NodeCanvasTarget>,
-    pub links: FxHashMap<u64, LinkContainer>,
+    pub links: Vec<LinkContainer>,
     pub idx: ScreenIndex,
-    pub render_order: Vec<ScreenSlot>,
     pub render_ops: DiagramOpt,
     pub center: Point,
     pending_updates: FxHashMap<ScreenSlot, IndexXY>,
 
     pub transform: Transform,
-    pub groups: FxHashMap<u32, FxHashSet<u32>>, // group_id,set->node_ids
-    pub node_links: FxHashMap<u32, FxHashSet<u64>>,
+    pub groups: FxHashMap<u32, FxHashSet<usize>>, // group_id,set->node_ids
     pub img_cache: ImgCache,
     pub render: Rc<RefCell<Render>>,
     pub animation_order: Vec<u64>,
@@ -153,12 +158,9 @@ impl Diagram {
         &self,
         boxes: Vec<Node>,
         nodes: Vec<Node>,
-        links: Vec<Link>,
-        bundles: Vec<Bundle>,
+        links: Vec<LinkSet>,
     ) -> Result<(), JsValue> {
-        self.core
-            .borrow_mut()
-            .set_data(boxes, nodes, links, bundles)
+        self.core.borrow_mut().set_data(boxes, nodes, links)
     }
 
     pub fn mount(&self, width: u32, height: u32, id: String) -> Result<(), JsValue> {
@@ -169,86 +171,17 @@ impl Diagram {
     }
 }
 impl DiagramCore {
-    fn finish_bulk_load(&mut self, start: usize) -> Result<(), JsValue> {
-        let total = self.nodes.len();
-        if total == 0 {
-            return Ok(());
-        }
-        let total = total as f64;
-        let opt = &self.render_ops;
-        let step = opt.index_step;
-        self.center.x = self.center.x / total;
-        self.center.y = self.center.y / total;
-        for i in start..self.render_order.len() {
-            let lid = unsafe { self.render_order[i].get_link_id().unwrap_unchecked() };
-            {
-                let lc = unsafe { self.links.get_mut(lid).unwrap_unchecked() };
-                let (a, b) = lc.get_src_dst();
-                let x = &self.nodes[a as usize];
-                let y = &self.nodes[b as usize];
-                let src = match x {
-                    NodeCanvasTarget::Box(_) => return Err(JsValue::from_str(LINK_ADD_ERROR)),
-                    NodeCanvasTarget::Node(node) => node,
-                };
-                let dst = match y {
-                    NodeCanvasTarget::Box(_) => return Err(JsValue::from_str(LINK_ADD_ERROR)),
-                    NodeCanvasTarget::Node(node) => node,
-                };
-
-                lc.build_draw_data(src, dst, opt);
-                let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
-                if !dd.animations.len() == 0 {
-                    self.animation_order.push(lc.id);
-                }
-                let points = dd.index.idx(step);
-                self.idx
-                    .manage(&ScreenSlot::Link(lc.id), points, IdxBoxAction::Add);
-            }
-
-            let lc = unsafe { self.links.get(lid).unwrap_unchecked() };
-            self.render
-                .borrow()
-                .render_link(lc, self, &self.render_ops, &self.img_cache)?;
-        }
-        self.links.shrink_to_fit();
-        self.node_links.shrink_to_fit();
-        self.groups.shrink_to_fit();
-        Ok(())
-    }
-    pub fn add_link(&mut self, link: Link) -> Result<(), JsValue> {
-        if link.src == link.dst
-            || !(self.nodes.len() > link.src as usize)
-            || !(self.nodes.len() > link.dst as usize)
-        {
-            return Err(JsValue::from(LINK_NODE_MISSING_ERROR));
-        }
-        self.get_lc(link.link_id()).add_link(link);
-        Ok(())
-    }
-
-    pub fn add_bundle(&mut self, bundle: Bundle) -> Result<(), JsValue> {
-        if bundle.src == bundle.dst
-            || !(self.nodes.len() > bundle.src as usize)
-            || !(self.nodes.len() > bundle.dst as usize)
-        {
-            return Err(JsValue::from(LINK_BUNDLE_MISSING_ERROR));
-        }
-        self.get_lc(bundle.link_id()).add_bundle(bundle)?;
-        Ok(())
-    }
     pub fn new(render_ops: DiagramOpt) -> Rc<RefCell<Self>> {
         let render = Render::new();
         let mut res = Self {
-            nodes: vec![],
-            links: FxHashMap::default(),
+            nodes: Vec::new(),
+            links: Vec::new(),
             el_ops: vec![ElementOpt::defaults()],
             idx: ScreenIndex::new(render_ops.index_step),
-            render_order: Vec::new(),
             render_ops,
             center: ZERO_POINT,
             transform: ZERO_TRANSFORM,
             groups: FxHashMap::default(),
-            node_links: FxHashMap::default(),
             img_cache: ImgCache::new(Rc::clone(&render)),
             pending_updates: FxHashMap::default(),
             render,
@@ -262,8 +195,7 @@ impl DiagramCore {
         this
     }
 
-    pub fn get_opt(&self, id: u32) -> &ElementOpt {
-        let id = id as usize;
+    pub fn get_opt(&self, id: usize) -> &ElementOpt {
         match self.el_ops.get(id) {
             Some(opt) => opt,
             None => &self.el_ops[0],
@@ -290,30 +222,35 @@ impl DiagramCore {
     }
 
     pub fn add_node(&mut self, node: Node, as_node: bool) {
-        let id = self.nodes.len() as u32;
+        let id = self.nodes.len();
         self.center.x += node.layout.x;
         self.center.y += node.layout.x;
 
         self.update_groups(&node.groups, id);
         let points = node.layout.idx(self.render_ops.index_step);
         let (n, ss) = match as_node {
-            true => (NodeCanvasTarget::Node(node), ScreenSlot::Node(id)),
-            false => (NodeCanvasTarget::Box(node), ScreenSlot::Box(id)),
+            true => (
+                NodeCanvasTarget::Node((node, Vec::new())),
+                ScreenSlot::Node(id),
+            ),
+            false => (
+                NodeCanvasTarget::Box((node, Vec::new())),
+                ScreenSlot::Box(id),
+            ),
         };
         self.idx.manage(&ss, points, IdxBoxAction::Add);
-        self.render_order.push(ss);
         self.nodes.push(n);
     }
     pub fn set_data(
         &mut self,
         boxes: Vec<Node>,
         nodes: Vec<Node>,
-        links: Vec<Link>,
-        bundles: Vec<Bundle>,
+        links: Vec<LinkSet>,
     ) -> Result<(), JsValue> {
         self.clear();
         self.render.borrow().clear()?;
 
+        self.nodes.reserve(boxes.len() + nodes.len());
         for node in boxes {
             self.render
                 .borrow()
@@ -326,41 +263,42 @@ impl DiagramCore {
                 .render_node(&node, &self, &self.img_cache, true)?;
             self.add_node(node, true);
         }
-        let start = self.render_order.len();
-        for link in links {
-            self.add_link(link)?
+        self.links.reserve(links.len());
+        for lc in links {
+            self.add_link(lc)?;
         }
-        for bundle in bundles {
-            self.add_bundle(bundle)?;
-        }
-        self.finish_bulk_load(start)?;
 
         Ok(())
     }
-    fn get_lc<'l>(&'l mut self, id: u64) -> &'l mut LinkContainer {
-        if let Some(c) = self.links.get_mut(&id) {
-            return unsafe { mem::transmute(c) };
-        }
 
-        self.links.insert(id, LinkContainer::new(id));
-        let res = unsafe { self.links.get_mut(&id).unwrap_unchecked() };
-        self.render_order.push(ScreenSlot::Link(id));
-
-        let (src, dst) = res.get_src_dst();
-        for id in [src, dst] {
-            if let Some(l) = self.node_links.get_mut(&id) {
-                l.insert(res.id);
-            } else {
-                let mut l = FxHashSet::default();
-                l.insert(res.id);
-                self.node_links.insert(id, l);
+    fn add_link(&mut self, ls: LinkSet) -> Result<(), JsValue> {
+        let id = self.links.len();
+        let (lc, a, b);
+        {
+            (a, b) = (ls.src as usize, ls.dst as usize);
+            if a == b {
+                return Err(JsValue::from(LINK_ADD_ERROR));
             }
+            let (x, y) = match (self.nodes.get(a), self.nodes.get(b)) {
+                (Some(a), Some(b)) => (a, b),
+                _ => return Err(JsValue::from(LINK_ADD_ERROR)),
+            };
+            let (src, dst) = match (x, y) {
+                (NodeCanvasTarget::Node((c, _)), NodeCanvasTarget::Node((d, _))) => (c, d),
+                _ => return Err(JsValue::from(LINK_ADD_ERROR)),
+            };
+            lc = LinkContainer::new(ls, src, dst, &self.render_ops, id);
         }
-
-        res
+        self.nodes[a].get_mut().1.push(id);
+        self.nodes[b].get_mut().1.push(id);
+        let points = lc.draw_data.index.idx(self.idx.step);
+        self.idx
+            .manage(&ScreenSlot::Link(id), points, IdxBoxAction::Add);
+        self.links.push(lc);
+        Ok(())
     }
 
-    fn update_groups(&mut self, groups: &Vec<u32>, id: u32) {
+    fn update_groups(&mut self, groups: &Vec<u32>, id: usize) {
         for group in groups {
             let set;
             if let Some(s) = self.groups.get_mut(group) {
@@ -378,19 +316,17 @@ impl DiagramCore {
         self.links.clear();
         self.el_ops.clear();
         self.idx.clear();
-        self.render_order.clear();
         self.groups.clear();
-        self.node_links.clear();
         self.center = ZERO_POINT;
         self.animation_order.clear();
     }
 
-    pub fn get_related_nodes(&self, node_ids: &[u32]) -> Vec<u32> {
+    pub fn get_related_nodes(&self, node_ids: &[usize]) -> Vec<usize> {
         let mut ids = FxHashSet::default();
         ids.reserve(node_ids.len());
         for node_id in node_ids {
             ids.insert(*node_id);
-            let node = (&self.nodes[*node_id as usize]).get();
+            let (node, _) = (&self.nodes[*node_id]).get();
             for gid in &node.groups {
                 let group = unsafe { self.groups.get(gid).unwrap_unchecked() };
                 for node_id in group {
@@ -401,47 +337,43 @@ impl DiagramCore {
         ids.into_iter().collect()
     }
 
-    pub fn move_nodes(&mut self, distance: &Point, node_ids: &[u32]) {
+    pub fn move_nodes(&mut self, distance: &Point, node_ids: &[usize]) {
         let mut links = FxHashSet::default();
         let step = self.idx.step;
         self.center.x += distance.x * node_ids.len() as f64;
         self.center.y += distance.y * node_ids.len() as f64;
 
         for node_id in node_ids {
-            if let Some(moved) = self.node_links.get(node_id) {
-                links.reserve(moved.len());
-                for link_id in moved {
-                    links.insert(*link_id);
-                }
-            }
-
             match unsafe { self.nodes.get_mut(*node_id as usize).unwrap_unchecked() } {
-                NodeCanvasTarget::Box(n) => {
+                NodeCanvasTarget::Box((n, _)) => {
                     let ss = ScreenSlot::Box(*node_id);
                     if !self.pending_updates.contains_key(&ss) {
                         self.pending_updates.insert(ss, n.layout.idx(step));
                     }
                     n.layout.move_distance(distance);
                 }
-                NodeCanvasTarget::Node(n) => {
+                NodeCanvasTarget::Node((n, l)) => {
                     let ss = ScreenSlot::Node(*node_id);
                     if !self.pending_updates.contains_key(&ss) {
                         self.pending_updates.insert(ss, n.layout.idx(step));
                     }
                     n.layout.move_distance(distance);
+                    for lid in l {
+                        links.insert(*lid);
+                    }
                 }
             };
         }
 
         for lid in links {
-            let lc = unsafe { self.links.get_mut(&lid).unwrap_unchecked() };
-            let dd = unsafe { lc.draw_data.as_mut().unwrap_unchecked() };
+            let lc = unsafe { self.links.get_mut(lid).unwrap_unchecked() };
             let ss = ScreenSlot::Link(lid);
 
             if !self.pending_updates.contains_key(&ss) {
-                self.pending_updates.insert(ss, dd.index.idx(step));
+                self.pending_updates
+                    .insert(ss, lc.draw_data.index.idx(step));
             }
-            dd.move_distance(distance);
+            lc.draw_data.move_distance(distance);
         }
     }
     pub fn finish_move(&mut self) {
@@ -455,29 +387,19 @@ impl DiagramCore {
             let old = unsafe { self.pending_updates.remove(&ss).unwrap_unchecked() };
             match ss {
                 ScreenSlot::Box(b) => {
-                    let new = (&self.nodes[b as usize]).get().layout.idx(step);
+                    let new = (&self.nodes[b as usize]).get().0.layout.idx(step);
                     self.idx.update(&ScreenSlot::Box(b), old, new);
                 }
                 ScreenSlot::Node(b) => {
-                    let new = (&self.nodes[b as usize]).get().layout.idx(step);
+                    let new = (&self.nodes[b as usize]).get().0.layout.idx(step);
                     self.idx.update(&ScreenSlot::Node(b), old, new);
                 }
                 ScreenSlot::Link(b) => {
-                    let new = unsafe {
-                        self.links
-                            .get(&b)
-                            .unwrap_unchecked()
-                            .draw_data
-                            .as_ref()
-                            .unwrap_unchecked()
-                    }
-                    .index
-                    .idx(step);
+                    let new = self.links[b as usize].draw_data.index.idx(step);
                     self.idx.update(&ScreenSlot::Link(b), old, new);
                 }
             }
         }
-        self.pending_updates.clear();
     }
 
     pub fn mount(&self, width: u32, height: u32, id: String) -> Result<(), JsValue> {

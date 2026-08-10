@@ -18,27 +18,27 @@ pub enum Slot {
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum Id {
-    Link(u64),
-    Node(u32),
+    Link(usize),
+    Node(usize),
 }
 
 impl Id {
-    fn get_link(&self) -> Option<u64> {
+    fn get_link(&self) -> Option<usize> {
         match self {
             Id::Link(id) => Some(*id),
             _ => None,
         }
     }
-    fn get_node(&self) -> Option<u32> {
+    fn get_node(&self) -> Option<usize> {
         match self {
             Id::Node(id) => Some(*id),
             _ => None,
         }
     }
-    fn link(&self) -> u64 {
+    fn link(&self) -> usize {
         unsafe { self.get_link().unwrap_unchecked() }
     }
-    fn node(&self) -> u32 {
+    fn node(&self) -> usize {
         unsafe { self.get_node().unwrap_unchecked() }
     }
 }
@@ -76,35 +76,35 @@ impl Ord for XYSet {
 
 #[derive(PartialEq, Debug)]
 pub enum LookupPointResult {
-    Bundle((Bundle, usize)),
-    Link((Link, usize)),
-    Node(u32),
-    Box(u32),
+    Bundle((Bundle, usize, usize)),
+    Link((Link, usize, usize)),
+    Node(usize),
+    Box(usize),
     Screen,
     NoMatch,
 }
 
 #[derive(Clone, Copy, Hash, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ScreenSlot {
-    Node(u32),
-    Box(u32),
-    Link(u64),
+    Node(usize),
+    Box(usize),
+    Link(usize),
 }
 
 impl ScreenSlot {
-    pub fn get_link_id(&self) -> Option<&u64> {
+    pub fn get_link_id(&self) -> Option<&usize> {
         if let ScreenSlot::Link(id) = self {
             return Some(id);
         }
         None
     }
-    pub fn get_box_id(&self) -> Option<&u32> {
+    pub fn get_box_id(&self) -> Option<&usize> {
         if let ScreenSlot::Box(id) = self {
             return Some(id);
         }
         None
     }
-    pub fn get_node_id(&self) -> Option<&u32> {
+    pub fn get_node_id(&self) -> Option<&usize> {
         if let ScreenSlot::Node(id) = self {
             return Some(id);
         }
@@ -153,7 +153,9 @@ impl ScreenIndex {
                 match set.slot {
                     Slot::Link => {
                         let lid = set.id.link();
-                        match unsafe { d.links.get(&lid).unwrap_unchecked() }.contains_point(p) {
+                        match unsafe { d.links.get(lid as usize).unwrap_unchecked() }
+                            .contains_point(p)
+                        {
                             LookupPointResult::Link(res) => return LookupPointResult::Link(res),
                             LookupPointResult::Bundle(res) => {
                                 return LookupPointResult::Bundle(res);
@@ -164,12 +166,12 @@ impl ScreenIndex {
                     Slot::Box | Slot::Node => {
                         let id = &set.id.node();
                         match &d.nodes[*id as usize] {
-                            NodeCanvasTarget::Box(node) => {
+                            NodeCanvasTarget::Box((node, _)) => {
                                 if node.layout.contains_point(p) {
                                     return LookupPointResult::Box(*id);
                                 }
                             }
-                            NodeCanvasTarget::Node(node) => {
+                            NodeCanvasTarget::Node((node, _)) => {
                                 if node.layout.contains_point(p) {
                                     return LookupPointResult::Node(*id);
                                 }

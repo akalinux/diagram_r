@@ -66,7 +66,7 @@ impl Render {
     pub fn on_mouse_enter(&self, p: &Point) {
         self.clear_timeout();
     }
-    pub fn on_mouse_leave(&self, p: &Point) {
+    pub fn on_mouse_leave(&self, _: &Point) {
         self.clear_timeout();
     }
     pub fn on_mouse_move(&self, p: &Point) {

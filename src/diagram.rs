@@ -28,7 +28,6 @@ pub struct DiagramOpt {
     pub link_scale: f64,
     pub callback: Option<Function>,
     pub index_step: i64,
-    pub id: String,
     pub node_font_scale: f64,
     pub animation_color: String,
 }
@@ -62,7 +61,6 @@ impl DiagramOpt {
             callback: None,
             link_scale: DEFAULT_LINK_SCALE,
             index_step: DEFAULT_IDX_STEP,
-            id: String::from(DEFAULT_ELEMENT_ID),
             node_font_scale: NODE_FONT_SCALE,
             animation_color: String::from(DEFAULT_ANIMATION_COLOR),
         }
@@ -265,13 +263,20 @@ impl DiagramCore {
         }
         self.links.reserve(links.len());
         for lc in links {
+            let id = self.links.len();
             self.add_link(lc)?;
+            self.render.borrow().render_link(
+                &self.links[id],
+                &self,
+                &self.render_ops,
+                &self.img_cache,
+            )?;
         }
 
         Ok(())
     }
 
-    fn add_link(&mut self, ls: LinkSet) -> Result<(), JsValue> {
+    fn add_link(&mut self, ls: LinkSet) -> Result<usize, JsValue> {
         let id = self.links.len();
         let (lc, a, b);
         {
@@ -295,26 +300,25 @@ impl DiagramCore {
         self.idx
             .manage(&ScreenSlot::Link(id), points, IdxBoxAction::Add);
         self.links.push(lc);
-        Ok(())
+        Ok(id)
     }
 
     fn update_groups(&mut self, groups: &Vec<u32>, id: usize) {
         for group in groups {
-            let set;
-            if let Some(s) = self.groups.get_mut(group) {
-                set = s;
-            } else {
-                let s = FxHashSet::default();
-                self.groups.insert(*group, s);
-                set = unsafe { self.groups.get_mut(group).unwrap_unchecked() }
-            }
+            let set = match self.groups.get_mut(group) {
+                Some(s) => s,
+                None => {
+                    let s = FxHashSet::default();
+                    self.groups.insert(*group, s);
+                    unsafe { self.groups.get_mut(group).unwrap_unchecked() }
+                }
+            };
             set.insert(id);
         }
     }
     fn clear(&mut self) {
         self.nodes.clear();
         self.links.clear();
-        self.el_ops.clear();
         self.idx.clear();
         self.groups.clear();
         self.center = ZERO_POINT;

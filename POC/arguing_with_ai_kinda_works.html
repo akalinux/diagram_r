@@ -1,0 +1,184 @@
+i!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Instanced Image Rendering over WebGL Lines</title>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #111; }
+        canvas { border: 1px solid #444; }
+    </style>
+</head>
+<body>
+
+    <canvas id="canvas" width="800" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl2');
+        if (!gl) { alert('WebGL 2 required'); }
+
+        // --- IMAGE TEXTURE ARRAYS VISUAL SHADER ---
+        const vsSource = `#version 300 es
+            // Instance-specific coordinates and dimension sizes
+            in vec2 i_pos;          // Center positioning coordinates in clip space
+            in vec2 i_size;         // Screen dimensions [width, height] in pixels
+            in float i_img_index;   // Which image layer in the array to display
+
+            uniform vec2 u_resolution;
+
+            out vec2 v_uv;
+            out float v_img_layer;
+
+            void main() {
+                // Determine raw quadrant sizing shifts
+                vec2 halfSize = i_size * 0.5;
+
+                // 1. Single-pass computational setup mapping 4 bounds using compass naming conventions
+                vec2 sw = vec2(-halfSize.x, -halfSize.y);
+                vec2 nw = vec2(-halfSize.x,  halfSize.y);
+                vec2 se = vec2( halfSize.x, -halfSize.y);
+                vec2 ne = vec2( halfSize.x,  halfSize.y);
+
+                // Static matching UV coordinate maps
+                vec2 uv_sw = vec2(0.0, 0.0);
+                vec2 uv_nw = vec2(0.0, 1.0);
+                vec2 uv_se = vec2(1.0, 0.0);
+                vec2 uv_ne = vec2(1.0, 1.0);
+
+                // 2. Unroll the 6 sequential execution stages to match your triangle pattern
+                vec2 computedOffsets[] = vec2[]( sw, nw, se, se, nw, ne );
+                vec2 computedUVs[] = vec2[]( uv_sw, uv_nw, uv_se, uv_se, uv_nw, uv_ne );
+
+                // 3. Extract the target location from the array using the native hardware step ID
+                vec2 offsetPixel = computedOffsets[gl_VertexID];
+                v_uv = computedUVs[gl_VertexID];
+                v_img_layer = i_img_index;
+
+                // Translate center to pixels, apply offset bounds, convert back to WebGL clip space
+                vec2 centerPixel = ((i_pos + 1.0) * 0.5) * u_resolution;
+                vec2 finalPixel = centerPixel + offsetPixel;
+                gl_Position = vec4((finalPixel / u_resolution) * 2.0 - 1.0, 0.0, 1.0);
+            }
+        `;
+
+        const fsSource = `#version 300 es
+            precision mediump float;
+            precision mediump sampler2DArray;
+
+            in vec2 v_uv;
+            in float v_img_layer;
+            
+            // Sampler setup specifically configured to parse layered text arrays
+            uniform sampler2DArray u_textures;
+            out vec4 fragColor;
+
+            void main() {
+                // Extract color pixels via 3D coordinates: [u, v, image_layer_index]
+                fragColor = texture(u_textures, vec3(v_uv, v_img_layer));
+            }
+        `;
+
+        // Helper function to load images straight into a WebGL2 Texture Array slot
+        function createTextureArray(gl, imageUrls, callback) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture);
+
+            // Allocate spatial registers on the GPU [width, height, layer_count/image_count]
+            const width = 256;
+            const height = 256;
+            gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA, width, height, imageUrls.length, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+            let loadedCount = 0;
+            imageUrls.forEach((url, index) => {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => {
+                    gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture);
+                    // Create an invisible canvas to normalize texture sizes to 256x256 automatically
+                    const canvasResize = document.createElement('canvas');
+                    canvasResize.width = width; canvasResize.height = height;
+                    const ctx = canvasResize.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Push image data directly into the allocated array slice layer slot
+                    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, index, width, height, 1, gl.RGBA, gl.UNSIGNED_BYTE, canvasResize);
+                    
+                    loadedCount++;
+                    if (loadedCount === imageUrls.length) callback();
+                };
+                img.src = url;
+            });
+        }
+
+        // --- WebGL Shader Core Compilation Pipeline ---
+        function compileShader(gl, source, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            return shader;
+        }
+
+        const program = gl.createProgram();
+        gl.attachShader(program, compileShader(gl, vsSource, gl.VERTEX_SHADER));
+        gl.attachShader(program, compileShader(gl, fsSource, gl.FRAGMENT_SHADER));
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        // Image instance attributes layout parameter tracking mapping array configuration:
+        // Format per row: [centerX, centerY, width, height, layerIndex]
+        const imageSpriteData = new Float32Array([
+            0.0,  0.0,   120.0, 120.0,   0.0,  // Image 1: Centered on screen, 120x120px
+            0.4,  0.4,   80.0,  80.0,    1.0   // Image 2: Shifted to top right, 80x80px
+        ]);
+
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+
+        const buffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, imageSpriteData, gl.STATIC_DRAW);
+
+        const bytesPerFloat = 4;
+        const stride = 5 * bytesPerFloat;
+
+        const iPos = gl.getAttribLocation(program, 'i_pos');
+        gl.enableVertexAttribArray(iPos);
+        gl.vertexAttribPointer(iPos, 2, gl.FLOAT, false, stride, 0);
+        gl.vertexAttribDivisor(iPos, 1);
+
+        const iSize = gl.getAttribLocation(program, 'i_size');
+        gl.enableVertexAttribArray(iSize);
+        gl.vertexAttribPointer(iSize, 2, gl.FLOAT, false, stride, 2 * bytesPerFloat);
+        gl.vertexAttribDivisor(iSize, 1);
+
+        const iImgIndex = gl.getAttribLocation(program, 'i_img_index');
+        gl.enableVertexAttribArray(iImgIndex);
+        gl.vertexAttribPointer(iImgIndex, 1, gl.FLOAT, false, stride, 4 * bytesPerFloat);
+        gl.vertexAttribDivisor(iImgIndex, 1);
+
+        gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), canvas.width, canvas.height);
+
+        // --- Execute Render Pipeline ---
+        // Provide asset endpoints (Replace with actual image path strings to check local assets)
+        const imageAssets = [
+            "https://picsum.photos",
+            "https://picsum.photos"
+        ];
+
+        createTextureArray(gl, imageAssets, () => {
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(0.1, 0.1, 0.1, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Note: In your real engine, you would render your lines first here, 
+            // then switch programs to this image shader and call the following draw call on top:
+            for (let i = 0; i < 2; i++) {
+                gl.drawArraysInstancedBaseInstance(gl.TRIANGLES, 0, 6, 1, i);
+            }
+        });
+    </script>
+</body>
+</html>

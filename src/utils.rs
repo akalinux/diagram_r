@@ -1,5 +1,3 @@
-use std::mem;
-
 use crate::{
     Point, Transform,
     constants::{RAD2DEG, TRIANGLE_MARGINE_FOR_ERROR},
@@ -34,16 +32,6 @@ pub fn get_angle(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
     }
 
     base
-}
-
-pub fn create_container_id(src: u32, dst: u32) -> u64 {
-    let id: u64;
-    if src < dst {
-        id = unsafe { mem::transmute::<(u32, u32), u64>((src, dst)) }
-    } else {
-        id = unsafe { mem::transmute::<(u32, u32), u64>((dst, src)) }
-    }
-    return id;
 }
 
 pub fn triangle_area(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) -> f64 {

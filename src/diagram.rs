@@ -277,6 +277,9 @@ impl DiagramCore {
     }
 
     fn add_link(&mut self, ls: LinkSet) -> Result<usize, JsValue> {
+        if ls.links.len() == 0 {
+            return Err(JsValue::from(LINK_ADD_ERROR));
+        }
         let id = self.links.len();
         let (lc, a, b);
         {

@@ -5,7 +5,7 @@ use diagram_r::{
     link::{Animation, Bundle, Link, LinkContainer, LinkSet},
     node::Node,
     square::Square,
-    utils::{AngleNorthSouth, FullBox, full_box_from},
+    utils::{FullBox, full_box_from},
 };
 pub fn square_a() -> Square {
     Square::new(0.0, 0.0, 5.0, 5.0)
@@ -71,4 +71,17 @@ pub fn test_lc_b1_l2(
     ids: (usize, usize),
 ) -> LinkContainer {
     LinkContainer::new(default_link_set(ids), src, dst, opt, id)
+}
+
+pub fn test_lc_b1_l3(
+    src: &Node,
+    dst: &Node,
+    opt: &DiagramOpt,
+    id: usize,
+    ids: (usize, usize),
+) -> LinkContainer {
+    let (a, b, c) = data_lc_b1_l2();
+    let d = Link::new(2, String::from("link b"), Animation::ToDst);
+    let ls = LinkSet::new(vec![a, b, d], vec![c], ids.0, ids.1);
+    LinkContainer::new(ls, src, dst, opt, id)
 }

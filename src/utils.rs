@@ -70,7 +70,7 @@ pub fn full_box_from(a: &Point, b: &Point, r: f64) -> (FullBox, (Point, f64)) {
     let ne = b.sub_distance(&distance);
     let sw = a.add_distance(&distance);
     let se = b.add_distance(&distance);
-    ((nw, ne, sw, se), (distance, angle))
+    ((nw, ne, sw, se), (distance, north))
 }
 
 pub fn inside_box(pbox: &FullBox, p: &Point) -> bool {

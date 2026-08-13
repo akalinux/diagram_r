@@ -48,79 +48,75 @@ impl LinkSet {
     }
 }
 
-pub fn compute_line_width(link_scale: f64, r: f64, nodes: usize) -> (f64, f64, f64) {
+pub fn compute_line_width(link_scale: f64, r: f64, links: usize) -> (f64, f64, f64) {
     //let lc = self.compute_node_scale(nodes) as f64;
-    let offset;
-    match nodes {
-        1 => offset = 0,
-        _ => offset = 1,
-    }
-    let lc = (2 * nodes - offset) as f64;
+    let offset = match links {
+        1 => 0,
+        _ => 1,
+    };
+    let lc = (2 * links - offset) as f64;
     let scaled = r * link_scale;
     let width = scaled / lc;
-    let step = scaled / (nodes as f64);
+    let step = scaled / (links as f64);
     return (width, step, step * 0.5);
 }
+pub fn compute_animation(
+    link: &Link,
+    clink: &(Point, Point),
+    animations: &mut Vec<AnimationLink>,
+    width: f64,
+    angle_north: f64,
+) {
+    match link.animation {
+        Animation::Both => {
+            let (aw, _, init_step) = compute_line_width(1.0, width, 2);
+            animations.reserve(2);
 
-impl LinkSet {
-    pub fn compute_animation(
-        &self,
-        link: &Link,
-        clink: &(Point, Point),
-        animations: &mut Vec<AnimationLink>,
-        width: f64,
-        angle_north: f64,
-        angle_south: f64,
-    ) {
-        match link.animation {
-            Animation::Both => {
-                let (aw, _, init_step) = compute_line_width(1.0, width, 2);
+            let ne = get_xy(clink.0.x, clink.0.y, init_step, angle_north);
+            let d = ne.get_move_distance(&clink.0);
 
-                animations.push((
-                    get_xy(clink.0.x, clink.0.y, init_step, angle_north),
-                    get_xy(clink.1.x, clink.1.y, init_step, angle_north),
-                    aw,
-                ));
-                animations.push((
-                    get_xy(clink.0.x, clink.0.y, init_step, angle_south),
-                    get_xy(clink.1.x, clink.1.y, init_step, angle_south),
-                    aw,
-                ));
-            }
-            Animation::ToSrc => {
-                let (aw, _, _) = compute_line_width(1.0, width, 1);
-                animations.push((clink.1, clink.0, aw));
-            }
-            Animation::ToDst => {
-                let (aw, _, _) = compute_line_width(1.0, width, 1);
-
-                animations.push((clink.0, clink.1, aw));
-            }
-            _ => (),
+            animations.push((ne, clink.1.sub_distance(&d), aw));
+            animations.push((
+                //get_xy(clink.0.x, clink.0.y, init_step, angle_south),
+                //get_xy(clink.1.x, clink.1.y, init_step, angle_south),
+                clink.0.add_distance(&d),
+                clink.1.add_distance(&d),
+                aw,
+            ));
         }
-    }
+        Animation::ToSrc => {
+            let (aw, _, _) = compute_line_width(1.0, width, 1);
+            animations.push((clink.1, clink.0, aw));
+        }
+        Animation::ToDst => {
+            let (aw, _, _) = compute_line_width(1.0, width, 1);
 
+            animations.push((clink.0, clink.1, aw));
+        }
+        _ => (),
+    }
+}
+impl LinkSet {
     pub fn build_draw_data(&self, src: &Node, dst: &Node, opt: &DiagramOpt) -> DrawData {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
         let smallest_side = src.layout.smallest_side(&dst.layout);
         let r = smallest_side * 0.5;
-        let ((nw, ne, sw, se), (_, angle)) = full_box_from(&src_p, &dst_p, r);
+        let ((nw, ne, sw, se), (mut d, north)) = full_box_from(&src_p, &dst_p, r);
+
         let idx = Square::from(compute_line_box(&ne, [&nw, &se, &sw]));
         let (width, step, init_step) =
             compute_line_width(opt.link_scale, smallest_side, self.links.len());
 
-        let mut animations = Vec::new(); // no way to know how big this will be :/
+        let mut animations = Vec::new(); // no way to know how big this will be :(
         let mut links = Vec::with_capacity(self.links.len());
-        let north = angle + 90.0;
-        let south = north + 180.0;
-
+        d = d.scale(2.0);
         for (i, link) in self.links.iter().enumerate() {
             let inc_by = init_step + step * (i as f64);
-            let start = get_xy(nw.x, nw.y, inc_by, south);
-            let end = get_xy(ne.x, ne.y, inc_by, south);
+            let start = nw + d.scale(inc_by);
+            let end = ne + d.scale(inc_by);
             let clink = (start, end);
-            self.compute_animation(link, &clink, &mut animations, width, north, south);
+            compute_animation(link, &clink, &mut animations, width, north);
 
             links.push(clink);
         }

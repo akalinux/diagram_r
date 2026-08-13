@@ -51,20 +51,20 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
         diagram
             .borrow()
             .idx
-            .contains_point(&(ZERO_POINT.move_distance(&p)), &*diagram.borrow()),
+            .contains_point(&(ZERO_POINT.add_distance(&p)), &*diagram.borrow()),
         LookupPointResult::Node(1)
     );
 
     assert_eq!(
         diagram.borrow().idx.contains_point(
-            &Point { x: 10.0, y: 0.000 }.move_distance(&p),
+            &Point { x: 10.0, y: 0.000 }.add_distance(&p),
             &*diagram.borrow()
         ),
         LookupPointResult::Node(2)
     );
     assert_eq!(
         diagram.borrow().idx.contains_point(
-            &Point { x: 5.0, y: 0.0 }.move_distance(&p),
+            &Point { x: 5.0, y: 0.0 }.add_distance(&p),
             &*diagram.borrow()
         ),
         LookupPointResult::Box(0)
@@ -72,14 +72,14 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
     let (link_a, link_b, bundle) = data_lc_b1_l2();
     assert_eq!(
         diagram.borrow().idx.contains_point(
-            &Point { x: 5.0, y: 0.5 }.move_distance(&p),
+            &Point { x: 5.0, y: 0.5 }.add_distance(&p),
             &*diagram.borrow()
         ),
         LookupPointResult::Bundle((bundle.clone(), 0, 0))
     );
     assert_eq!(
         diagram.borrow().idx.contains_point(
-            &Point { x: 2.5, y: 0.21 }.move_distance(&p),
+            &Point { x: 2.5, y: 0.21 }.add_distance(&p),
             &*diagram.borrow()
         ),
         LookupPointResult::Link((link_a.clone(), 0, 0))
@@ -87,7 +87,7 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
 
     assert_eq!(
         diagram.borrow().idx.contains_point(
-            &Point { x: 2.5, y: 0.66 }.move_distance(&p),
+            &Point { x: 2.5, y: 0.66 }.add_distance(&p),
             &*diagram.borrow()
         ),
         LookupPointResult::Link((link_b.clone(), 1, 0))

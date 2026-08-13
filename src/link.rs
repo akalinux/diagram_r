@@ -7,7 +7,7 @@ use crate::{
     diagram::DiagramOpt,
     node::Node,
     square::Square,
-    utils::{compute_line_box, full_box_from, get_angle, get_distance, get_xy, inside_box},
+    utils::{compute_bunlde_points, compute_line_box, full_box_from, get_xy, inside_box},
 };
 pub type AnimationLink = (Point, Point, f64);
 #[wasm_bindgen]
@@ -48,24 +48,21 @@ impl LinkSet {
     }
 }
 
-impl LinkSet {
-    pub fn compute_bunlde_points(
-        &self,
-        src: &Point,
-        dst: &Point,
-        bundles: usize,
-        points: &mut Vec<Point>,
-    ) {
-        let distance = get_distance(src.x, src.y, dst.x, dst.y);
-        let scale = (bundles * 2) as f64;
-        let size = distance / scale;
-
-        let angle = get_angle(src.x, src.y, dst.x, dst.y) + 180.0;
-        for i in (1..bundles * 2).step_by(2) {
-            let r = size * i as f64;
-            points.push(get_xy(src.x, src.y, r, angle));
-        }
+pub fn compute_line_width(link_scale: f64, r: f64, nodes: usize) -> (f64, f64, f64) {
+    //let lc = self.compute_node_scale(nodes) as f64;
+    let offset;
+    match nodes {
+        1 => offset = 0,
+        _ => offset = 1,
     }
+    let lc = (2 * nodes - offset) as f64;
+    let scaled = r * link_scale;
+    let width = scaled / lc;
+    let step = scaled / (nodes as f64);
+    return (width, step, step * 0.5);
+}
+
+impl LinkSet {
     pub fn compute_animation(
         &self,
         link: &Link,
@@ -77,7 +74,7 @@ impl LinkSet {
     ) {
         match link.animation {
             Animation::Both => {
-                let (aw, _, init_step) = self.compute_line_width(1.0, width, 2);
+                let (aw, _, init_step) = compute_line_width(1.0, width, 2);
 
                 animations.push((
                     get_xy(clink.0.x, clink.0.y, init_step, angle_north),
@@ -91,43 +88,32 @@ impl LinkSet {
                 ));
             }
             Animation::ToSrc => {
-                let (aw, _, _) = self.compute_line_width(1.0, width, 1);
+                let (aw, _, _) = compute_line_width(1.0, width, 1);
                 animations.push((clink.1, clink.0, aw));
             }
             Animation::ToDst => {
-                let (aw, _, _) = self.compute_line_width(1.0, width, 1);
+                let (aw, _, _) = compute_line_width(1.0, width, 1);
 
                 animations.push((clink.0, clink.1, aw));
             }
             _ => (),
         }
     }
-    pub fn compute_line_width(&self, link_scale: f64, r: f64, nodes: usize) -> (f64, f64, f64) {
-        //let lc = self.compute_node_scale(nodes) as f64;
-        let offset;
-        match nodes {
-            1 => offset = 0,
-            _ => offset = 1,
-        }
-        let lc = (2 * nodes - offset) as f64;
-        let scaled = r * link_scale;
-        let width = scaled / lc;
-        let step = scaled / (nodes as f64);
-        return (width, step, step * 0.5);
-    }
+
     pub fn build_draw_data(&self, src: &Node, dst: &Node, opt: &DiagramOpt) -> DrawData {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
         let smallest_side = src.layout.smallest_side(&dst.layout);
         let r = smallest_side * 0.5;
-        let ((nw, ne, sw, se), (_, north, south)) = full_box_from(&src_p, &dst_p, r);
+        let ((nw, ne, sw, se), (_, angle)) = full_box_from(&src_p, &dst_p, r);
         let idx = Square::from(compute_line_box(&ne, [&nw, &se, &sw]));
         let (width, step, init_step) =
-            self.compute_line_width(opt.link_scale, smallest_side, self.links.len());
+            compute_line_width(opt.link_scale, smallest_side, self.links.len());
 
         let mut animations = Vec::new(); // no way to know how big this will be :/
-        let mut bundles = Vec::with_capacity(self.bundles.len());
         let mut links = Vec::with_capacity(self.links.len());
+        let north = angle + 90.0;
+        let south = north + 180.0;
 
         for (i, link) in self.links.iter().enumerate() {
             let inc_by = init_step + step * (i as f64);
@@ -138,7 +124,7 @@ impl LinkSet {
 
             links.push(clink);
         }
-        self.compute_bunlde_points(&src_p, &dst_p, self.bundles.len(), &mut bundles);
+        let bundles = compute_bunlde_points(&src_p, &dst_p, self.bundles.len());
 
         DrawData {
             line_width: width,
@@ -198,15 +184,15 @@ impl DrawData {
     pub fn move_distance(&mut self, distance: &Point) {
         self.index.move_distance(distance);
         for link in &mut self.links {
-            link.0 = link.0.move_distance(distance);
-            link.1 = link.1.move_distance(distance);
+            link.0 = link.0.add_distance(distance);
+            link.1 = link.1.add_distance(distance);
         }
         for bundle in &mut self.bundles {
-            *bundle = bundle.move_distance(distance);
+            *bundle = bundle.add_distance(distance);
         }
         for animation in &mut self.animations {
-            animation.0 = animation.0.move_distance(distance);
-            animation.1 = animation.1.move_distance(distance);
+            animation.0 = animation.0.add_distance(distance);
+            animation.1 = animation.1.add_distance(distance);
         }
     }
 }

@@ -11,7 +11,7 @@ fn link_container_update_tests() {
     let mut opt = DiagramOpt::new();
     opt.link_scale = 1.0;
     let (a, b) = nodes_a_b();
-    let mut lc = test_lc_b1_l2(&a, &b, &opt, 0, (0, 1));
+    let lc = test_lc_b1_l2(&a, &b, &opt, 0, (0, 1));
     // 2 links act as 4
     let dd = &lc.draw_data;
     let center = Point::new(5.0, 0.5);

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebGL2 Branchless Thick Lines (Compass Form)</title>
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #111; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <canvas id="glcanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('glcanvas');
+        const gl = canvas.getContext('webgl2');
+
+        if (!gl) { alert('WebGL 2 is required.'); }
+
+        // --- VERTEX SHADER ---
+        // Correctly declares the 6-element local vec2 array and selects via gl_VertexID
+        const vsSource = `#version 300 es
+
+        in vec2 a_p1;         // x1, y1 (South Anchor)
+        in vec2 a_p2;         // x2, y2 (North Anchor)
+        in float a_thickness; // line width
+        in vec3 a_color;      // line color
+
+        uniform vec2 u_resolution;
+        out vec3 v_color;
+
+        void main() {
+            v_color = a_color;
+
+            // 1. Convert input endpoints from NDC (-1 to 1) to screen pixels
+            vec2 southPixels = (a_p1 + 1.0) * 0.5 * u_resolution;
+            vec2 northPixels = (a_p2 + 1.0) * 0.5 * u_resolution;
+
+            // 2. Compute the perpendicular offset vector (pointing East)
+            vec2 dir = northPixels - southPixels;
+            vec2 normalEast = normalize(vec2(-dir.y, dir.x));
+            vec2 halfThicknessOffset = normalEast * (a_thickness * 0.5);
+
+            // 3. Compute the 4 base corners using intuitive compass directions
+            vec2 sw = southPixels - halfThicknessOffset; // South-West corner
+            vec2 se = southPixels + halfThicknessOffset; // South-East corner
+            vec2 nw = northPixels - halfThicknessOffset; // North-West corner
+            vec2 ne = northPixels + halfThicknessOffset; // North-East corner
+
+            // 4. FIXED: Correctly declared explicit GLSL 6-element array syntax
+            vec2 corners[6] = vec2[](
+                sw, se, nw, // First Triangle (South-West to South-East to North-West)
+                nw, se, ne  // Second Triangle (North-West to South-East to North-East)
+            );
+
+            // 5. Select coordinate branchlessly using gl_VertexID 
+            vec2 currentPixel = corners[gl_VertexID];
+            
+            // 6. Output back to WebGL standard Clip Space (-1 to 1)
+            gl_Position = vec4((currentPixel / u_resolution) * 2.0 - 1.0, 0.0, 1.0);
+        }
+        `;
+
+        // --- FRAGMENT SHADER ---
+        const fsSource = `#version 300 es
+        precision highp float;
+        in vec3 v_color;
+        out vec4 fragColor;
+        void main() { fragColor = vec4(v_color, 1.0); }
+        `;
+
+        // --- UTILS: COMPILE & LINK ---
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+                return null;
+            }
+            return shader;
+        }
+
+        const program = gl.createProgram();
+        gl.attachShader(program, createShader(gl, gl.VERTEX_SHADER, vsSource));
+        gl.attachShader(program, createShader(gl, gl.FRAGMENT_SHADER, fsSource));
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        const vao = gl.createVertexArray();
+        gl.bindVertexArray(vao);
+
+        // --- THE JAVASCRIPT ARRAY ---
+        // Exactly 3 unique lines defined once. Zero structural duplication.
+        // Format: [x1, y1, x2, y2, thickness, r, g, b]
+        const rawLines = new Float32Array([
+            -0.7, -0.5,   0.0,  0.5,   20.0,   1.0, 0.2, 0.2,  // Line 1: Red, 20px thick
+             0.0,  0.5,   0.5, -0.6,   40.0,   0.2, 0.6, 1.0,  // Line 2: Blue, 40px thick
+             0.5, -0.6,   0.8,  0.7,   15.0,   0.2, 1.0, 0.5   // Line 3: Green, 15px thick
+        ]);
+
+        const vbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, rawLines, gl.STATIC_DRAW);
+
+        const stride = 8 * Float32Array.BYTES_PER_ELEMENT;
+
+        const locP1 = gl.getAttribLocation(program, 'a_p1');
+        gl.vertexAttribPointer(locP1, 2, gl.FLOAT, false, stride, 0);
+        gl.enableVertexAttribArray(locP1);
+        gl.vertexAttribDivisor(locP1, 1); // Advances 1 index row per 6 vertex calls
+
+        const locP2 = gl.getAttribLocation(program, 'a_p2');
+        gl.vertexAttribPointer(locP2, 2, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
+        gl.enableVertexAttribArray(locP2);
+        gl.vertexAttribDivisor(locP2, 1);
+
+        const locThickness = gl.getAttribLocation(program, 'a_thickness');
+        gl.vertexAttribPointer(locThickness, 1, gl.FLOAT, false, stride, 4 * Float32Array.BYTES_PER_ELEMENT);
+        gl.enableVertexAttribArray(locThickness);
+        gl.vertexAttribDivisor(locThickness, 1);
+
+        const locColor = gl.getAttribLocation(program, 'a_color');
+        gl.vertexAttribPointer(locColor, 3, gl.FLOAT, false, stride, 5 * Float32Array.BYTES_PER_ELEMENT);
+        gl.enableVertexAttribArray(locColor);
+        gl.vertexAttribDivisor(locColor, 1);
+
+        const locResolution = gl.getUniformLocation(program, 'u_resolution');
+
+        // --- RENDER LOOP ---
+        function render() {
+            if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                gl.viewport(0, 0, canvas.width, canvas.height);
+            }
+
+            gl.clearColor(0.08, 0.08, 0.08, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.uniform2f(locResolution, canvas.width, canvas.height);
+
+            // Execute draw command. Runs 6 vertices per instance for 3 instances.
+            gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 3);
+
+            requestAnimationFrame(render);
+        }
+
+        window.addEventListener('resize', render);
+        render();
+    </script>
+</body>
+</html>

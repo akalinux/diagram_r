@@ -7,6 +7,8 @@ pub mod node;
 pub mod render;
 pub mod square;
 pub mod utils;
+use std::ops::Add;
+
 use wasm_bindgen::prelude::*;
 
 use crate::{constants::DEFAULT_COLOR, utils::to_map_xy};
@@ -70,6 +72,16 @@ pub struct Point {
     pub y: f64,
 }
 
+impl Add for Point {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+
 impl Point {
     pub fn new(x: f64, y: f64) -> Self {
         Self { x, y }
@@ -84,8 +96,18 @@ impl Point {
             y: p.y - self.y,
         }
     }
-    pub fn move_distance(&self, distance: &Point) -> Point {
+    pub fn add_distance(&self, distance: &Point) -> Point {
         Self::new(self.x + distance.x, self.y + distance.y)
+    }
+    pub fn sub_distance(&self, distance: &Point) -> Point {
+        Self::new(self.x - distance.x, self.y - distance.y)
+    }
+
+    pub fn scale(&self, scale: f64) -> Self {
+        Self {
+            x: self.x * scale,
+            y: self.y * scale,
+        }
     }
 
     pub fn idx(&self, step: i64) -> (i64, i64) {

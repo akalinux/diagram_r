@@ -61,15 +61,16 @@ pub fn compute_line_box(ne: &Point, points: [&Point; 3]) -> Corners {
     (min_x, max_x, min_y, max_y)
 }
 
-pub fn full_box_from(a: &Point, b: &Point, r: f64) -> (FullBox, AngleNorthSouth) {
+pub fn full_box_from(a: &Point, b: &Point, r: f64) -> (FullBox, (Point, f64)) {
     let angle = get_angle(a.x, a.y, b.x, b.y);
     let north = angle + 90.0;
-    let south = north + 180.0;
     let nw = get_xy(a.x, a.y, r, north);
-    let ne = get_xy(b.x, b.y, r, north);
-    let sw = get_xy(a.x, a.y, r, south);
-    let se = get_xy(b.x, b.y, r, south);
-    ((nw, ne, sw, se), (angle, north, south))
+    let distance = nw.get_move_distance(&a);
+
+    let ne = b.sub_distance(&distance);
+    let sw = a.add_distance(&distance);
+    let se = b.add_distance(&distance);
+    ((nw, ne, sw, se), (distance, angle))
 }
 
 pub fn inside_box(pbox: &FullBox, p: &Point) -> bool {
@@ -119,4 +120,17 @@ pub fn to_screen_xy(p: &Point, t: &Transform) -> Point {
     let x = px * t.k;
     let y = py * t.k;
     return Point { x, y };
+}
+
+pub fn compute_bunlde_points(src: &Point, dst: &Point, bundles: usize) -> Vec<Point> {
+    let mut points = Vec::with_capacity(bundles);
+    if bundles == 0 {
+        return points;
+    }
+    let d = src.get_move_distance(dst).scale(1.0 / (bundles * 2) as f64);
+
+    for i in (1..bundles * 2).step_by(2) {
+        points.push(Point::new(src.x + d.x * i as f64, src.x + d.y * i as f64));
+    }
+    points
 }

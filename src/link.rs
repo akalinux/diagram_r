@@ -192,6 +192,7 @@ impl DrawData {
         }
     }
 }
+#[derive(Debug)]
 pub struct LinkContainer {
     pub ls: LinkSet,
     pub draw_data: DrawData,
@@ -202,17 +203,17 @@ impl LinkContainer {
     pub fn contains_point(&self, p: &Point) -> LookupPointResult {
         let dd = &self.draw_data;
         // first check bundles
-        for (i, b) in self.ls.bundles.iter().enumerate() {
+        for (i, _) in self.ls.bundles.iter().enumerate() {
             let square = dd.bundle_draw_box(i);
             if square.contains_point(p) {
-                return LookupPointResult::Bundle((b.clone(), i, self.id));
+                return LookupPointResult::Bundle((self.id, i));
             }
         }
-        for (i, l) in self.ls.links.iter().enumerate() {
+        for (i, _) in self.ls.links.iter().enumerate() {
             let lp = &dd.links[i];
             let (pb, _) = full_box_from(&lp.0, &lp.1, dd.line_width * 0.5);
             if inside_box(&pb, p) {
-                return LookupPointResult::Link((l.clone(), i, self.id));
+                return LookupPointResult::Link((self.id, i));
             }
         }
         return LookupPointResult::NoMatch;
@@ -245,14 +246,14 @@ impl LinkContainer {
                     y: y / count,
                 }
             }
-            LookupPointResult::Link((_, i, _)) => {
+            LookupPointResult::Link((i, _)) => {
                 let (a, b) = dd.links[*i];
                 Point {
                     x: (a.x + b.x) / 2.0,
                     y: (a.y + b.y) / 2.0,
                 }
             }
-            LookupPointResult::Bundle((_, i, _)) => dd.bundles[*i],
+            LookupPointResult::Bundle((i, _)) => dd.bundles[*i],
             _ => ZERO_POINT,
         }
     }

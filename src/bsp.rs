@@ -4,8 +4,7 @@ pub mod iter;
 use crate::{
     Point,
     bsp::iter::{IdxBoxAction, IdxBoxIter},
-    diagram::{DiagramCore, NodeCanvasTarget},
-    link::{Bundle, Link},
+    diagram::DiagramCore,
 };
 
 pub type IndexXY = (RangeInclusive<i64>, RangeInclusive<i64>, f64);
@@ -16,37 +15,11 @@ pub enum Slot {
     Box,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
-pub enum Id {
-    Link(usize),
-    Node(usize),
-}
-
-impl Id {
-    fn get_link(&self) -> Option<usize> {
-        match self {
-            Id::Link(id) => Some(*id),
-            _ => None,
-        }
-    }
-    fn get_node(&self) -> Option<usize> {
-        match self {
-            Id::Node(id) => Some(*id),
-            _ => None,
-        }
-    }
-    fn link(&self) -> usize {
-        unsafe { self.get_link().unwrap_unchecked() }
-    }
-    fn node(&self) -> usize {
-        unsafe { self.get_node().unwrap_unchecked() }
-    }
-}
 #[derive(Debug, Clone, Copy)]
 pub struct XYSet {
     slot: Slot,
     size: f64,
-    id: Id,
+    id: usize,
 }
 impl PartialEq for XYSet {
     fn eq(&self, other: &Self) -> bool {
@@ -76,8 +49,8 @@ impl Ord for XYSet {
 
 #[derive(PartialEq, Debug)]
 pub enum LookupPointResult {
-    Bundle((Bundle, usize, usize)),
-    Link((Link, usize, usize)),
+    Bundle((usize, usize)),
+    Link((usize, usize)),
     Node(usize),
     Box(usize),
     Screen,
@@ -151,31 +124,21 @@ impl ScreenIndex {
         if let Some(screen) = self.x.get(&z) {
             for set in screen.nodes.iter() {
                 match set.slot {
-                    Slot::Link => {
-                        let lid = set.id.link();
-                        match unsafe { d.links.get(lid as usize).unwrap_unchecked() }
-                            .contains_point(p)
-                        {
-                            LookupPointResult::Link(res) => return LookupPointResult::Link(res),
-                            LookupPointResult::Bundle(res) => {
-                                return LookupPointResult::Bundle(res);
-                            }
-                            _ => (),
+                    Slot::Link => match d.links[set.id].contains_point(p) {
+                        LookupPointResult::Link(res) => return LookupPointResult::Link(res),
+                        LookupPointResult::Bundle(res) => {
+                            return LookupPointResult::Bundle(res);
+                        }
+                        _ => (),
+                    },
+                    Slot::Box => {
+                        if d.boxes[set.id].layout.contains_point(p) {
+                            return LookupPointResult::Box(set.id);
                         }
                     }
-                    Slot::Box | Slot::Node => {
-                        let id = &set.id.node();
-                        match &d.nodes[*id as usize] {
-                            NodeCanvasTarget::Box((node, _)) => {
-                                if node.layout.contains_point(p) {
-                                    return LookupPointResult::Box(*id);
-                                }
-                            }
-                            NodeCanvasTarget::Node((node, _)) => {
-                                if node.layout.contains_point(p) {
-                                    return LookupPointResult::Node(*id);
-                                }
-                            }
+                    Slot::Node => {
+                        if d.nodes[set.id].0.layout.contains_point(p) {
+                            return LookupPointResult::Node(set.id);
                         }
                     }
                 }
@@ -227,17 +190,17 @@ impl ScreenBoundY {
             ScreenSlot::Link(l) => self.nodes.insert(XYSet {
                 slot: Slot::Link,
                 size: area,
-                id: Id::Link(*l),
+                id: *l,
             }),
             ScreenSlot::Node(n) => self.nodes.insert(XYSet {
                 slot: Slot::Node,
                 size: area,
-                id: Id::Node(*n),
+                id: *n,
             }),
             ScreenSlot::Box(n) => self.nodes.insert(XYSet {
                 slot: Slot::Box,
                 size: area,
-                id: Id::Node(*n),
+                id: *n,
             }),
         };
     }
@@ -246,17 +209,17 @@ impl ScreenBoundY {
             ScreenSlot::Link(l) => self.nodes.remove(&XYSet {
                 slot: Slot::Link,
                 size: area,
-                id: Id::Link(*l),
+                id: *l,
             }),
             ScreenSlot::Node(n) => self.nodes.remove(&XYSet {
                 slot: Slot::Node,
                 size: area,
-                id: Id::Node(*n),
+                id: *n,
             }),
             ScreenSlot::Box(n) => self.nodes.remove(&XYSet {
                 slot: Slot::Box,
                 size: area,
-                id: Id::Node(*n),
+                id: *n,
             }),
         };
     }

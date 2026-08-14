@@ -65,7 +65,7 @@ impl ElementOpt {
         };
     }
 }
-#[wasm_bindgen()]
+#[wasm_bindgen(inspectable)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Point {
     pub x: f64,

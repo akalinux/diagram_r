@@ -6,11 +6,12 @@ use diagram_r::{
     Point,
     bsp::LookupPointResult,
     constants::ZERO_POINT,
-    diagram::{DiagramCore, DiagramOpt},
+    diagram::{DiagramCore, DiagramOpt, GroupID, LinkAndElement},
+    render::HighlightTargets,
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
-use crate::common::{box_a, data_lc_b1_l2, default_link_set, nodes_a_b};
+use crate::common::{box_a, default_link_set, nodes_a_b};
 mod common;
 
 pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
@@ -19,7 +20,7 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
     let ct = DiagramCore::new(ops);
 
     let (node_a, node_b) = nodes_a_b();
-    let links = vec![default_link_set((1, 2))];
+    let links = vec![default_link_set((0, 1))];
 
     match ct
         .borrow_mut()
@@ -37,7 +38,8 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
 fn buld_ok_test() {
     let mut ops = DiagramOpt::new();
     ops.index_step = 1;
-    DiagramCore::new(ops);
+    let core = DiagramCore::new(ops);
+    assert!(!core.borrow().render.borrow().diagram.upgrade().is_none());
 }
 
 #[test]
@@ -45,22 +47,98 @@ fn buld_ok_test() {
 fn set_data_test() {
     base_diagram();
 }
+#[test]
+#[wasm_bindgen_test]
+fn test_highlights() {
+    let diagram = base_diagram();
+    let d = &*diagram.borrow();
 
+    assert_eq!(
+        d.get_highlights(&d.contains_point(&ZERO_POINT)),
+        HighlightTargets {
+            nodes: vec![0],
+            links: vec![],
+            boxes: vec![],
+            bundles: vec![]
+        }
+    );
+    assert_eq!(
+        d.get_highlights(&d.contains_point(&Point { x: 10.0, y: 0.000 })),
+        HighlightTargets {
+            nodes: vec![1],
+            links: vec![],
+            boxes: vec![],
+            bundles: vec![]
+        }
+    );
+    assert_eq!(
+        d.get_highlights(&d.contains_point(&Point { x: 5.0, y: 0.0 })),
+        HighlightTargets {
+            nodes: vec![],
+            links: vec![],
+            boxes: vec![0],
+            bundles: vec![]
+        }
+    );
+    assert_eq!(
+        d.get_highlights(&d.contains_point(&Point { x: 2.5, y: 0.21 })),
+        HighlightTargets {
+            nodes: vec![0, 1],
+            links: vec![LinkAndElement {
+                link: 0,
+                element: 0
+            }],
+            boxes: vec![],
+            bundles: vec![]
+        }
+    );
+    assert_eq!(
+        d.get_highlights(&d.contains_point(&Point { x: 2.5, y: 0.66 })),
+        HighlightTargets {
+            nodes: vec![0, 1],
+            links: vec![LinkAndElement {
+                link: 0,
+                element: 1
+            }],
+            boxes: vec![],
+            bundles: vec![]
+        }
+    );
+    assert_eq!(
+        d.get_highlights(&d.contains_point(&Point { x: 5.0, y: 0.5 })),
+        HighlightTargets {
+            nodes: vec![0, 1],
+            links: vec![
+                LinkAndElement {
+                    link: 0,
+                    element: 0
+                },
+                LinkAndElement {
+                    link: 0,
+                    element: 1
+                },
+            ],
+            boxes: vec![],
+            bundles: vec![LinkAndElement {
+                link: 0,
+                element: 0
+            },]
+        }
+    );
+}
 fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
     assert_eq!(
         diagram
             .borrow()
-            .idx
-            .contains_point(&(ZERO_POINT.add_distance(&p)), &*diagram.borrow()),
-        LookupPointResult::Node(1)
+            .contains_point(&(ZERO_POINT.add_distance(&p))),
+        LookupPointResult::Node(0)
     );
 
     assert_eq!(
-        diagram.borrow().idx.contains_point(
-            &Point { x: 10.0, y: 0.000 }.add_distance(&p),
-            &*diagram.borrow()
-        ),
-        LookupPointResult::Node(2)
+        diagram
+            .borrow()
+            .contains_point(&Point { x: 10.0, y: 0.000 }.add_distance(&p),),
+        LookupPointResult::Node(1)
     );
     assert_eq!(
         diagram.borrow().idx.contains_point(
@@ -69,20 +147,18 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
         ),
         LookupPointResult::Box(0)
     );
-    let (link_a, link_b, bundle) = data_lc_b1_l2();
     assert_eq!(
-        diagram.borrow().idx.contains_point(
-            &Point { x: 5.0, y: 0.5 }.add_distance(&p),
-            &*diagram.borrow()
-        ),
-        LookupPointResult::Bundle((bundle.clone(), 0, 0))
+        diagram
+            .borrow()
+            .contains_point(&Point { x: 5.0, y: 0.5 }.add_distance(&p),),
+        LookupPointResult::Bundle((0, 0))
     );
     assert_eq!(
         diagram.borrow().idx.contains_point(
             &Point { x: 2.5, y: 0.21 }.add_distance(&p),
             &*diagram.borrow()
         ),
-        LookupPointResult::Link((link_a.clone(), 0, 0))
+        LookupPointResult::Link((0, 0))
     );
 
     assert_eq!(
@@ -90,7 +166,7 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
             &Point { x: 2.5, y: 0.66 }.add_distance(&p),
             &*diagram.borrow()
         ),
-        LookupPointResult::Link((link_b.clone(), 1, 0))
+        LookupPointResult::Link((0, 1))
     );
 }
 #[test]
@@ -105,7 +181,7 @@ fn reload_data() -> Rc<RefCell<DiagramCore>> {
 
     let (node_a, node_b) = nodes_a_b();
     let box_a = box_a();
-    let links = vec![default_link_set((1, 2))];
+    let links = vec![default_link_set((0, 1))];
 
     match diagram
         .borrow_mut()
@@ -136,7 +212,10 @@ fn test_move_box() {
     test_points(Rc::clone(&diagram), ZERO_POINT);
     let distance = &Point { x: 5.0, y: 5.0 };
 
-    diagram.borrow_mut().move_nodes(distance, &[0, 1, 2]);
+    diagram.borrow_mut().move_nodes(
+        distance,
+        &[GroupID::Box(0), GroupID::Node(0), GroupID::Node(1)],
+    );
     diagram.borrow_mut().finish_move();
 
     test_points(diagram, *distance);

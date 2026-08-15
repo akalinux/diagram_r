@@ -515,6 +515,8 @@ impl DiagramCore {
     }
     pub fn unmount(&self) {
         self.clear_render();
+        self.render.replace(None);
+        self.watcher.replace(None);
     }
 }
 

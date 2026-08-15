@@ -285,7 +285,9 @@ impl DiagramCore {
             true => ScreenSlot::Node(id),
             false => ScreenSlot::Box(id),
         };
-        self.idx.borrow_mut().manage(&ss, points, IdxBoxAction::Add);
+        if self.render_ops.interactive {
+            self.idx.borrow_mut().manage(&ss, points, IdxBoxAction::Add);
+        }
     }
     pub fn set_data(
         &mut self,
@@ -331,12 +333,14 @@ impl DiagramCore {
 
             lc = LinkContainer::new(ls, src, dst, &self.render_ops, id);
         }
-        self.nodes.borrow_mut()[a].1.push(id);
-        self.nodes.borrow_mut()[b].1.push(id);
-        let points = lc.draw_data.index.idx(self.render_ops.index_step);
-        self.idx
-            .borrow_mut()
-            .manage(&ScreenSlot::Link(id), points, IdxBoxAction::Add);
+        if self.render_ops.interactive {
+            self.nodes.borrow_mut()[a].1.push(id);
+            self.nodes.borrow_mut()[b].1.push(id);
+            let points = lc.draw_data.index.idx(self.render_ops.index_step);
+            self.idx
+                .borrow_mut()
+                .manage(&ScreenSlot::Link(id), points, IdxBoxAction::Add);
+        }
         self.links.borrow_mut().push(lc);
         Ok(id)
     }
@@ -517,7 +521,10 @@ impl DiagramCore {
 // Pointer event code is here
 impl DiagramCore {
     fn render(&self) -> Result<(), JsValue> {
-        Ok(())
+        match self.render.borrow().as_ref() {
+            Some(r) => r.render(),
+            None => Ok(()),
+        }
     }
 
     fn clear_timeout(&self) {
@@ -588,7 +595,38 @@ impl DiagramCore {
         self.current_target.replace(Some((res, *p)));
     }
     pub fn on_mouse_up(&self, p: &Point) {
-        self.move_lookup(p);
+        let res = self.move_lookup(p);
+        // still need to update the index
+        match self.current_target.borrow().as_ref() {
+            Some((l, _)) => match l {
+                LookupPointResult::Screen | LookupPointResult::NoMatch => (),
+                _ => self.finish_move(),
+            },
+            _ => (),
+        }
+        self.current_target
+            .replace(Some((LookupPointResult::NoMatch, *p)));
+        self.set_timeout();
+        let g = match res {
+            Some(g) => g,
+            None => return,
+        };
+        let mut nodes = Vec::new();
+        let mut boxes = Vec::new();
+        for o in g {
+            match o {
+                GroupID::Box(b) => boxes.push(NodeChanges {
+                    id: b,
+                    layout: self.boxes.borrow()[b].layout,
+                }),
+                GroupID::Node(b) => nodes.push(NodeChanges {
+                    id: b,
+                    layout: self.nodes.borrow()[b].0.layout,
+                }),
+            }
+        }
+        let moved = MovedElements { nodes, boxes };
+        self.run_callback(CoreMouseEvent::Moved(moved), p);
     }
     pub fn on_mouse_enter(&self, p: &Point) {
         self.current_target
@@ -599,14 +637,14 @@ impl DiagramCore {
         self.current_target.replace(None);
         self.highlights.replace(None);
     }
-    fn move_lookup(&self, p: &Point) {
+    fn move_lookup(&self, p: &Point) -> Option<Vec<GroupID>> {
         match self.current_target.borrow_mut().as_mut() {
             Some((l, op)) => {
                 let nodes = match l {
                     LookupPointResult::NoMatch => {
                         *op = *p;
                         self.set_timeout();
-                        return;
+                        return None;
                     }
                     LookupPointResult::Screen => {
                         let distance = self.to_map_xy(op).get_move_distance(p);
@@ -618,7 +656,7 @@ impl DiagramCore {
 
                         self.set_transform(t);
                         let _ = self.render();
-                        return;
+                        return None;
                     }
                     LookupPointResult::Box(id) => self.get_related_nodes(&[GroupID::Box(*id)]),
                     LookupPointResult::Node(id) => self.get_related_nodes(&[GroupID::Node(*id)]),
@@ -632,7 +670,7 @@ impl DiagramCore {
                 self.move_nodes(&distance, &nodes);
                 *op = *p;
                 let _ = self.render();
-                return;
+                return Some(nodes);
             }
             None => (),
         }
@@ -640,6 +678,7 @@ impl DiagramCore {
         self.current_target
             .replace(Some((LookupPointResult::NoMatch, *p)));
         self.set_timeout();
+        None
     }
     pub fn on_mouse_move(&self, p: &Point) {
         self.clear_timeout();
@@ -647,9 +686,10 @@ impl DiagramCore {
         self.move_lookup(p);
     }
 
-    pub fn on_mouse_wheel(&self, delta: f64) {
+    pub fn on_mouse_wheel(&self, p: &Point, delta: f64) {
         let mut t = self.get_transform();
-        t.k -= match delta < 0.0 {
+        self.clear_timeout();
+        t.k += match delta < 0.0 {
             true => self.render_ops.wheel_move,
             false => -self.render_ops.wheel_move,
         };
@@ -657,6 +697,7 @@ impl DiagramCore {
             t.k = self.render_ops.wheel_move;
         }
         self.set_transform(t);
+        self.run_callback(CoreMouseEvent::TransForm(t), p);
         let _ = self.render();
     }
 }

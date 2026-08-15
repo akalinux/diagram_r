@@ -50,14 +50,15 @@ impl PointerWatcher {
         let on_enter = create_mouse_callback!(diagram, "pointerleave", el, on_mouse_enter)?;
         // -- on_wheel start
         let diagram = unsafe { diagram.upgrade().unwrap_unchecked() };
+        let we = el.clone();
         let on_wheel = HtmlEventWatcher::new(
             "wheel",
             move |e| {
                 e.prevent_default();
                 e.stop_propagation();
-                match e.dyn_ref::<WheelEvent>() {
-                    Some(w) => {
-                        diagram.borrow().on_mouse_wheel(w.delta_y());
+                match (e.dyn_ref::<WheelEvent>(), get_el_xy(&e, &we)) {
+                    (Some(w), Some(p)) => {
+                        diagram.borrow().on_mouse_wheel(&p, w.delta_y());
                     }
                     _ => (),
                 }

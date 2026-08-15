@@ -1,3 +1,5 @@
+use js_sys::Number;
+
 use crate::{
     Point, Transform,
     constants::{RAD2DEG, TRIANGLE_MARGINE_FOR_ERROR},
@@ -12,6 +14,14 @@ pub fn to_map_xy(p: &Point, t: &Transform) -> Point {
     let x = px / t.k;
     let y = py / t.k;
     Point { x, y }
+}
+
+pub fn to_fixed_px(n: f64) -> String {
+    let js_num: Number = n.into();
+    let js_str = unsafe { js_num.to_fixed(2).unwrap_unchecked() };
+    let mut str = String::from(js_str);
+    str.push_str("px");
+    str
 }
 
 pub fn get_xy(cx: f64, cy: f64, r: f64, degree: f64) -> Point {
@@ -61,13 +71,18 @@ pub fn compute_line_box(ne: &Point, points: [&Point; 3]) -> Corners {
     (min_x, max_x, min_y, max_y)
 }
 
-pub fn full_box_from(a: &Point, b: &Point, r: f64) -> (FullBox, (Point, f64)) {
+pub fn north_box_from(a: &Point, b: &Point, r: f64) -> (Point, Point, Point, f64) {
     let angle = get_angle(a.x, a.y, b.x, b.y);
     let north = angle + 90.0;
     let nw = get_xy(a.x, a.y, r, north);
     let distance = nw.get_move_distance(&a);
 
     let ne = b.sub_distance(&distance);
+    (nw, ne, distance, north)
+}
+pub fn full_box_from(a: &Point, b: &Point, r: f64) -> (FullBox, (Point, f64)) {
+    let (nw, ne, distance, north) = north_box_from(a, b, r);
+
     let sw = a.add_distance(&distance);
     let se = b.add_distance(&distance);
     ((nw, ne, sw, se), (distance, north))

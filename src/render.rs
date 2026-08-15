@@ -2,36 +2,30 @@ use std::{
     cell::RefCell,
     rc::{Rc, Weak},
 };
+pub mod canvasrender;
 pub mod event_watcher;
 pub mod size_watcher;
 pub mod timeout;
-use js_sys::Array;
 use wasm_bindgen::JsValue;
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
-pub mod targets;
-
+use web_sys::HtmlCanvasElement;
+pub mod pointerwatcher;
 use crate::{
-    ElementOpt, Point,
-    bsp::LookupPointResult,
-    diagram::{DiagramCore, DiagramOpt, GroupID, LinkAndElement},
-    imgcache::ImgCache,
-    link::LinkContainer,
-    node::Node,
-    render::{targets::Targets, timeout::Timeout},
-    square::Square,
-    utils::to_map_xy,
+    Point,
+    bsp::ScreenSlot,
+    diagram::{DiagramCore, LinkAndElement},
 };
-pub enum UiEvent {
-    MouseOver(LookupPointResult),
+
+pub trait BuildRender {
+    fn new(
+        canvas: &HtmlCanvasElement,
+        diagram: Weak<RefCell<DiagramCore>>,
+    ) -> Result<Box<dyn CoreRender>, JsValue>;
 }
-pub struct Render {
-    pub diagram: Weak<RefCell<DiagramCore>>,
-    this: Weak<RefCell<Self>>,
-    targets: Option<Targets>,
-    timeout: RefCell<Option<Timeout>>,
-    frame_tick: f64,
-    current_target: RefCell<Option<(LookupPointResult, Point)>>,
-    highlights: RefCell<Option<HighlightTargets>>,
+
+pub trait CoreRender {
+    fn render(&self) -> Result<(), JsValue>;
+    fn update(&self, target: ScreenSlot, distance: &Point);
+    fn clear(&self);
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -40,6 +34,17 @@ pub struct HighlightTargets {
     pub boxes: Vec<usize>,
     pub links: Vec<LinkAndElement>,
     pub bundles: Vec<LinkAndElement>,
+}
+
+/*
+pub struct Render {
+    pub diagram: Weak<RefCell<DiagramCore>>,
+    this: Weak<RefCell<Self>>,
+    targets: Option<Targets>,
+    timeout: RefCell<Option<Timeout>>,
+    frame_tick: f64,
+    current_target: RefCell<Option<(LookupPointResult, Point)>>,
+    highlights: RefCell<Option<HighlightTargets>>,
 }
 impl Render {
     pub fn new() -> Rc<RefCell<Self>> {
@@ -438,3 +443,4 @@ impl Render {
         Ok(())
     }
 }
+*/

@@ -3,11 +3,10 @@
 use std::{cell::RefCell, rc::Rc};
 
 use diagram_r::{
-    Point,
+    DiagramOpt, Point,
     bsp::LookupPointResult,
     constants::ZERO_POINT,
-    diagram::{DiagramCore, DiagramOpt, GroupID, LinkAndElement},
-    render::HighlightTargets,
+    diagram::{DiagramCore, GroupID, HighlightTargets, LinkAndElement},
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -31,15 +30,6 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
     };
 
     ct
-}
-
-#[test]
-#[wasm_bindgen_test]
-fn buld_ok_test() {
-    let mut ops = DiagramOpt::new();
-    ops.index_step = 1;
-    let core = DiagramCore::new(ops);
-    assert!(!core.borrow().render.borrow().diagram.upgrade().is_none());
 }
 
 #[test]
@@ -141,10 +131,9 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
         LookupPointResult::Node(1)
     );
     assert_eq!(
-        diagram.borrow().idx.contains_point(
-            &Point { x: 5.0, y: 0.0 }.add_distance(&p),
-            &*diagram.borrow()
-        ),
+        diagram
+            .borrow()
+            .contains_point(&Point { x: 5.0, y: 0.0 }.add_distance(&p),),
         LookupPointResult::Box(0)
     );
     assert_eq!(
@@ -154,18 +143,16 @@ fn test_points(diagram: Rc<RefCell<DiagramCore>>, p: Point) {
         LookupPointResult::Bundle((0, 0))
     );
     assert_eq!(
-        diagram.borrow().idx.contains_point(
-            &Point { x: 2.5, y: 0.21 }.add_distance(&p),
-            &*diagram.borrow()
-        ),
+        diagram
+            .borrow()
+            .contains_point(&Point { x: 2.5, y: 0.21 }.add_distance(&p),),
         LookupPointResult::Link((0, 0))
     );
 
     assert_eq!(
-        diagram.borrow().idx.contains_point(
-            &Point { x: 2.5, y: 0.66 }.add_distance(&p),
-            &*diagram.borrow()
-        ),
+        diagram
+            .borrow()
+            .contains_point(&Point { x: 2.5, y: 0.66 }.add_distance(&p),),
         LookupPointResult::Link((0, 1))
     );
 }

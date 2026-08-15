@@ -65,3 +65,4 @@ pub const DOM_ERROR: &'static str = "No `document` exists";
 pub const EL_ERROR: &'static str = "No Element by the given `id`, exists";
 pub const LINK_NODE_MISSING_ERROR: &'static str = "Cannot add Link to node that does not exist";
 pub const LINK_BUNDLE_MISSING_ERROR: &'static str = "Cannot add Bundle to node that does not exist";
+pub const FRAME_TICK: f64 = 0.01;

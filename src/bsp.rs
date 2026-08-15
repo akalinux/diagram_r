@@ -124,7 +124,7 @@ impl ScreenIndex {
         if let Some(screen) = self.x.get(&z) {
             for set in screen.nodes.iter() {
                 match set.slot {
-                    Slot::Link => match d.links[set.id].contains_point(p) {
+                    Slot::Link => match d.links.borrow()[set.id].contains_point(p) {
                         LookupPointResult::Link(res) => return LookupPointResult::Link(res),
                         LookupPointResult::Bundle(res) => {
                             return LookupPointResult::Bundle(res);
@@ -132,12 +132,12 @@ impl ScreenIndex {
                         _ => (),
                     },
                     Slot::Box => {
-                        if d.boxes[set.id].layout.contains_point(p) {
+                        if d.boxes.borrow()[set.id].layout.contains_point(p) {
                             return LookupPointResult::Box(set.id);
                         }
                     }
                     Slot::Node => {
-                        if d.nodes[set.id].0.layout.contains_point(p) {
+                        if d.nodes.borrow()[set.id].0.layout.contains_point(p) {
                             return LookupPointResult::Node(set.id);
                         }
                     }

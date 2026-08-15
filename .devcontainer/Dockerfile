@@ -2,10 +2,10 @@ FROM mcr.microsoft.com/devcontainers/typescript-node
 
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
-   apt-get update && apt-get install -y \
+   apt-get update && apt-get upgrade -y &&  apt-get install -y \
     curl \
     build-essential \
-    vim wget llvm ispell cargo brotli
+    vim wget llvm ispell cargo brotli chromium chromium-driver
 RUN --mount=type=cache,target=/var/cache/apt \
     --mount=type=cache,target=/var/lib/apt \
    apt-get update && apt-get install -y \
@@ -14,6 +14,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
 RUN /usr/local/bin/corepack enable
 RUN COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn set version stable
 RUN cd /;curl -L https://git.io/misspell | bash
+
 USER node
 RUN COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn set version stable
 RUN rustup default stable 

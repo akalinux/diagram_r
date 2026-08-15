@@ -64,3 +64,5 @@ strip = true
 # Terminate immediately on panic to remove stack-unwinding machinery
 panic = "abort"
 
+[features]
+webgl = []

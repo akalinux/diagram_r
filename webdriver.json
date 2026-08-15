@@ -1,0 +1,19 @@
+{
+  "moz:firefoxOptions": {
+    "prefs": {
+      "media.navigator.streams.fake": true,
+      "media.navigator.permission.disabled": true
+    },
+    "args": [    "--headless=new",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--window-size=1920,1080",
+    "--disable-gpu"]
+  },
+  "goog:chromeOptions": {
+    "args": [
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream"
+    ]
+  }
+}

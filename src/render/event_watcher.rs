@@ -1,13 +1,13 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{AddEventListenerOptions, Event, HtmlElement};
+use web_sys::{AddEventListenerOptions, Event, HtmlCanvasElement};
 pub struct HtmlEventWatcher {
     target: String,
     cb: Closure<dyn FnMut(Event)>,
-    element: HtmlElement,
+    element: HtmlCanvasElement,
 }
 
 impl HtmlEventWatcher {
-    pub fn new<F>(s: &str, f: F, element: &HtmlElement) -> Result<Self, JsValue>
+    pub fn new<F>(s: &str, f: F, element: &HtmlCanvasElement) -> Result<Self, JsValue>
     where
         F: FnMut(Event) + 'static,
     {

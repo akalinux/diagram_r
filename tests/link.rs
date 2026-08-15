@@ -3,8 +3,9 @@
 mod common;
 use approx::assert_relative_eq;
 use common::*;
+use diagram_r::DiagramOpt;
 use diagram_r::link::{Animation, Link, compute_animation};
-use diagram_r::{Point, bsp::LookupPointResult, constants::ZERO_POINT, diagram::DiagramOpt};
+use diagram_r::{Point, bsp::LookupPointResult, constants::ZERO_POINT};
 use wasm_bindgen_test::wasm_bindgen_test;
 #[test]
 #[wasm_bindgen_test]

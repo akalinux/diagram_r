@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 use diagram_r::{
-    Point,
-    diagram::DiagramOpt,
+    DiagramOpt, Point,
     link::{Animation, Bundle, Link, LinkContainer, LinkSet},
     node::Node,
     square::Square,

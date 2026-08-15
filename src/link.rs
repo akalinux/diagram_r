@@ -1,10 +1,9 @@
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    Point,
+    DiagramOpt, Point,
     bsp::LookupPointResult,
     constants::ZERO_POINT,
-    diagram::DiagramOpt,
     node::Node,
     square::Square,
     utils::{compute_bunlde_points, compute_line_box, full_box_from, get_xy, inside_box},

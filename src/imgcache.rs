@@ -1,9 +1,12 @@
 use rustc_hash::FxHashMap;
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 use wasm_bindgen::prelude::*;
 use web_sys::{ErrorEvent, HtmlImageElement};
 
-use crate::render::Render;
+use crate::diagram::DiagramCore;
 
 pub struct ImgLoader {
     onload: Option<Closure<dyn FnMut()>>,
@@ -18,7 +21,7 @@ pub enum CacheState {
 }
 
 pub struct ImgCache {
-    render: Rc<RefCell<Render>>,
+    pub diagram: Weak<RefCell<DiagramCore>>,
     pub cache: Rc<RefCell<Cache>>,
 }
 pub struct Cache {
@@ -27,9 +30,9 @@ pub struct Cache {
 }
 
 impl ImgCache {
-    pub fn new(render: Rc<RefCell<Render>>) -> Self {
+    pub fn new(diagram: Weak<RefCell<DiagramCore>>) -> Self {
         Self {
-            render,
+            diagram: diagram,
             cache: Rc::new(RefCell::new(Cache {
                 imgs: FxHashMap::default(),
                 loading: 0,
@@ -42,7 +45,9 @@ impl ImgCache {
             cache.loading -= 1;
             cache.imgs.insert(src.clone(), state);
         }
-        self.render.borrow().on_img(self);
+        unsafe { self.diagram.upgrade().unwrap_unchecked() }
+            .borrow()
+            .on_img(self);
     }
     pub fn uptick(&mut self) {
         self.cache.borrow_mut().loading += 1;
@@ -79,7 +84,7 @@ impl ImgCache {
 impl Clone for ImgCache {
     fn clone(&self) -> Self {
         Self {
-            render: Rc::clone(&self.render),
+            diagram: self.diagram.clone(),
             cache: Rc::clone(&self.cache),
         }
     }

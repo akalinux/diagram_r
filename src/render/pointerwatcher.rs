@@ -3,11 +3,7 @@ use std::{cell::RefCell, rc::Weak};
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{Event, HtmlCanvasElement, PointerEvent, WheelEvent};
 
-use crate::{
-    Point,
-    diagram::{self, DiagramCore},
-    render::event_watcher::HtmlEventWatcher,
-};
+use crate::{Point, diagram::DiagramCore, render::event_watcher::HtmlEventWatcher};
 macro_rules! create_mouse_callback {
     ($render:expr,$target:literal,$el:expr,$method:ident) => {{
         let render = unsafe { $render.upgrade().unwrap_unchecked() }.clone();
@@ -53,7 +49,6 @@ impl PointerWatcher {
         let on_leave = create_mouse_callback!(diagram, "pointerenter", el, on_mouse_leave)?;
         let on_enter = create_mouse_callback!(diagram, "pointerleave", el, on_mouse_enter)?;
         // -- on_wheel start
-        let we = el.clone();
         let diagram = unsafe { diagram.upgrade().unwrap_unchecked() };
         let on_wheel = HtmlEventWatcher::new(
             "wheel",

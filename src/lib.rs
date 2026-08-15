@@ -95,6 +95,12 @@ impl Point {
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
+    pub fn get_center(&self, other: &Self) -> Self {
+        Self {
+            x: (self.x + other.x) * 0.5,
+            y: (self.y + other.y) * 0.5,
+        }
+    }
     pub fn to_map_xy(&self, t: &Transform) -> Self {
         to_map_xy(&self, t)
     }

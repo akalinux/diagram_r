@@ -16,7 +16,6 @@ use crate::{
     square::Square,
     utils::to_map_xy,
 };
-use js_sys::Function;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(inspectable, getter_with_clone)]
@@ -572,9 +571,24 @@ impl DiagramCore {
 
     pub fn on_mouse_down(&self, p: &Point) {
         self.clear_timeout();
+        let lp = self.to_map_xy(p);
+        let res = self.contains_point(&lp);
+
+        // grab the center of what ever was clicked on
+        match &res {
+            LookupPointResult::NoMatch => {
+                // screen is always a synthetic fall through
+                self.current_target
+                    .replace(Some((LookupPointResult::Screen, *p)));
+                return;
+            }
+            _ => (),
+        };
+
+        self.current_target.replace(Some((res, *p)));
     }
     pub fn on_mouse_up(&self, p: &Point) {
-        self.set_timeout();
+        self.move_lookup(p);
     }
     pub fn on_mouse_enter(&self, p: &Point) {
         self.current_target
@@ -585,9 +599,7 @@ impl DiagramCore {
         self.current_target.replace(None);
         self.highlights.replace(None);
     }
-    pub fn on_mouse_move(&self, p: &Point) {
-        self.clear_timeout();
-        self.highlights.replace(None);
+    fn move_lookup(&self, p: &Point) {
         match self.current_target.borrow_mut().as_mut() {
             Some((l, op)) => {
                 let nodes = match l {
@@ -629,6 +641,22 @@ impl DiagramCore {
             .replace(Some((LookupPointResult::NoMatch, *p)));
         self.set_timeout();
     }
+    pub fn on_mouse_move(&self, p: &Point) {
+        self.clear_timeout();
+        self.highlights.replace(None);
+        self.move_lookup(p);
+    }
 
-    pub fn on_mouse_wheel(&self, delta: f64) {}
+    pub fn on_mouse_wheel(&self, delta: f64) {
+        let mut t = self.get_transform();
+        t.k -= match delta < 0.0 {
+            true => self.render_ops.wheel_move,
+            false => -self.render_ops.wheel_move,
+        };
+        if t.k < 0.0 {
+            t.k = self.render_ops.wheel_move;
+        }
+        self.set_transform(t);
+        let _ = self.render();
+    }
 }

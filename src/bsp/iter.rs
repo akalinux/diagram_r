@@ -6,7 +6,7 @@ enum IdxBoxIterSection {
     Done,
 }
 
-pub type IdxWork = (i64, i64, IdxBoxAction, f64);
+pub type IdxWork = (i64, i64, IdxBoxAction, f32);
 
 pub struct IdxBoxIter {
     old: IndexXY,

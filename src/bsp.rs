@@ -7,7 +7,7 @@ use crate::{
     diagram::DiagramCore,
 };
 
-pub type IndexXY = (RangeInclusive<i64>, RangeInclusive<i64>, f64);
+pub type IndexXY = (RangeInclusive<i64>, RangeInclusive<i64>, f32);
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum Slot {
     Node,
@@ -18,7 +18,7 @@ pub enum Slot {
 #[derive(Debug, Clone, Copy)]
 pub struct XYSet {
     slot: Slot,
-    size: f64,
+    size: f32,
     id: usize,
 }
 impl PartialEq for XYSet {
@@ -185,7 +185,7 @@ impl ScreenBoundY {
         return self.nodes.is_empty();
     }
 
-    pub fn add(&mut self, t: &ScreenSlot, area: f64) {
+    pub fn add(&mut self, t: &ScreenSlot, area: f32) {
         match t {
             ScreenSlot::Link(l) => self.nodes.insert(XYSet {
                 slot: Slot::Link,
@@ -204,7 +204,7 @@ impl ScreenBoundY {
             }),
         };
     }
-    pub fn remove(&mut self, t: &ScreenSlot, area: f64) {
+    pub fn remove(&mut self, t: &ScreenSlot, area: f32) {
         match t {
             ScreenSlot::Link(l) => self.nodes.remove(&XYSet {
                 slot: Slot::Link,

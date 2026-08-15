@@ -410,8 +410,8 @@ impl DiagramCore {
         let step = self.render_ops.index_step;
         {
             let mut center = self.center.borrow_mut();
-            center.x += distance.x * node_ids.len() as f64;
-            center.y += distance.y * node_ids.len() as f64;
+            center.x += distance.x * node_ids.len() as f32;
+            center.y += distance.y * node_ids.len() as f32;
         }
 
         for group in node_ids {

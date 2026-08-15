@@ -7,16 +7,16 @@ use crate::{Point, bsp::IndexXY, constants::SCREEN_EPSILON};
 #[wasm_bindgen(inspectable)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Square {
-    pub x: f64,
-    pub y: f64,
-    pub width: f64,
-    pub height: f64,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 #[wasm_bindgen]
 impl Square {
     #[wasm_bindgen(constructor)]
-    pub fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
+    pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
         Self {
             x,
             y,
@@ -28,10 +28,10 @@ impl Square {
 
 /// The corners of a right angled rectangle or square.
 pub type Corners = (
-    f64, // min_x
-    f64, // max_x
-    f64, // min_y
-    f64, // max_y
+    f32, // min_x
+    f32, // max_x
+    f32, // min_y
+    f32, // max_y
 );
 
 impl PartialOrd for Square {
@@ -66,10 +66,14 @@ impl Ord for Square {
     }
 }
 impl Square {
-    pub fn render_points(&self) -> (f64, f64, f64, f64) {
+    pub fn render_points(&self) -> (f32, f32, f32, f32) {
         (self.x, self.y, self.width, self.height)
     }
-    pub fn scale(&self, scale: f64) -> Self {
+    pub fn render_points64(&self) -> (f64, f64, f64, f64) {
+        let (a, b, c, d) = self.render_points();
+        (a as f64, b as f64, c as f64, d as f64)
+    }
+    pub fn scale(&self, scale: f32) -> Self {
         let width = self.width * scale;
         let height = self.height * scale;
         let x = self.x - (self.width - width) * 0.5;
@@ -98,14 +102,14 @@ impl Square {
             y: self.y + (self.height * 0.5),
         }
     }
-    pub fn area(&self) -> f64 {
+    pub fn area(&self) -> f32 {
         self.width * self.height
     }
 
-    pub fn contains_x(&self, x: f64) -> bool {
+    pub fn contains_x(&self, x: f32) -> bool {
         self.x <= x && self.max_x() >= x
     }
-    pub fn contains_y(&self, y: f64) -> bool {
+    pub fn contains_y(&self, y: f32) -> bool {
         self.y <= y && self.max_y() >= y
     }
     pub fn contains_point(&self, p: &Point) -> bool {
@@ -115,14 +119,14 @@ impl Square {
         // return !(dx > self.width || dy > self.height);
         self.contains_x(p.x) && self.contains_y(p.y)
     }
-    pub fn max_x(&self) -> f64 {
+    pub fn max_x(&self) -> f32 {
         self.x + self.width
     }
-    pub fn max_y(&self) -> f64 {
+    pub fn max_y(&self) -> f32 {
         self.y + self.height
     }
 
-    pub fn smallest_side(&self, b: &Self) -> f64 {
+    pub fn smallest_side(&self, b: &Self) -> f32 {
         let mut min = self.width;
 
         for c in [self.height, b.width, b.height] {
@@ -162,8 +166,8 @@ impl Square {
     pub fn center(&self, screen: &Self) -> Point {
         let inlay_point = screen.get_center();
         let host_point = self.get_center();
-        let mut x: f64 = 0.0;
-        let mut y: f64 = 0.0;
+        let mut x: f32 = 0.0;
+        let mut y: f32 = 0.0;
         for (inlay, host, host_size, t) in [
             (inlay_point.x, host_point.x, self.width * 0.5, &mut x),
             (inlay_point.y, host_point.y, self.height * 0.5, &mut y),

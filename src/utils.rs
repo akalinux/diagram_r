@@ -6,7 +6,7 @@ use crate::{
     square::Corners,
 };
 
-pub type AngleNorthSouth = (f64, f64, f64);
+pub type AngleNorthSouth = (f32, f32, f32);
 pub type FullBox = (Point, Point, Point, Point);
 pub fn to_map_xy(p: &Point, t: &Transform) -> Point {
     let px = p.x - t.x;
@@ -16,7 +16,7 @@ pub fn to_map_xy(p: &Point, t: &Transform) -> Point {
     Point { x, y }
 }
 
-pub fn to_fixed_px(n: f64) -> String {
+pub fn to_fixed_px(n: f32) -> String {
     let js_num: Number = n.into();
     let js_str = unsafe { js_num.to_fixed(2).unwrap_unchecked() };
     let mut str = String::from(js_str);
@@ -24,7 +24,7 @@ pub fn to_fixed_px(n: f64) -> String {
     str
 }
 
-pub fn get_xy(cx: f64, cy: f64, r: f64, degree: f64) -> Point {
+pub fn get_xy(cx: f32, cy: f32, r: f32, degree: f32) -> Point {
     let rad = degree.to_radians();
 
     let x = cx + r * rad.cos();
@@ -32,7 +32,7 @@ pub fn get_xy(cx: f64, cy: f64, r: f64, degree: f64) -> Point {
     Point { x, y }
 }
 
-pub fn get_angle(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
+pub fn get_angle(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     let dx = x1 - x2;
     let dy = y1 - y2;
 
@@ -44,7 +44,7 @@ pub fn get_angle(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
     base
 }
 
-pub fn triangle_area(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) -> f64 {
+pub fn triangle_area(x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) -> f32 {
     return (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)).abs() * 0.5;
 }
 
@@ -71,7 +71,7 @@ pub fn compute_line_box(ne: &Point, points: [&Point; 3]) -> Corners {
     (min_x, max_x, min_y, max_y)
 }
 
-pub fn north_box_from(a: &Point, b: &Point, r: f64) -> (Point, Point, Point, f64) {
+pub fn north_box_from(a: &Point, b: &Point, r: f32) -> (Point, Point, Point, f32) {
     let angle = get_angle(a.x, a.y, b.x, b.y);
     let north = angle + 90.0;
     let nw = get_xy(a.x, a.y, r, north);
@@ -80,7 +80,7 @@ pub fn north_box_from(a: &Point, b: &Point, r: f64) -> (Point, Point, Point, f64
     let ne = b.sub_distance(&distance);
     (nw, ne, distance, north)
 }
-pub fn full_box_from(a: &Point, b: &Point, r: f64) -> (FullBox, (Point, f64)) {
+pub fn full_box_from(a: &Point, b: &Point, r: f32) -> (FullBox, (Point, f32)) {
     let (nw, ne, distance, north) = north_box_from(a, b, r);
 
     let sw = a.add_distance(&distance);
@@ -107,15 +107,15 @@ pub fn inside_box(pbox: &FullBox, p: &Point) -> bool {
     return true;
 }
 
-pub fn get_distance(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
+pub fn get_distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     return get_distance_square(x1, y1, x2, y2).sqrt();
 }
 
-pub fn get_distance_square(x1: f64, y1: f64, x2: f64, y2: f64) -> f64 {
+pub fn get_distance_square(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     return (x1 - x2).powi(2) + (y1 - y2).powi(2);
 }
 
-pub fn compute_r_for_even_space_on_circle(r: f64, points: f64) -> f64 {
+pub fn compute_r_for_even_space_on_circle(r: f32, points: f32) -> f32 {
     let degree = 360.0 / points;
     let a = get_xy(0.0, 0.0, r, 0.0);
     let b = get_xy(0.0, 0.0, r, degree);
@@ -124,7 +124,7 @@ pub fn compute_r_for_even_space_on_circle(r: f64, points: f64) -> f64 {
     return r * scale;
 }
 
-pub fn inside_circle(p: &Point, c: &Point, r: f64) -> bool {
+pub fn inside_circle(p: &Point, c: &Point, r: f32) -> bool {
     return (p.x - c.x).powi(2) + (p.y - c.y).powi(2) <= r.powi(2);
 }
 
@@ -142,10 +142,10 @@ pub fn compute_bunlde_points(src: &Point, dst: &Point, bundles: usize) -> Vec<Po
     if bundles == 0 {
         return points;
     }
-    let d = src.get_move_distance(dst).scale(1.0 / (bundles * 2) as f64);
+    let d = src.get_move_distance(dst).scale(1.0 / (bundles * 2) as f32);
 
     for i in (1..bundles * 2).step_by(2) {
-        points.push(Point::new(src.x + d.x * i as f64, src.x + d.y * i as f64));
+        points.push(Point::new(src.x + d.x * i as f32, src.x + d.y * i as f32));
     }
     points
 }

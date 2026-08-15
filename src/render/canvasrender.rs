@@ -32,7 +32,7 @@ pub fn unpack_canvas(c: &HtmlCanvasElement) -> Result<CanvasRenderingContext2d, 
 pub struct CanvasRender {
     diagram: Weak<RefCell<DiagramCore>>,
     ctx: CanvasRenderingContext2d,
-    frame_tick: f64,
+    frame_tick: f32,
     link_data: RefCell<Option<Vec<DrawData>>>,
     dashes: Array,
 }
@@ -66,7 +66,7 @@ impl CoreRender for CanvasRender {
     fn render(&self) -> Result<(), JsValue> {
         let context = &self.ctx;
         context.set_global_alpha(1.0);
-        context.set_line_dash_offset(self.frame_tick);
+        context.set_line_dash_offset(self.frame_tick as f64);
         let d = unsafe { self.diagram.upgrade().unwrap_unchecked() };
         let diagram = &*d.borrow();
 
@@ -94,7 +94,7 @@ impl CoreRender for CanvasRender {
         };
 
         let highight_color = &opt.highlight_color;
-        context.set_global_alpha(opt.highlight_alpha);
+        context.set_global_alpha(opt.highlight_alpha as f64);
         for id in &highlights.boxes {
             let node = &boxes_vec[*id];
             self.draw_box(&node.layout, opt, diagram.get_opt(node.opt), true, cache)?;
@@ -134,13 +134,13 @@ impl CoreRender for CanvasRender {
 }
 
 impl CanvasRender {
-    fn draw_line(&self, src: &Point, dst: &Point, width: f64, color: &String) {
+    fn draw_line(&self, src: &Point, dst: &Point, width: f32, color: &String) {
         let ctx = &self.ctx;
         ctx.begin_path();
-        ctx.set_line_width(width);
+        ctx.set_line_width(width as f64);
         ctx.set_stroke_style_str(&color);
-        ctx.move_to(src.x, src.y);
-        ctx.line_to(dst.x, dst.y);
+        ctx.move_to(src.x as f64, src.y as f64);
+        ctx.line_to(dst.x as f64, dst.y as f64);
         ctx.close_path();
         ctx.stroke();
     }
@@ -156,11 +156,11 @@ impl CanvasRender {
         if highlight {
             ctx.set_fill_style_str(&opt.highlight_color);
 
-            let (x, y, w, h) = target.scale(opt.highlight_scale).render_points();
+            let (x, y, w, h) = target.scale(opt.highlight_scale).render_points64();
             ctx.clear_rect(x, y, w, h);
             ctx.fill_rect(x, y, w, h);
         } else {
-            let (x, y, w, h) = target.render_points();
+            let (x, y, w, h) = target.render_points64();
             if let Some(res) = cache.load_img(&o.img)
                 && let Ok(img) = res
             {

@@ -8,7 +8,7 @@ use crate::{
     square::Square,
     utils::{compute_bunlde_points, compute_line_box, full_box_from, get_xy, inside_box},
 };
-pub type AnimationLink = (Point, Point, f64);
+pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Animation {
@@ -47,24 +47,24 @@ impl LinkSet {
     }
 }
 
-pub fn compute_line_width(link_scale: f64, r: f64, links: usize) -> (f64, f64, f64) {
-    //let lc = self.compute_node_scale(nodes) as f64;
+pub fn compute_line_width(link_scale: f32, r: f32, links: usize) -> (f32, f32, f32) {
+    //let lc = self.compute_node_scale(nodes) as f32;
     let offset = match links {
         1 => 0,
         _ => 1,
     };
-    let lc = (2 * links - offset) as f64;
+    let lc = (2 * links - offset) as f32;
     let scaled = r * link_scale;
     let width = scaled / lc;
-    let step = scaled / (links as f64);
+    let step = scaled / (links as f32);
     return (width, step, step * 0.5);
 }
 pub fn compute_animation(
     link: &Link,
     clink: &(Point, Point),
     animations: &mut Vec<AnimationLink>,
-    width: f64,
-    angle_north: f64,
+    width: f32,
+    angle_north: f32,
 ) {
     match link.animation {
         Animation::Both => {
@@ -111,7 +111,7 @@ impl LinkSet {
         let mut links = Vec::with_capacity(self.links.len());
         d = d.scale(2.0);
         for (i, link) in self.links.iter().enumerate() {
-            let inc_by = init_step + step * (i as f64);
+            let inc_by = init_step + step * (i as f32);
             let start = nw + d.scale(inc_by);
             let end = ne + d.scale(inc_by);
             let clink = (start, end);
@@ -160,8 +160,8 @@ impl Bundle {
 
 #[derive(Debug, PartialEq)]
 pub struct DrawData {
-    pub line_width: f64,
-    pub bundle_side: f64,
+    pub line_width: f32,
+    pub bundle_side: f32,
     pub bundles: Vec<Point>,
     pub links: Vec<(Point, Point)>,
     pub animations: Vec<AnimationLink>,
@@ -239,7 +239,7 @@ impl LinkContainer {
                     x += a.x + b.x;
                     y += a.y + b.y;
                 }
-                let count = (self.ls.links.len() * 2) as f64;
+                let count = (self.ls.links.len() * 2) as f32;
                 Point {
                     x: x / count,
                     y: y / count,

@@ -25,15 +25,15 @@ use crate::{
 #[wasm_bindgen]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Transform {
-    pub x: f64,
-    pub y: f64,
-    pub k: f64,
+    pub x: f32,
+    pub y: f32,
+    pub k: f32,
 }
 
 #[wasm_bindgen]
 impl Transform {
     #[wasm_bindgen(constructor)]
-    pub fn new(x: f64, y: f64, k: f64) -> Self {
+    pub fn new(x: f32, y: f32, k: f32) -> Self {
         Self { x, y, k }
     }
 }
@@ -77,8 +77,8 @@ impl ElementOpt {
 #[wasm_bindgen(inspectable)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Point {
-    pub x: f64,
-    pub y: f64,
+    pub x: f32,
+    pub y: f32,
 }
 
 impl Add for Point {
@@ -92,7 +92,7 @@ impl Add for Point {
 }
 
 impl Point {
-    pub fn new(x: f64, y: f64) -> Self {
+    pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
     pub fn to_map_xy(&self, t: &Transform) -> Self {
@@ -112,7 +112,7 @@ impl Point {
         Self::new(self.x - distance.x, self.y - distance.y)
     }
 
-    pub fn scale(&self, scale: f64) -> Self {
+    pub fn scale(&self, scale: f32) -> Self {
         Self {
             x: self.x * scale,
             y: self.y * scale,
@@ -137,21 +137,21 @@ impl Point {
 #[wasm_bindgen(inspectable, getter_with_clone)]
 #[derive(Clone, Debug)]
 pub struct DiagramOpt {
-    pub wheel_move: f64,
+    pub wheel_move: f32,
     pub timeout: i32,
     pub font_family: String,
     pub text_align: String,
     pub animation_dashes: Vec<f64>,
-    pub highlight_alpha: f64,
+    pub highlight_alpha: f32,
     pub highlight_color: String,
-    pub highlight_scale: f64,
+    pub highlight_scale: f32,
     pub bulk_img_update: bool,
-    pub link_scale: f64,
+    pub link_scale: f32,
     pub callback: Option<Function>,
     pub index_step: i64,
-    pub node_font_scale: f64,
+    pub node_font_scale: f32,
     pub animation_color: String,
-    pub frame_tick: f64,
+    pub frame_tick: f32,
     pub interactive: bool,
 }
 

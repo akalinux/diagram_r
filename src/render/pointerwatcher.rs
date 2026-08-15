@@ -26,8 +26,8 @@ fn get_el_xy(e: &Event, div: &HtmlCanvasElement) -> Option<Point> {
     e.stop_propagation();
     let rect = div.get_bounding_client_rect();
     if let Some(e) = e.dyn_ref::<PointerEvent>() {
-        let x = e.client_x() as f64 - rect.left();
-        let y = e.client_y() as f64 - rect.top();
+        let x = (e.client_x() as f64 - rect.left()) as f32;
+        let y = (e.client_y() as f64 - rect.top()) as f32;
         return Some(Point { x, y });
     }
     None

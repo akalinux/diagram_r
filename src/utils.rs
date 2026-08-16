@@ -1,10 +1,6 @@
 use js_sys::Number;
 
-use crate::{
-    Point, Transform,
-    constants::{RAD2DEG, TRIANGLE_MARGINE_FOR_ERROR},
-    square::Corners,
-};
+use crate::{Point, Transform, constants::AREA_SCALE_EPSILON, square::Corners};
 
 pub type AngleNorthSouth = (f32, f32, f32);
 pub type FullBox = (Point, Point, Point, Point);
@@ -36,7 +32,8 @@ pub fn get_angle(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     let dx = x1 - x2;
     let dy = y1 - y2;
 
-    let base = dy.atan2(dx) * RAD2DEG; //- 180;
+    //let base = dy.atan2(dx) * RAD2DEG; //- 180;
+    let base = dy.atan2(dx).to_degrees();
     if base < 0.0 {
         return base + 360.0;
     }
@@ -92,7 +89,7 @@ pub fn inside_box(pbox: &FullBox, p: &Point) -> bool {
     let (nw, ne, sw, se) = pbox;
     let box_area = (triangle_area(ne.x, ne.y, nw.x, nw.y, se.x, se.y)
         + triangle_area(ne.x, ne.y, nw.x, nw.y, sw.x, sw.y))
-        * TRIANGLE_MARGINE_FOR_ERROR;
+        * AREA_SCALE_EPSILON;
 
     let mut triangle_sum = 0.0;
     let order = [&ne, &nw, &sw, &se, &ne];

@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use crate::{Point, Transform};
 
 /// Used to slightly oversize link boxes for mouse over intersections preventing misses.
-pub const TRIANGLE_MARGINE_FOR_ERROR: f32 = 1.00004;
+pub const AREA_SCALE_EPSILON: f32 = 1.00004;
 
 /// Half a circle
 pub const RAD2DEG: f32 = 180.0 / PI;

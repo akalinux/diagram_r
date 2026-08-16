@@ -23,6 +23,7 @@ pub struct Link {
     pub opt: usize,
     pub label: String,
     pub animation: Animation,
+    pub arc: Option<Point>,
 }
 
 #[wasm_bindgen(inspectable, getter_with_clone)]
@@ -61,7 +62,7 @@ pub fn compute_line_width(link_scale: f32, r: f32, links: usize) -> (f32, f32, f
 }
 pub fn compute_animation(
     link: &Link,
-    clink: &(Point, Point),
+    clink: &(Point, Point, Option<Point>),
     animations: &mut Vec<AnimationLink>,
     width: f32,
     angle_north: f32,
@@ -114,7 +115,7 @@ impl LinkSet {
             let inc_by = init_step + step * (i as f32);
             let start = nw + d.scale(inc_by);
             let end = ne + d.scale(inc_by);
-            let clink = (start, end);
+            let clink = (start, end, None);
             compute_animation(link, &clink, &mut animations, width, north);
 
             links.push(clink);
@@ -135,11 +136,12 @@ impl LinkSet {
 #[wasm_bindgen]
 impl Link {
     #[wasm_bindgen(constructor)]
-    pub fn new(opt: usize, label: String, animation: Animation) -> Self {
+    pub fn new(opt: usize, label: String, animation: Animation, arc: Option<Point>) -> Self {
         Self {
             opt,
             label,
             animation,
+            arc,
         }
     }
 }
@@ -163,7 +165,7 @@ pub struct DrawData {
     pub line_width: f32,
     pub bundle_side: f32,
     pub bundles: Vec<Point>,
-    pub links: Vec<(Point, Point)>,
+    pub links: Vec<(Point, Point, Option<Point>)>,
     pub animations: Vec<AnimationLink>,
     pub index: Square,
 }
@@ -235,7 +237,8 @@ impl LinkContainer {
             LookupPointResult::NoMatch => {
                 let mut x = 0.0;
                 let mut y = 0.0;
-                for (a, b) in &dd.links {
+                // TODO
+                for (a, b, _) in &dd.links {
                     x += a.x + b.x;
                     y += a.y + b.y;
                 }
@@ -246,7 +249,8 @@ impl LinkContainer {
                 }
             }
             LookupPointResult::Link((i, _)) => {
-                let (a, b) = dd.links[*i];
+                // TODO
+                let (a, b, _) = dd.links[*i];
                 Point {
                     x: (a.x + b.x) / 2.0,
                     y: (a.y + b.y) / 2.0,

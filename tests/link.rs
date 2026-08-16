@@ -50,17 +50,17 @@ fn link_container_update_tests() {
     lc = test_lc_b1_l3(&a, &b, &opt, 0, (0, 1));
     assert_eq!(
         lc.draw_data.links[1],
-        (a.layout.get_center(), b.layout.get_center())
+        (a.layout.get_center(), b.layout.get_center(), None)
     );
 }
 
 #[test]
 #[wasm_bindgen_test]
 fn animation_tests() {
-    let mut link = Link::new(0, String::from("testing"), Animation::Both);
+    let mut link = Link::new(0, String::from("testing"), Animation::Both, None);
     let mut a = Vec::new();
     let (src, dst) = (Point::new(0.0, 2.5), Point::new(10.0, 2.5));
-    compute_animation(&link, &(src, dst), &mut a, 5.0, 270.0);
+    compute_animation(&link, &(src, dst, None), &mut a, 5.0, 270.0);
     assert_relative_eq!(a[0].0.x, 0.0, epsilon = 0.0001);
     assert_relative_eq!(a[0].1.x, 10.0, epsilon = 0.0001);
     assert_relative_eq!(a[0].0.y, 1.25, epsilon = 0.0001);
@@ -73,7 +73,7 @@ fn animation_tests() {
     assert_relative_eq!(a[1].2, 5.0 / 3.0, epsilon = 0.0001);
     link.animation = Animation::ToDst;
     a.clear();
-    compute_animation(&link, &(src, dst), &mut a, 5.0, 270.0);
+    compute_animation(&link, &(src, dst, None), &mut a, 5.0, 270.0);
     assert_eq!(a[0].0, src);
     assert_eq!(a[0].1, dst);
 }

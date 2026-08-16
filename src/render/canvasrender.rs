@@ -175,7 +175,8 @@ impl CanvasRender {
         dst: &Point,
         o: &ElementOpt,
         text: &String,
-        line_width: f32,
+        text_height: f32,
+        angle: f32,
     ) -> Result<(), JsValue> {
         if text.is_empty() {
             return Ok(());
@@ -185,16 +186,15 @@ impl CanvasRender {
             return Ok(());
         }
         // don't alow rotation beyond 90 degrees.. as it will invert the text!
-        let angle = get_angle(src.x, src.y, dst.x, dst.y) % 90.0;
 
         let center = src.get_center(dst);
         let p = match o.label_position {
             LabelPosition::Center => center,
-            LabelPosition::Bottom => get_xy(center.x, center.y, line_width * 0.5, angle + 90.0),
-            LabelPosition::Top => get_xy(center.x, center.y, line_width * 0.5, angle + 270.0),
+            LabelPosition::Bottom => get_xy(center.x, center.y, text_height, angle + 90.0),
+            LabelPosition::Top => get_xy(center.x, center.y, text_height, angle + 270.0),
         };
 
-        let scale = (line_width * 0.5) as f64 / height;
+        let scale = text_height as f64 / height;
         let ctx = &self.ctx;
         ctx.save();
         match ctx.rotate(angle.to_radians() as f64) {
@@ -233,12 +233,21 @@ impl CanvasRender {
         let ctx = &self.ctx;
 
         let data = &link.draw_data;
+        if data.links.len() == 0 {
+            return Ok(());
+        }
+        let angle = {
+            let (a, b, _) = &data.links[0];
+            get_angle(a.x, a.y, b.x, b.y)
+        };
         let width = data.line_width;
+        let text_height = width * 0.5;
         for (i, ld) in link.ls.links.iter().enumerate() {
-            let (a, b) = &data.links[i];
+            // TODO
+            let (a, b, _) = &data.links[i];
             let o = diagram.get_opt(ld.opt);
             self.draw_line(a, b, width, &o.color);
-            self.draw_link_text(a, b, o, &ld.label, data.line_width)?;
+            self.draw_link_text(a, b, o, &ld.label, text_height, angle)?;
         }
 
         ctx.set_line_dash(&self.dashes)?;

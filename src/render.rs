@@ -10,7 +10,7 @@ use crate::{Point, bsp::ScreenSlot, diagram::DiagramCore};
 
 pub trait BuildRender {
     fn new(
-        canvas: &HtmlCanvasElement,
+        canvas: HtmlCanvasElement,
         diagram: Weak<RefCell<DiagramCore>>,
     ) -> Result<Box<dyn CoreRender>, JsValue>;
 }

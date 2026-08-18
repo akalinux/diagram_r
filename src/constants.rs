@@ -20,14 +20,14 @@ pub const DEFAULT_LINK_SCALE: f32 = 0.85;
 pub const DEFAULT_OPT_NAME: &'static str = "defaults";
 
 /// Default color used for nodesand links.
-pub const DEFAULT_COLOR: &'static str = "#00828A";
+pub const DEFAULT_COLOR: &'static str = "rgb(0, 131, 138)";
 // Default color used for bundles
-pub const DEFAULT_BUNDLE_COLOR: &'static str = "#e18f38";
+pub const DEFAULT_BUNDLE_COLOR: &'static str = "rgb(225, 143, 56)";
 pub const DEFAULT_HOVER_TIMEOUT: i32 = 300;
 
 // default animation color
-pub const DEFAULT_ANIMATION_COLOR: &'static str = "#9319cc";
-pub const DEFAULT_HIGHLIGHT_COLOR: &'static str = "#d4d4d468";
+pub const DEFAULT_ANIMATION_COLOR: &'static str = "rgb(147, 25, 204)";
+pub const DEFAULT_HIGHLIGHT_COLOR: &'static str = "#d3d3d3c6";
 pub const DEFAULT_DIV_STYLE: &'static str =
     "position: relative; height: 100%;widht: 100%;box-sizing: border-box;overflow: clip;";
 

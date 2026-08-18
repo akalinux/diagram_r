@@ -17,7 +17,7 @@ use crate::{
     utils::{get_angle, get_xy},
 };
 
-pub fn unpack_canvas(c: &HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
+pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
     match c.get_context("2d") {
         Ok(o) => match o {
             Some(obj) => match obj.dyn_into::<web_sys::CanvasRenderingContext2d>() {
@@ -35,14 +35,16 @@ pub struct CanvasRender {
     ctx: CanvasRenderingContext2d,
     frame_tick: f32,
     dashes: Array,
+    width: u32,
+    height: u32,
 }
 
 impl BuildRender for CanvasRender {
     fn new(
-        canvas: &HtmlCanvasElement,
+        canvas: HtmlCanvasElement,
         diagram: Weak<RefCell<DiagramCore>>,
     ) -> Result<Box<dyn CoreRender>, JsValue> {
-        let ctx = unpack_canvas(canvas)?;
+        let ctx = unpack_canvas(canvas.clone())?;
         ctx.set_text_align(&"center");
         ctx.set_text_baseline(&"middle");
         let d = unsafe { diagram.upgrade().unwrap_unchecked() };
@@ -54,6 +56,8 @@ impl BuildRender for CanvasRender {
             diagram,
             ctx,
             dashes,
+            height: canvas.height(),
+            width: canvas.width(),
         }))
     }
 }
@@ -67,10 +71,15 @@ fn animation_dash(src: &Vec<f64>) -> Array {
 impl CoreRender for CanvasRender {
     fn render(&self) -> Result<(), JsValue> {
         let context = &self.ctx;
-        context.set_global_alpha(1.0);
-        context.set_line_dash_offset(self.frame_tick as f64);
+        context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
+        context.clear_rect(0.0, 0.0, self.width as f64, self.height as f64);
         let d = unsafe { self.diagram.upgrade().unwrap_unchecked() };
         let diagram = &*d.borrow();
+        let t = *&*diagram.transform.borrow();
+
+        context.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
+        context.set_global_alpha(1.0);
+        context.set_line_dash_offset(self.frame_tick as f64);
 
         let cache = &diagram.img_cache;
         let opt = &diagram.render_ops;
@@ -154,7 +163,6 @@ impl CanvasRender {
             ctx.set_fill_style_str(&opt.highlight_color);
 
             let (x, y, w, h) = target.scale(opt.highlight_scale).render_points64();
-            ctx.clear_rect(x, y, w, h);
             ctx.fill_rect(x, y, w, h);
         } else {
             let (x, y, w, h) = target.render_points64();
@@ -297,13 +305,13 @@ impl CanvasRender {
         o: &ElementOpt,
         text: &String,
     ) -> Result<(f64, f64, f64), JsValue> {
-        let (width, height) = self.get_text_size(text)?;
-        let x = width as f32 * 0.5;
+        let (_, height) = self.get_text_size(text)?;
+        let x = l.x + l.width * 0.5;
         let h = (height * 0.5) as f32;
 
         // We always center on the x axis
         let y = match o.label_position {
-            LabelPosition::Top => l.max_y() - h,
+            LabelPosition::Top => l.y - h,
             LabelPosition::Bottom => l.max_y() + h,
             LabelPosition::Center => l.y + l.height * 0.5,
         };

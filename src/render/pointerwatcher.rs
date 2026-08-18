@@ -17,13 +17,14 @@ macro_rules! create_mouse_callback {
     }};
 }
 
-fn get_el_xy(e: &Event, div: &HtmlCanvasElement) -> Option<Point> {
+fn get_el_xy(e: &Event, canvas: &HtmlCanvasElement) -> Option<Point> {
     e.prevent_default();
     e.stop_propagation();
-    let rect = div.get_bounding_client_rect();
+    let rect = canvas.get_bounding_client_rect();
     if let Some(e) = e.dyn_ref::<PointerEvent>() {
         let x = (e.client_x() as f64 - rect.left()) as f32;
         let y = (e.client_y() as f64 - rect.top()) as f32;
+        //log(&format!("x: {}, y: {}", x, y));
         return Some(Point { x, y });
     }
     None
@@ -56,9 +57,15 @@ impl PointerWatcher {
             move |e| {
                 e.prevent_default();
                 e.stop_propagation();
-                match (e.dyn_ref::<WheelEvent>(), get_el_xy(&e, &we)) {
-                    (Some(w), Some(p)) => {
-                        diagram.borrow().on_mouse_wheel(&p, w.delta_y());
+                match e.dyn_into::<WheelEvent>() {
+                    Ok(e) => {
+                        let rect = we.get_bounding_client_rect();
+                        let x = (e.client_x() as f64 - rect.left()) as f32;
+                        let y = (e.client_y() as f64 - rect.top()) as f32;
+
+                        diagram
+                            .borrow()
+                            .on_mouse_wheel(&Point::new(x, y), e.delta_y());
                     }
                     _ => (),
                 }

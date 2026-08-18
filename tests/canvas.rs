@@ -34,12 +34,18 @@ fn test_canvas_2d_context() {
 
     // Create a new canvas element dynamically
     let canvas_element = document.create_element("canvas").unwrap();
+
     let canvas: web_sys::HtmlCanvasElement = canvas_element
         .dyn_into::<web_sys::HtmlCanvasElement>()
         .expect("element should be an HtmlCanvasElement");
 
+    canvas.set_id("test_id");
+    canvas.set_width(800);
+    canvas.set_height(600);
+    let body = unsafe { document.body().unwrap_unchecked() };
+    body.append_child(&canvas).unwrap();
     let diagram = base_diagram();
-    match diagram.borrow().mount(canvas) {
+    match diagram.borrow().mount(String::from("test_id")) {
         Ok(_) => (),
         Err(err) => panic!("{}", &unsafe { err.as_string().unwrap_unchecked() }),
     }

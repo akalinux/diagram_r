@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
     rc::{Rc, Weak},
 };
-use web_sys::HtmlCanvasElement;
+use web_sys::{HtmlCanvasElement, window};
 
 use crate::{
     DiagramOpt, ElementOpt, Point, Transform,
@@ -32,7 +32,7 @@ pub struct MovedNode {
 
 #[cfg(not(feature = "webgl"))]
 fn build_render(
-    canvas: &HtmlCanvasElement,
+    canvas: HtmlCanvasElement,
     diagram: Weak<RefCell<DiagramCore>>,
 ) -> Result<Box<dyn CoreRender>, JsValue> {
     use crate::render::{BuildRender, canvasrender::CanvasRender};
@@ -76,6 +76,7 @@ pub struct Diagram {
 
 #[wasm_bindgen]
 impl Diagram {
+    #[wasm_bindgen(constructor)]
     pub fn new(render_ops: DiagramOpt) -> Self {
         Self {
             core: DiagramCore::new(render_ops),
@@ -103,8 +104,8 @@ impl Diagram {
         self.core.borrow_mut().set_data(boxes, nodes, links)
     }
 
-    pub fn mount(&self, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
-        self.core.borrow().mount(canvas)
+    pub fn mount(&self, id: String) -> Result<(), JsValue> {
+        self.core.borrow().mount(id)
     }
     pub fn unmount(&self) {
         self.core.borrow().unmount();
@@ -497,8 +498,21 @@ impl DiagramCore {
         }
     }
 
-    pub fn mount(&self, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
-        let render = build_render(&canvas, self.this.clone())?;
+    pub fn mount(&self, id: String) -> Result<(), JsValue> {
+        let canvas = match window() {
+            Some(window) => match window.document() {
+                Some(dom) => match dom.get_element_by_id(&id) {
+                    Some(e) => match e.dyn_into::<HtmlCanvasElement>() {
+                        Ok(c) => c,
+                        Err(_) => return Err(JsValue::from_str(CANVAS_ERROR)),
+                    },
+                    None => return Err(JsValue::from_str(EL_ERROR)),
+                },
+                None => return Err(JsValue::from_str(DOM_ERROR)),
+            },
+            None => return Err(JsValue::from_str(WINDOW_ERROR)),
+        };
+        let render = build_render(canvas.clone(), self.this.clone())?;
         if self.render_ops.interactive {
             let watcher = PointerWatcher::new(self.this.clone(), canvas)?;
             self.watcher.replace(Some(watcher));
@@ -535,6 +549,7 @@ impl DiagramCore {
     pub fn to_map_xy(&self, p: &Point) -> Point {
         to_map_xy(p, &*self.transform.borrow())
     }
+
     fn set_timeout(&self) {
         let this = unsafe { self.this.upgrade().unwrap_unchecked() };
 
@@ -544,9 +559,10 @@ impl DiagramCore {
                     match l {
                         LookupPointResult::NoMatch => {
                             let np = this.borrow().to_map_xy(&p);
-                            let event = match this.borrow().contains_point(&np) {
-                                LookupPointResult::Box(id) => CoreMouseEvent::MoseOverBox(id),
-                                LookupPointResult::Node(id) => CoreMouseEvent::MoseOverNode(id),
+                            let res = this.borrow().contains_point(&np);
+                            let event = match &res {
+                                LookupPointResult::Box(id) => CoreMouseEvent::MoseOverBox(*id),
+                                LookupPointResult::Node(id) => CoreMouseEvent::MoseOverNode(*id),
                                 LookupPointResult::Link(id) => {
                                     CoreMouseEvent::MouseOverLink(LinkAndElement::new(id.0, id.1))
                                 }
@@ -559,6 +575,9 @@ impl DiagramCore {
                                     return;
                                 }
                             };
+                            let higlights = this.borrow().get_highlights(&res);
+                            this.borrow().highlights.replace(Some(higlights));
+                            let _ = this.borrow().render();
                             this.borrow().run_callback(event, &p);
                         }
                         _ => {
@@ -567,7 +586,7 @@ impl DiagramCore {
                         }
                     };
                 }
-                None => (),
+                None => {}
             };
         };
         match Timeout::new(job, self.render_ops.timeout) {
@@ -649,14 +668,13 @@ impl DiagramCore {
                         return None;
                     }
                     LookupPointResult::Screen => {
-                        let distance = self.to_map_xy(op).get_move_distance(p);
-                        *op = *p;
-                        let mut t = self.get_transform();
+                        let distance = op.get_move_distance(p);
+                        let mut t = self.transform.borrow_mut();
 
                         t.x += distance.x;
                         t.y += distance.y;
+                        *op = *p;
 
-                        self.set_transform(t);
                         let _ = self.render();
                         return None;
                     }
@@ -668,7 +686,9 @@ impl DiagramCore {
                         vec![GroupID::Node(link.src), GroupID::Node(link.dst)]
                     }
                 };
-                let distance = self.to_map_xy(op).get_move_distance(p);
+                let distance = &op
+                    .get_move_distance(p)
+                    .scale(1.0 / self.transform.borrow().k);
                 self.move_nodes(&distance, &nodes);
                 *op = *p;
                 let _ = self.render();
@@ -684,8 +704,14 @@ impl DiagramCore {
     }
     pub fn on_mouse_move(&self, p: &Point) {
         self.clear_timeout();
-        self.highlights.replace(None);
-        self.move_lookup(p);
+        let res = self.highlights.replace(None);
+
+        match (self.move_lookup(p), res) {
+            (None, Some(_)) => {
+                let _ = self.render();
+            }
+            _ => (),
+        };
     }
 
     pub fn on_mouse_wheel(&self, p: &Point, delta: f64) {

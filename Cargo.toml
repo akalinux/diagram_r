@@ -24,7 +24,7 @@ web-sys = {
         'Node',
         'Window',
        "TextMetrics",
-       "ResizeObserver", "ResizeObserverEntry" 
+       "ResizeObserver", "ResizeObserverEntry" ,
     ] 
 }
 wasm-bindgen-futures = "0.4.76"
@@ -37,6 +37,7 @@ wasm-bindgen-test = "0.3.76"
 
 [lib]
 crate-type = ["cdylib","rlib"]
+name = "diagram_r"
 
 [package.metadata.wasm-pack.profile.release]
 #wasm-opt = false

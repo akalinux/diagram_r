@@ -76,8 +76,8 @@ impl Square {
     pub fn scale(&self, scale: f32) -> Self {
         let width = self.width * scale;
         let height = self.height * scale;
-        let x = self.x - (self.width - width) * 0.5;
-        let y = self.y - (self.height - height) * 0.5;
+        let x = self.x + (self.width - width) * 0.5;
+        let y = self.y + (self.height - height) * 0.5;
         Self {
             x,
             y,

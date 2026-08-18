@@ -140,8 +140,18 @@ impl Point {
     }
 }
 
-#[wasm_bindgen(inspectable, getter_with_clone)]
-#[derive(Clone, Debug)]
+/*
+#[wasm_bindgen]
+extern "C" {
+    // Use `js_namespace` here to bind `console.log(..)` instead of just
+    // `log(..)`
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn log(s: &str);
+
+}
+*/
+
+#[wasm_bindgen(getter_with_clone,js_name=DiagramOpt)]
 pub struct DiagramOpt {
     pub wheel_move: f32,
     pub timeout: i32,
@@ -161,7 +171,7 @@ pub struct DiagramOpt {
     pub interactive: bool,
 }
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_class=DiagramOpt)]
 impl DiagramOpt {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {

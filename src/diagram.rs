@@ -669,12 +669,12 @@ impl DiagramCore {
                     }
                     LookupPointResult::Screen => {
                         let distance = op.get_move_distance(p);
-                        let mut t = self.transform.borrow_mut();
-
-                        t.x += distance.x;
-                        t.y += distance.y;
                         *op = *p;
-
+                        {
+                            let mut t = self.transform.borrow_mut();
+                            t.x += distance.x;
+                            t.y += distance.y;
+                        }
                         let _ = self.render();
                         return None;
                     }

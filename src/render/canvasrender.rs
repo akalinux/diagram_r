@@ -11,7 +11,6 @@ use crate::{
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::LinkContainer,
-    log,
     node::Node,
     render::{BuildRender, CoreRender},
     square::Square,

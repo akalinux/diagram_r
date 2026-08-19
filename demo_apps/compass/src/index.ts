@@ -29,6 +29,7 @@ async function run() {
   ],
   )
 
+
   let link_north_south = new Link(0, "North to South", Animation.Both);
   let link_south_north = new Link(0, "South to North", Animation.ToDst);
   let link_south_north2 = new Link(0, "South to North", Animation.ToDst);

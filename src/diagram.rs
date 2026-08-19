@@ -436,6 +436,7 @@ impl DiagramCore {
         }
 
         let mut all_links = self.links.borrow_mut();
+        let nodes = self.nodes.borrow();
         for lid in links {
             let lc = &mut all_links[lid];
             let ss = ScreenSlot::Link(lid);
@@ -445,7 +446,9 @@ impl DiagramCore {
                     .borrow_mut()
                     .insert(ss, lc.draw_data.index.idx(step));
             }
-            lc.draw_data.move_distance(distance);
+            lc.draw_data =
+                lc.ls
+                    .build_draw_data(&nodes[lc.ls.src].0, &nodes[lc.ls.dst].0, &self.render_ops);
             self.update_render(ScreenSlot::Link(lid), distance);
         }
     }

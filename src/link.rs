@@ -4,7 +4,6 @@ use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
     constants::ZERO_POINT,
-    log,
     node::Node,
     square::Square,
     utils::{compute_bunlde_points, compute_line_box, full_box_from, get_xy, inside_box},
@@ -125,7 +124,7 @@ impl LinkSet {
         d = d.scale(2.0);
         let init = d.scale(inital_scale);
         let chunk = d.scale(scale);
-        log(&format!("{:?},{:?}, {},{}", init, d, width, inital_scale));
+        //log(&format!("{:?},{:?}, {},{}", init, d, width, inital_scale));
         nw = nw.add_distance(&init);
         ne = ne.add_distance(&init);
         for (i, link) in self.links.iter().enumerate() {
@@ -133,7 +132,7 @@ impl LinkSet {
             let start = nw.add_distance(&chunk.scale(ix));
             let end = ne.add_distance(&chunk.scale(ix));
             let clink = (start, end, None);
-            //compute_animation(link, &clink, &mut animations, width * 0.5, north);
+            compute_animation(link, &clink, &mut animations, width * 0.5, north);
 
             links.push(clink);
         }
@@ -195,6 +194,7 @@ impl DrawData {
         Square::new(p.x - offset, p.y - offset, side, side)
     }
 
+    /*
     pub fn move_distance(&mut self, distance: &Point) {
         self.index.move_distance(distance);
         for link in &mut self.links {
@@ -208,7 +208,7 @@ impl DrawData {
             animation.0 = animation.0.add_distance(distance);
             animation.1 = animation.1.add_distance(distance);
         }
-    }
+    }*/
 }
 #[derive(Debug)]
 pub struct LinkContainer {

@@ -14,10 +14,10 @@ use wasm_bindgen::prelude::*;
 
 use crate::{
     constants::{
-        DEFAULT_ANIMATION_COLOR, DEFAULT_ANIMATION_DASHES, DEFAULT_COLOR, DEFAULT_FONT_FAMILY,
-        DEFAULT_HIGHLIGHT_ALPHA, DEFAULT_HIGHLIGHT_COLOR, DEFAULT_HIGHLIGHT_SCALE,
-        DEFAULT_HOVER_TIMEOUT, DEFAULT_IDX_STEP, DEFAULT_LINK_SCALE, DEFAULT_SCREEN_ZOOM,
-        DEFAULT_TEXT_ALIGN, FRAME_TICK, NODE_FONT_SCALE,
+        DEFAULT_ANIMATION_COLOR, DEFAULT_ANIMATION_DASHES, DEFAULT_COLOR, DEFAULT_FONT_COLOR,
+        DEFAULT_FONT_FAMILY, DEFAULT_HIGHLIGHT_ALPHA, DEFAULT_HIGHLIGHT_COLOR,
+        DEFAULT_HIGHLIGHT_SCALE, DEFAULT_HOVER_TIMEOUT, DEFAULT_IDX_STEP, DEFAULT_LINK_SCALE,
+        DEFAULT_SCREEN_ZOOM, FRAME_TICK, MAX_K, MIN_K, NODE_FONT_SCALE,
     },
     utils::to_map_xy,
 };
@@ -140,7 +140,6 @@ impl Point {
     }
 }
 
-/*
 #[wasm_bindgen]
 extern "C" {
     // Use `js_namespace` here to bind `console.log(..)` instead of just
@@ -149,19 +148,15 @@ extern "C" {
     pub fn log(s: &str);
 
 }
-*/
 
 #[wasm_bindgen(getter_with_clone,js_name=DiagramOpt)]
 pub struct DiagramOpt {
-    pub wheel_move: f32,
     pub timeout: i32,
     pub font_family: String,
-    pub text_align: String,
     pub animation_dashes: Vec<f64>,
     pub highlight_alpha: f32,
     pub highlight_color: String,
     pub highlight_scale: f32,
-    pub bulk_img_update: bool,
     pub link_scale: f32,
     pub callback: Option<Function>,
     pub index_step: i64,
@@ -169,6 +164,10 @@ pub struct DiagramOpt {
     pub animation_color: String,
     pub frame_tick: f32,
     pub interactive: bool,
+    pub wheel_move: f32,
+    pub min_k: f32,
+    pub max_k: f32,
+    pub font_color: String,
 }
 
 #[wasm_bindgen(js_class=DiagramOpt)]
@@ -177,14 +176,15 @@ impl DiagramOpt {
     pub fn new() -> Self {
         Self {
             wheel_move: DEFAULT_SCREEN_ZOOM,
+            min_k: MIN_K,
+            max_k: MAX_K,
             timeout: DEFAULT_HOVER_TIMEOUT,
             font_family: String::from(DEFAULT_FONT_FAMILY),
-            text_align: String::from(DEFAULT_TEXT_ALIGN),
+            font_color: String::from(DEFAULT_FONT_COLOR),
             animation_dashes: Vec::from(DEFAULT_ANIMATION_DASHES),
             highlight_alpha: DEFAULT_HIGHLIGHT_ALPHA,
             highlight_color: String::from(DEFAULT_HIGHLIGHT_COLOR),
             highlight_scale: DEFAULT_HIGHLIGHT_SCALE,
-            bulk_img_update: true,
             interactive: true,
             callback: None,
             link_scale: DEFAULT_LINK_SCALE,

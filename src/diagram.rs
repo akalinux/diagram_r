@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
     rc::{Rc, Weak},
 };
-use web_sys::{HtmlCanvasElement, window};
+use web_sys::HtmlCanvasElement;
 
 use crate::{
     DiagramOpt, ElementOpt, Point, Transform,
@@ -104,8 +104,8 @@ impl Diagram {
         self.core.borrow_mut().set_data(boxes, nodes, links)
     }
 
-    pub fn mount(&self, id: String) -> Result<(), JsValue> {
-        self.core.borrow().mount(id)
+    pub fn mount(&self, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
+        self.core.borrow().mount(canvas)
     }
     pub fn unmount(&self) {
         self.core.borrow().unmount();
@@ -273,6 +273,7 @@ impl DiagramCore {
         } else {
             self.el_ops = el_ops
         }
+        self.img_cache.load_images(&self.el_ops);
     }
 
     fn add_node(&self, id: usize, as_node: bool, node: &Node) {
@@ -397,17 +398,9 @@ impl DiagramCore {
     }
 
     pub fn on_img(&self, cache: &ImgCache) {
-        match self.render_ops.bulk_img_update {
-            true => {
-                if cache.is_done() {
-                    let _ = self.render();
-                    return;
-                }
-            }
-            false => {
-                let _ = self.render();
-            }
-        };
+        if cache.is_done() {
+            let _ = self.render();
+        }
     }
     pub fn move_nodes(&self, distance: &Point, node_ids: &[GroupID]) {
         let mut links = FxHashSet::default();
@@ -498,20 +491,7 @@ impl DiagramCore {
         }
     }
 
-    pub fn mount(&self, id: String) -> Result<(), JsValue> {
-        let canvas = match window() {
-            Some(window) => match window.document() {
-                Some(dom) => match dom.get_element_by_id(&id) {
-                    Some(e) => match e.dyn_into::<HtmlCanvasElement>() {
-                        Ok(c) => c,
-                        Err(_) => return Err(JsValue::from_str(CANVAS_ERROR)),
-                    },
-                    None => return Err(JsValue::from_str(EL_ERROR)),
-                },
-                None => return Err(JsValue::from_str(DOM_ERROR)),
-            },
-            None => return Err(JsValue::from_str(WINDOW_ERROR)),
-        };
+    pub fn mount(&self, canvas: HtmlCanvasElement) -> Result<(), JsValue> {
         let render = build_render(canvas.clone(), self.this.clone())?;
         if self.render_ops.interactive {
             let watcher = PointerWatcher::new(self.this.clone(), canvas)?;
@@ -537,9 +517,9 @@ impl DiagramCore {
 // Pointer event code is here
 impl DiagramCore {
     fn render(&self) -> Result<(), JsValue> {
-        match self.render.borrow().as_ref() {
-            Some(r) => r.render(),
-            None => Ok(()),
+        match (self.img_cache.is_done(), self.render.borrow().as_ref()) {
+            (true, Some(r)) => r.render(),
+            _ => Ok(()),
         }
     }
 
@@ -714,17 +694,39 @@ impl DiagramCore {
         };
     }
 
-    pub fn on_mouse_wheel(&self, p: &Point, delta: f64) {
-        let mut t = self.get_transform();
-        self.clear_timeout();
-        t.k += match delta < 0.0 {
-            true => self.render_ops.wheel_move,
-            false => -self.render_ops.wheel_move,
-        };
-        if t.k < 0.0 {
-            t.k = self.render_ops.wheel_move;
+    fn get_width_height(&self) -> (f32, f32) {
+        unsafe {
+            self.render
+                .borrow()
+                .as_ref()
+                .unwrap_unchecked()
+                .get_width_height()
         }
-        self.set_transform(t);
+    }
+    pub fn on_mouse_wheel(&self, p: &Point, delta: f64) {
+        self.clear_timeout();
+        let t = {
+            let mut t = self.get_transform();
+
+            let mut offset = match delta < 0.0 {
+                true => self.render_ops.wheel_move,
+                false => -self.render_ops.wheel_move,
+            };
+            t.k += offset;
+            if t.k < self.render_ops.min_k || t.k > self.render_ops.max_k {
+                return;
+            }
+            let (width, height) = self.get_width_height();
+            offset *= -0.5;
+            let x = width * offset;
+            let y = height * offset;
+            t.x += x;
+            t.y += y;
+
+            self.set_transform(t);
+            t
+        };
+
         self.run_callback(CoreMouseEvent::TransForm(t), p);
         let _ = self.render();
     }

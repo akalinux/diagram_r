@@ -19,4 +19,5 @@ pub trait CoreRender {
     fn render(&self) -> Result<(), JsValue>;
     fn update(&self, target: ScreenSlot, distance: &Point);
     fn clear(&self);
+    fn get_width_height(&self) -> (f32, f32);
 }

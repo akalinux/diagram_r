@@ -42,10 +42,8 @@ fn test_canvas_2d_context() {
     canvas.set_id("test_id");
     canvas.set_width(800);
     canvas.set_height(600);
-    let body = unsafe { document.body().unwrap_unchecked() };
-    body.append_child(&canvas).unwrap();
     let diagram = base_diagram();
-    match diagram.borrow().mount(String::from("test_id")) {
+    match diagram.borrow().mount(canvas) {
         Ok(_) => (),
         Err(err) => panic!("{}", &unsafe { err.as_string().unwrap_unchecked() }),
     }

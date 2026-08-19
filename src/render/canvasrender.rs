@@ -11,6 +11,7 @@ use crate::{
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::LinkContainer,
+    log,
     node::Node,
     render::{BuildRender, CoreRender},
     square::Square,
@@ -48,7 +49,6 @@ impl BuildRender for CanvasRender {
         ctx.set_text_align(&"center");
         ctx.set_text_baseline(&"middle");
         let d = unsafe { diagram.upgrade().unwrap_unchecked() };
-        ctx.set_font(&d.borrow().render_ops.font_family);
         let frame_tick = d.borrow().render_ops.frame_tick;
         let dashes = animation_dash(&d.borrow().render_ops.animation_dashes);
         Ok(Box::new(Self {
@@ -69,6 +69,10 @@ fn animation_dash(src: &Vec<f64>) -> Array {
     res
 }
 impl CoreRender for CanvasRender {
+    fn get_width_height(&self) -> (f32, f32) {
+        (self.width as f32, self.height as f32)
+    }
+
     fn render(&self) -> Result<(), JsValue> {
         let context = &self.ctx;
         context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
@@ -83,19 +87,20 @@ impl CoreRender for CanvasRender {
 
         let cache = &diagram.img_cache;
         let opt = &diagram.render_ops;
+        context.set_font(&opt.font_family);
 
         let node_vec = &diagram.nodes.borrow();
         let boxes_vec = &diagram.boxes.borrow();
         let link_vec = &diagram.links.borrow();
         for node in boxes_vec.iter() {
-            self.draw_node(node, diagram, cache, false)?;
+            self.draw_node(node, diagram, opt, cache, false)?;
         }
 
         for link in link_vec.iter() {
             self.draw_link(link, diagram, opt, cache)?;
         }
         for (node, _) in node_vec.iter() {
-            self.draw_node(node, diagram, cache, false)?;
+            self.draw_node(node, diagram, opt, cache, false)?;
         }
 
         let h = diagram.highlights.borrow();
@@ -109,7 +114,9 @@ impl CoreRender for CanvasRender {
         context.set_global_alpha(opt.highlight_alpha as f64);
         for id in &highlights.boxes {
             let node = &boxes_vec[*id];
-            self.draw_box(&node.layout, opt, diagram.get_opt(node.opt), true, cache)?;
+            let o = diagram.get_opt(node.opt);
+            self.draw_box(&node.layout, opt, o, true, cache)?;
+            self.draw_node_text_highlight(&node.layout, &node.label, o, opt)?;
         }
 
         for set in &highlights.links {
@@ -124,11 +131,15 @@ impl CoreRender for CanvasRender {
             let link = &link_vec[set.link];
             let bundle = &link.ls.bundles[set.element];
             let target = link.draw_data.bundle_draw_box(set.element);
-            self.draw_box(&target, opt, diagram.get_opt(bundle.opt), true, cache)?;
+            let o = diagram.get_opt(bundle.opt);
+            self.draw_box(&target, opt, o, true, cache)?;
+            self.draw_node_text_highlight(&target, &bundle.label, o, opt)?;
         }
         for id in &highlights.nodes {
             let node = &node_vec[*id].0;
-            self.draw_box(&node.layout, opt, diagram.get_opt(node.opt), true, cache)?;
+            let o = diagram.get_opt(node.opt);
+            self.draw_box(&node.layout, opt, o, true, cache)?;
+            self.draw_node_text_highlight(&node.layout, &node.label, o, opt)?;
         }
 
         Ok(())
@@ -140,6 +151,29 @@ impl CoreRender for CanvasRender {
 }
 
 impl CanvasRender {
+    fn draw_node_text_highlight(
+        &self,
+        square: &Square,
+        text: &String,
+        o: &ElementOpt,
+        opt: &DiagramOpt,
+    ) -> Result<(), JsValue> {
+        if text.is_empty() {
+            return Ok(());
+        }
+        let target = square.scale(opt.highlight_scale);
+        let ctx = &self.ctx;
+        let (w, h) = self.get_text_size(text)?;
+        let x = target.x as f64 + (target.width * 0.5) as f64 - w * 0.5;
+        let y = match o.label_position {
+            LabelPosition::Top => target.y as f64 - h,
+            LabelPosition::Bottom => target.max_y() as f64,
+            LabelPosition::Center => (target.y + target.height * 0.5) as f64 - h * 0.5,
+        };
+        ctx.set_fill_style_str(&opt.highlight_color);
+        ctx.fill_rect(x, y, w, h);
+        Ok(())
+    }
     fn draw_line(&self, src: &Point, dst: &Point, width: f32, color: &String) {
         let ctx = &self.ctx;
         ctx.begin_path();
@@ -147,6 +181,7 @@ impl CanvasRender {
         ctx.set_stroke_style_str(&color);
         ctx.move_to(src.x as f64, src.y as f64);
         ctx.line_to(dst.x as f64, dst.y as f64);
+
         ctx.close_path();
         ctx.stroke();
     }
@@ -279,6 +314,7 @@ impl CanvasRender {
         &self,
         node: &Node,
         diagram: &DiagramCore,
+        opts: &DiagramOpt,
         cache: &ImgCache,
         highlight: bool,
     ) -> Result<(), JsValue> {
@@ -288,15 +324,15 @@ impl CanvasRender {
             return Ok(());
         }
 
-        let (x, y, _) = self.text_pos(&node.layout, o, &node.label)?;
+        let (x, y, _, _) = self.text_pos(&node.layout, o, &node.label)?;
 
-        self.draw_text(x as f64, y as f64, &node.label, &o.color)
+        self.draw_text(x as f64, y as f64, &node.label, &opts.font_color)
     }
 
     fn get_text_size(&self, text: &String) -> Result<(f64, f64), JsValue> {
         let meta = self.ctx.measure_text(&text)?;
-        let w = meta.width();
-        let height = meta.actual_bounding_box_descent() + meta.actual_bounding_box_descent();
+        let w = meta.actual_bounding_box_left() + meta.actual_bounding_box_right();
+        let height = meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent();
         Ok((w, height))
     }
     fn text_pos(
@@ -304,8 +340,8 @@ impl CanvasRender {
         l: &Square,
         o: &ElementOpt,
         text: &String,
-    ) -> Result<(f64, f64, f64), JsValue> {
-        let (_, height) = self.get_text_size(text)?;
+    ) -> Result<(f64, f64, f64, f64), JsValue> {
+        let (width, height) = self.get_text_size(text)?;
         let x = l.x + l.width * 0.5;
         let h = (height * 0.5) as f32;
 
@@ -315,6 +351,6 @@ impl CanvasRender {
             LabelPosition::Bottom => l.max_y() + h,
             LabelPosition::Center => l.y + l.height * 0.5,
         };
-        Ok((x as f64, y as f64, height))
+        Ok((x as f64, y as f64, height, width))
     }
 }

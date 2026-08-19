@@ -27,7 +27,8 @@ pub const DEFAULT_HOVER_TIMEOUT: i32 = 300;
 
 // default animation color
 pub const DEFAULT_ANIMATION_COLOR: &'static str = "rgb(147, 25, 204)";
-pub const DEFAULT_HIGHLIGHT_COLOR: &'static str = "#d3d3d3c6";
+pub const DEFAULT_HIGHLIGHT_COLOR: &'static str = "#3c3c3c";
+pub const DEFAULT_FONT_COLOR: &'static str = "#3c3c3c";
 pub const DEFAULT_DIV_STYLE: &'static str =
     "position: relative; height: 100%;widht: 100%;box-sizing: border-box;overflow: clip;";
 
@@ -49,7 +50,7 @@ pub const ZERO_TRANSFORM: Transform = Transform {
 pub const DEFAULT_SCREEN_ZOOM: f32 = 0.05;
 pub const DEFAULT_HIGHLIGHT_SCALE: f32 = 1.10;
 pub const DEFAULT_HIGHLIGHT_ALPHA: f32 = 0.5;
-pub const DEFAULT_FONT_FAMILY: &'static str = "Arial";
+pub const DEFAULT_FONT_FAMILY: &'static str = "24px Arial";
 pub const NODE_FONT_SCALE: f32 = 0.6;
 pub const DEFAULT_TEXT_ALIGN: &'static str = "center";
 /// This is the size of the index in pixels.
@@ -66,3 +67,6 @@ pub const EL_ERROR: &'static str = "No Element by the given `id`, exists";
 pub const LINK_NODE_MISSING_ERROR: &'static str = "Cannot add Link to node that does not exist";
 pub const LINK_BUNDLE_MISSING_ERROR: &'static str = "Cannot add Bundle to node that does not exist";
 pub const FRAME_TICK: f32 = 0.01;
+
+pub const MAX_K: f32 = 3.0;
+pub const MIN_K: f32 = 0.0;

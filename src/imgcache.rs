@@ -6,7 +6,7 @@ use std::{
 use wasm_bindgen::prelude::*;
 use web_sys::{ErrorEvent, HtmlImageElement};
 
-use crate::diagram::DiagramCore;
+use crate::{ElementOpt, diagram::DiagramCore};
 
 pub struct ImgLoader {
     onload: Option<Closure<dyn FnMut()>>,
@@ -26,7 +26,8 @@ pub struct ImgCache {
 }
 pub struct Cache {
     pub imgs: FxHashMap<String, CacheState>,
-    loading: u32,
+    pub loading: u32,
+    pub bulk: bool,
 }
 
 impl ImgCache {
@@ -36,6 +37,7 @@ impl ImgCache {
             cache: Rc::new(RefCell::new(Cache {
                 imgs: FxHashMap::default(),
                 loading: 0,
+                bulk: false,
             })),
         }
     }
@@ -44,17 +46,31 @@ impl ImgCache {
             let mut cache = self.cache.borrow_mut();
             cache.loading -= 1;
             cache.imgs.insert(src.clone(), state);
+            if cache.bulk {
+                return;
+            }
         }
+
         unsafe { self.diagram.upgrade().unwrap_unchecked() }
             .borrow()
             .on_img(self);
     }
-    pub fn uptick(&mut self) {
-        self.cache.borrow_mut().loading += 1;
-    }
 
     pub fn is_done(&self) -> bool {
         self.cache.borrow().loading == 0
+    }
+    pub fn load_images(&self, opts: &Vec<ElementOpt>) {
+        self.cache.borrow_mut().bulk = true;
+        for opt in opts {
+            self.load_img(&opt.img);
+        }
+
+        self.cache.borrow_mut().bulk = false;
+        if self.is_done() {
+            unsafe { self.diagram.upgrade().unwrap_unchecked() }
+                .borrow()
+                .on_img(&self);
+        }
     }
     pub fn load_img(&self, url: &String) -> Option<Result<HtmlImageElement, JsValue>> {
         if url.is_empty() {
@@ -69,6 +85,7 @@ impl ImgCache {
             _ => (),
         }
 
+        self.cache.borrow_mut().loading += 1;
         ImgLoader::new(url, self.clone());
 
         match self.cache.borrow().imgs.get(url) {
@@ -96,11 +113,7 @@ impl ImgLoader {
         match HtmlImageElement::new() {
             Ok(i) => img = i,
             Err(e) => {
-                cache
-                    .cache
-                    .borrow_mut()
-                    .imgs
-                    .insert(url.clone(), CacheState::Failed(e));
+                cache.on_load(url, CacheState::Failed(e));
                 return;
             }
         };
@@ -116,7 +129,7 @@ impl ImgLoader {
 
         let wanted = cache.clone();
         let on_load = Closure::wrap(Box::new(move || {
-            // This call causes self to drop
+            // This will drop self
             wanted.on_load(&src, CacheState::Loaded(img_ok.clone()));
         }));
         res.img.set_onload(Some(on_load.as_ref().unchecked_ref()));
@@ -125,7 +138,7 @@ impl ImgLoader {
         let src = url.clone();
         let wanted = cache.clone();
         let on_err = Closure::wrap(Box::new(move |e: ErrorEvent| {
-            // This call causes self to drop
+            // This will drop self
             wanted.on_load(&src, CacheState::Failed(e.into()));
         }));
         res.img.set_onerror(Some(on_err.as_ref().unchecked_ref()));

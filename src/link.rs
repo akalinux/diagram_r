@@ -4,6 +4,7 @@ use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
     constants::ZERO_POINT,
+    log,
     node::Node,
     square::Square,
     utils::{compute_bunlde_points, compute_line_box, full_box_from, get_xy, inside_box},
@@ -96,27 +97,43 @@ pub fn compute_animation(
         _ => (),
     }
 }
+
+fn get_line_width(total_links: usize, smallest_side: f32, link_scale: f32) -> (f32, f32, f32) {
+    let full_width = smallest_side * link_scale;
+    let incremental_scale = 1.0 / total_links as f32;
+    let (virtual_count, inital_scale) = match total_links {
+        1 => (2.0, 0.5),
+        _ => (total_links as f32 * 2.0 - 1.0, incremental_scale * 0.5),
+    };
+    let link_width = full_width / virtual_count;
+    (link_width, inital_scale, incremental_scale)
+}
 impl LinkSet {
     pub fn build_draw_data(&self, src: &Node, dst: &Node, opt: &DiagramOpt) -> DrawData {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
         let smallest_side = src.layout.smallest_side(&dst.layout);
         let r = smallest_side * 0.5;
-        let ((nw, ne, sw, se), (mut d, north)) = full_box_from(&src_p, &dst_p, r);
+        let ((mut nw, mut ne, sw, se), (mut d, north)) = full_box_from(&src_p, &dst_p, r);
 
         let idx = Square::from(compute_line_box(&ne, [&nw, &se, &sw]));
-        let (width, step, init_step) =
-            compute_line_width(opt.link_scale, smallest_side, self.links.len());
+        let (width, inital_scale, scale) =
+            get_line_width(self.links.len(), smallest_side, opt.link_scale);
 
         let mut animations = Vec::new(); // no way to know how big this will be :(
         let mut links = Vec::with_capacity(self.links.len());
         d = d.scale(2.0);
+        let init = d.scale(inital_scale);
+        let chunk = d.scale(scale);
+        log(&format!("{:?},{:?}, {},{}", init, d, width, inital_scale));
+        nw = nw.add_distance(&init);
+        ne = ne.add_distance(&init);
         for (i, link) in self.links.iter().enumerate() {
-            let inc_by = init_step + step * (i as f32);
-            let start = nw + d.scale(inc_by);
-            let end = ne + d.scale(inc_by);
+            let ix = i as f32;
+            let start = nw.add_distance(&chunk.scale(ix));
+            let end = ne.add_distance(&chunk.scale(ix));
             let clink = (start, end, None);
-            compute_animation(link, &clink, &mut animations, width, north);
+            //compute_animation(link, &clink, &mut animations, width * 0.5, north);
 
             links.push(clink);
         }

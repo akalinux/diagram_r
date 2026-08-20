@@ -6,7 +6,7 @@ use crate::{
     constants::ZERO_POINT,
     node::Node,
     square::Square,
-    utils::{compute_bunlde_points, compute_line_box, full_box_from, get_xy, inside_box},
+    utils::{compute_line_box, full_box_from, get_xy, inside_box},
 };
 pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
@@ -108,6 +108,16 @@ fn get_line_width(total_links: usize, smallest_side: f32, link_scale: f32) -> (f
     (link_width, inital_scale, incremental_scale)
 }
 impl LinkSet {
+    pub fn compute_bunlde_points(&self, src: &Point, dst: &Point) -> Vec<Point> {
+        let mut points = Vec::with_capacity(self.bundles.len());
+
+        let d = src.get_move_distance(dst);
+
+        for bundle in &self.bundles {
+            points.push(src.add_distance(&d.scale(bundle.pos)));
+        }
+        points
+    }
     pub fn build_draw_data(&self, src: &Node, dst: &Node, opt: &DiagramOpt) -> DrawData {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
@@ -136,7 +146,7 @@ impl LinkSet {
 
             links.push(clink);
         }
-        let bundles = compute_bunlde_points(&src_p, &dst_p, self.bundles.len());
+        let bundles = self.compute_bunlde_points(&src_p, &dst_p);
 
         DrawData {
             line_width: width,
@@ -167,12 +177,18 @@ pub struct Bundle {
     pub opt: usize,
     pub label: String,
     pub links: Vec<usize>,
+    pub pos: f32,
 }
 #[wasm_bindgen]
 impl Bundle {
     #[wasm_bindgen(constructor)]
-    pub fn new(opt: usize, label: String, links: Vec<usize>) -> Self {
-        Self { opt, label, links }
+    pub fn new(opt: usize, label: String, links: Vec<usize>, pos: f32) -> Self {
+        Self {
+            opt,
+            label,
+            links,
+            pos,
+        }
     }
 }
 

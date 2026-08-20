@@ -52,7 +52,7 @@ pub fn full_testbox2() -> (FullBox, (Point, f32)) {
 }
 
 pub fn data_lc_b1_l2() -> (Link, Link, Bundle) {
-    let c = Bundle::new(1, String::from("test bundle"), vec![0, 1]);
+    let c = Bundle::new(1, String::from("test bundle"), vec![0, 1], 0.5);
     let a = Link::new(1, String::from("link a"), Animation::ToDst, None);
     let b = Link::new(2, String::from("link b"), Animation::ToDst, None);
     (a, b, c)

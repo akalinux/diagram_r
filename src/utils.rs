@@ -134,12 +134,12 @@ pub fn to_screen_xy(p: &Point, t: &Transform) -> Point {
     return Point { x, y };
 }
 
-pub fn angle_check(angle: f32) -> bool {
+pub fn angle_needs_normalization(angle: f32) -> bool {
     angle >= 90.0 && angle <= 270.0
 }
-pub fn angle_fix(angle: f32) -> f32 {
-    match angle_check(angle) {
-        true => angle + 180.0,
-        false => angle,
+pub fn normalize_angle(angle: f32) -> (f32, bool) {
+    match angle_needs_normalization(angle) {
+        true => (angle + 180.0, true),
+        false => (angle, false),
     }
 }

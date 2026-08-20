@@ -14,7 +14,7 @@ use crate::{
     node::Node,
     render::{BuildRender, CoreRender},
     square::Square,
-    utils::{angle_check, angle_fix, get_angle, get_xy},
+    utils::{get_angle, get_xy, normalize_angle},
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -269,7 +269,7 @@ impl CanvasRender {
         dst: &Point,
         text: &String,
         height: f32,
-        angle: f32,
+        new_angle: f32,
         o: &ElementOpt,
     ) -> Result<(Point, f32), JsValue> {
         let meta = self.ctx.measure_text(&text)?;
@@ -279,7 +279,6 @@ impl CanvasRender {
         let scale = height / font_height as f32;
         let r = (height + font_height * 0.5) * scale as f32;
 
-        let new_angle = angle_fix(angle);
         let p = match o.label_position {
             // _ => center.scale(1.0 / scale),
             LabelPosition::Center => center,
@@ -296,7 +295,7 @@ impl CanvasRender {
         o: &ElementOpt,
         text: &String,
         height: f32,
-        angle: f32,
+        new_angle: f32,
         opt: &DiagramOpt,
         t: &Transform,
     ) -> Result<(), JsValue> {
@@ -309,7 +308,7 @@ impl CanvasRender {
         }
         // don't alow rotation beyond 90 degrees.. as it will invert the text!
 
-        let (p, scale) = self.compute_link_text(src, dst, text, height, angle, o)?;
+        let (p, scale) = self.compute_link_text(src, dst, text, height, new_angle, o)?;
 
         let full_scale = scale * t.k;
 
@@ -317,8 +316,7 @@ impl CanvasRender {
         let y = p.y * t.k + t.y;
         let ctx = &self.ctx;
 
-        let new_angle = angle_fix(angle);
-        let angle = (new_angle).to_radians();
+        let angle = new_angle.to_radians();
         let k = (full_scale * angle.cos()) as f64;
         let r = (full_scale * angle.sin()) as f64;
         ctx.set_transform(k as f64, r, -r, k as f64, x as f64, y as f64)?;
@@ -337,12 +335,12 @@ impl CanvasRender {
         data: &DrawData,
         i: usize,
         width: f32,
-        angle: f32,
+        normalized_angle: f32,
     ) -> Result<(), JsValue> {
         let (a, b, _) = &data.links[i];
         let o = diagram.get_opt(ld.opt);
         self.draw_line(a, b, width, &o.color);
-        self.draw_link_text(a, b, o, &ld.label, width, angle, opt, t)?;
+        self.draw_link_text(a, b, o, &ld.label, width, normalized_angle, opt, t)?;
         Ok(())
     }
     pub fn draw_link(
@@ -363,20 +361,27 @@ impl CanvasRender {
             let (a, b, _) = &data.links[0];
             get_angle(a.x, a.y, b.x, b.y)
         };
+        let (normalized_angle, was_normalized) = normalize_angle(angle);
         let width = data.line_width;
-        if angle_check(angle) {
-            for (i, ld) in link.ls.links.iter().enumerate() {
-                self.draw_sublink(ld, diagram, opt, t, data, i, width, angle)?;
+        if was_normalized {
+            for (i, ld) in link.ls.links.iter().rev().enumerate() {
+                self.draw_sublink(ld, diagram, opt, t, data, i, width, normalized_angle)?;
             }
         } else {
-            for (i, ld) in link.ls.links.iter().rev().enumerate() {
-                self.draw_sublink(ld, diagram, opt, t, data, i, width, angle)?;
+            for (i, ld) in link.ls.links.iter().enumerate() {
+                self.draw_sublink(ld, diagram, opt, t, data, i, width, normalized_angle)?;
             }
         }
 
         ctx.set_line_dash(&self.dashes)?;
-        for (a, b, width) in &data.animations {
-            self.draw_line(a, b, *width, &opt.animation_color);
+        if was_normalized {
+            for (a, b, width) in data.animations.iter().rev() {
+                self.draw_line(a, b, *width, &opt.animation_color);
+            }
+        } else {
+            for (a, b, width) in &data.animations {
+                self.draw_line(a, b, *width, &opt.animation_color);
+            }
         }
         ctx.set_line_dash(&Array::new())?;
 

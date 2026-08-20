@@ -133,16 +133,3 @@ pub fn to_screen_xy(p: &Point, t: &Transform) -> Point {
     let y = py * t.k;
     return Point { x, y };
 }
-
-pub fn compute_bunlde_points(src: &Point, dst: &Point, bundles: usize) -> Vec<Point> {
-    let mut points = Vec::with_capacity(bundles);
-    if bundles == 0 {
-        return points;
-    }
-    let d = src.get_move_distance(dst).scale(1.0 / (bundles * 2) as f32);
-
-    for i in (1..bundles * 2).step_by(2) {
-        points.push(Point::new(src.x + d.x * i as f32, src.x + d.y * i as f32));
-    }
-    points
-}

@@ -48,7 +48,7 @@ impl LinkSet {
     }
 }
 
-pub fn compute_line_width(link_scale: f32, r: f32, links: usize) -> (f32, f32, f32) {
+pub fn compute_animation_width(link_scale: f32, r: f32, links: usize) -> (f32, f32, f32) {
     //let lc = self.compute_node_scale(nodes) as f32;
     let offset = match links {
         1 => 0,
@@ -69,7 +69,7 @@ pub fn compute_animation(
 ) {
     match link.animation {
         Animation::Both => {
-            let (aw, _, init_step) = compute_line_width(1.0, width, 2);
+            let (aw, _, init_step) = compute_animation_width(1.0, width, 2);
             animations.reserve(2);
 
             let ne = get_xy(clink.0.x, clink.0.y, init_step, angle_north);
@@ -85,11 +85,11 @@ pub fn compute_animation(
             ));
         }
         Animation::ToSrc => {
-            let (aw, _, _) = compute_line_width(1.0, width, 1);
+            let (aw, _, _) = compute_animation_width(1.0, width, 1);
             animations.push((clink.1, clink.0, aw));
         }
         Animation::ToDst => {
-            let (aw, _, _) = compute_line_width(1.0, width, 1);
+            let (aw, _, _) = compute_animation_width(1.0, width, 1);
 
             animations.push((clink.0, clink.1, aw));
         }

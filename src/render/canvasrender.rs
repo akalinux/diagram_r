@@ -10,7 +10,8 @@ use crate::{
     constants::CANVAS_ERROR,
     diagram::DiagramCore,
     imgcache::ImgCache,
-    link::{DrawData, Link, LinkContainer},
+    link::{DrawData, Link, LinkContainer, SubLink},
+    log,
     node::Node,
     render::{BuildRender, CoreRender},
     square::Square,
@@ -122,7 +123,7 @@ impl CoreRender for CanvasRender {
 
         for set in &highlights.links {
             let link = &link_vec[set.link];
-            let (src, dst, _) = &link.draw_data.links[set.element];
+            let (src, dst, _, _) = &link.draw_data.links[set.element];
             let width = link.draw_data.line_width * opt.highlight_scale;
 
             self.draw_line(&src, &dst, width, highight_color);
@@ -332,14 +333,20 @@ impl CanvasRender {
         diagram: &DiagramCore,
         opt: &DiagramOpt,
         t: &Transform,
-        data: &DrawData,
-        i: usize,
+        data: &SubLink,
         width: f32,
         normalized_angle: f32,
     ) -> Result<(), JsValue> {
-        let (a, b, _) = &data.links[i];
+        let (a, b, _, animations) = data;
         let o = diagram.get_opt(ld.opt);
         self.draw_line(a, b, width, &o.color);
+        if let Some(list) = animations {
+            self.ctx.set_line_dash(&self.dashes)?;
+            for (src, dst, _, width) in list {
+                self.draw_line(src, dst, *width, &opt.animation_color);
+            }
+            self.ctx.set_line_dash(&Array::new())?;
+        }
         self.draw_link_text(a, b, o, &ld.label, width, normalized_angle, opt, t)?;
         Ok(())
     }
@@ -351,39 +358,30 @@ impl CanvasRender {
         cache: &ImgCache,
         t: &Transform,
     ) -> Result<(), JsValue> {
-        let ctx = &self.ctx;
-
         let data = &link.draw_data;
         if data.links.len() == 0 {
             return Ok(());
         }
         let angle = {
-            let (a, b, _) = &data.links[0];
+            let (a, b, _, _) = &data.links[0];
             get_angle(a.x, a.y, b.x, b.y)
         };
         let (normalized_angle, was_normalized) = normalize_angle(angle);
         let width = data.line_width;
+
         if was_normalized {
-            for (i, ld) in link.ls.links.iter().rev().enumerate() {
-                self.draw_sublink(ld, diagram, opt, t, data, i, width, normalized_angle)?;
+            for (i, ld) in link.ls.links.iter().enumerate() {
+                //for i in (0..link.ls.links.len()).rev() {
+                //    let ld = &link.ls.links[i];
+                log(&format!("Reverse: {}", i));
+                self.draw_sublink(ld, diagram, opt, t, &data.links[i], width, normalized_angle)?;
             }
         } else {
             for (i, ld) in link.ls.links.iter().enumerate() {
-                self.draw_sublink(ld, diagram, opt, t, data, i, width, normalized_angle)?;
+                log(&format!("Forward: {}", i));
+                self.draw_sublink(ld, diagram, opt, t, &data.links[i], width, normalized_angle)?;
             }
         }
-
-        ctx.set_line_dash(&self.dashes)?;
-        if was_normalized {
-            for (a, b, width) in data.animations.iter().rev() {
-                self.draw_line(a, b, *width, &opt.animation_color);
-            }
-        } else {
-            for (a, b, width) in &data.animations {
-                self.draw_line(a, b, *width, &opt.animation_color);
-            }
-        }
-        ctx.set_line_dash(&Array::new())?;
 
         for (i, bundle) in link.ls.bundles.iter().enumerate() {
             let target = data.bundle_draw_box(i);

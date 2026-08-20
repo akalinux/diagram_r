@@ -43,7 +43,7 @@ async function run() {
   let etw = new LinkSet([link_east_west], [], 2, 3)
 
   d.set_data([], [north, south, east, west], [
-    etw,
+    //etw,
     nts,
   ]);
 

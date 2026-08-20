@@ -60,40 +60,49 @@ pub fn compute_animation_width(link_scale: f32, r: f32, links: usize) -> (f32, f
     let step = scaled / (links as f32);
     return (width, step, step * 0.5);
 }
+pub type LineAnimation = Vec<(Point, Point, Option<Point>, f32)>;
+pub type ComputedLink = (Point, Point, Option<Point>);
 pub fn compute_animation(
     link: &Link,
-    clink: &(Point, Point, Option<Point>),
-    animations: &mut Vec<AnimationLink>,
+    clink: &ComputedLink,
     width: f32,
     angle_north: f32,
-) {
+) -> Option<LineAnimation> {
     match link.animation {
         Animation::Both => {
             let (aw, _, init_step) = compute_animation_width(1.0, width, 2);
-            animations.reserve(2);
 
             let ne = get_xy(clink.0.x, clink.0.y, init_step, angle_north);
             let d = ne.get_move_distance(&clink.0);
+            let arc = match &clink.2 {
+                Some(p) => Some(p.sub_distance(&d)),
+                None => None,
+            };
+            let nw = clink.1.sub_distance(&d);
+            let mut res = Vec::with_capacity(2);
+            res.push((ne, nw, arc, aw));
 
-            animations.push((ne, clink.1.sub_distance(&d), aw));
-            animations.push((
-                //get_xy(clink.0.x, clink.0.y, init_step, angle_south),
-                //get_xy(clink.1.x, clink.1.y, init_step, angle_south),
+            res.push((
                 clink.0.add_distance(&d),
                 clink.1.add_distance(&d),
+                match &clink.2 {
+                    Some(p) => Some(p.add_distance(&d)),
+                    None => None,
+                },
                 aw,
             ));
+            Some(res)
         }
         Animation::ToSrc => {
             let (aw, _, _) = compute_animation_width(1.0, width, 1);
-            animations.push((clink.1, clink.0, aw));
+            Some(Vec::from([(clink.1, clink.0, clink.2, aw)]))
         }
         Animation::ToDst => {
             let (aw, _, _) = compute_animation_width(1.0, width, 1);
 
-            animations.push((clink.0, clink.1, aw));
+            Some(Vec::from([(clink.0, clink.1, clink.2, aw)]))
         }
-        _ => (),
+        _ => None,
     }
 }
 
@@ -129,7 +138,6 @@ impl LinkSet {
         let (width, inital_scale, scale) =
             get_line_width(self.links.len(), smallest_side, opt.link_scale);
 
-        let mut animations = Vec::new(); // no way to know how big this will be :(
         let mut links = Vec::with_capacity(self.links.len());
         d = d.scale(2.0);
         let init = d.scale(inital_scale);
@@ -141,10 +149,9 @@ impl LinkSet {
             let ix = i as f32;
             let start = nw.add_distance(&chunk.scale(ix));
             let end = ne.add_distance(&chunk.scale(ix));
-            let clink = (start, end, None);
-            compute_animation(link, &clink, &mut animations, width * 0.5, north);
+            let animation = compute_animation(link, &(start, end, None), width * 0.5, north);
 
-            links.push(clink);
+            links.push((start, end, None, animation));
         }
         let bundles = self.compute_bunlde_points(&src_p, &dst_p);
 
@@ -153,7 +160,6 @@ impl LinkSet {
             bundle_side: smallest_side * opt.link_scale,
             bundles,
             links,
-            animations,
             index: idx,
         }
     }
@@ -192,13 +198,13 @@ impl Bundle {
     }
 }
 
+pub type SubLink = (Point, Point, Option<Point>, Option<LineAnimation>);
 #[derive(Debug, PartialEq)]
 pub struct DrawData {
     pub line_width: f32,
     pub bundle_side: f32,
     pub bundles: Vec<Point>,
-    pub links: Vec<(Point, Point, Option<Point>)>,
-    pub animations: Vec<AnimationLink>,
+    pub links: Vec<SubLink>,
     pub index: Square,
 }
 
@@ -215,13 +221,20 @@ impl DrawData {
         for link in &mut self.links {
             link.0 = link.0.add_distance(distance);
             link.1 = link.1.add_distance(distance);
+            // FIXME!
+            if let Some(list) = &mut link.3 {
+                for (src, dst, arc, _) in list {
+                    *src = src.add_distance(distance);
+                    *dst = dst.add_distance(distance);
+                    *arc = match arc {
+                        Some(p) => Some(p.add_distance(distance)),
+                        None => None,
+                    };
+                }
+            }
         }
         for bundle in &mut self.bundles {
             *bundle = bundle.add_distance(distance);
-        }
-        for animation in &mut self.animations {
-            animation.0 = animation.0.add_distance(distance);
-            animation.1 = animation.1.add_distance(distance);
         }
     }
 }
@@ -270,7 +283,7 @@ impl LinkContainer {
                 let mut x = 0.0;
                 let mut y = 0.0;
                 // TODO
-                for (a, b, _) in &dd.links {
+                for (a, b, _, _) in &dd.links {
                     x += a.x + b.x;
                     y += a.y + b.y;
                 }
@@ -282,7 +295,7 @@ impl LinkContainer {
             }
             LookupPointResult::Link((i, _)) => {
                 // TODO
-                let (a, b, _) = dd.links[*i];
+                let (a, b, _, _) = dd.links[*i];
                 Point {
                     x: (a.x + b.x) / 2.0,
                     y: (a.y + b.y) / 2.0,

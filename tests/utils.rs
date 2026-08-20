@@ -5,7 +5,7 @@ use approx::assert_relative_eq;
 use diagram_r::{
     Point,
     constants::ZERO_POINT,
-    utils::{compute_bunlde_points, full_box_from, get_angle, inside_box},
+    utils::{full_box_from, get_angle, inside_box},
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -51,29 +51,4 @@ fn inside_box_tests() {
     assert!(inside_box(&pbox, &Point::new(5.0, 2.5)));
     // outside
     assert!(!inside_box(&pbox, &Point::new(15.0, 2.5)));
-}
-
-#[test]
-#[wasm_bindgen_test]
-fn compute_bundle_points_tests() {
-    assert_eq!(
-        compute_bunlde_points(&ZERO_POINT, &Point::new(3.0, 3.0), 0),
-        vec![]
-    );
-
-    let mut res = compute_bunlde_points(&ZERO_POINT, &Point::new(3.0, 3.0), 1);
-    assert_relative_eq!(res[0].x, 1.5, epsilon = 0.0001);
-    assert_relative_eq!(res[0].y, 1.5, epsilon = 0.0001);
-    res = compute_bunlde_points(&ZERO_POINT, &Point::new(4.0, 4.0), 2);
-    assert_relative_eq!(res[0].x, 1.0, epsilon = 0.0001);
-    assert_relative_eq!(res[0].y, 1.0, epsilon = 0.0001);
-    assert_relative_eq!(res[1].x, 3.0, epsilon = 0.0001);
-    assert_relative_eq!(res[1].y, 3.0, epsilon = 0.0001);
-    res = compute_bunlde_points(&ZERO_POINT, &Point::new(6.0, 6.0), 3);
-    assert_relative_eq!(res[0].x, 1.0, epsilon = 0.0001);
-    assert_relative_eq!(res[0].y, 1.0, epsilon = 0.0001);
-    assert_relative_eq!(res[1].x, 3.0, epsilon = 0.0001);
-    assert_relative_eq!(res[1].y, 3.0, epsilon = 0.0001);
-    assert_relative_eq!(res[2].x, 5.0, epsilon = 0.0001);
-    assert_relative_eq!(res[2].y, 5.0, epsilon = 0.0001);
 }

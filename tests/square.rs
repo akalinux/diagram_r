@@ -15,10 +15,10 @@ fn get_center() {
 #[test]
 #[wasm_bindgen_test]
 fn index_tests() {
-    assert_eq!(square_a().idx(5), (0..=5, 0..=5, 25.0));
-    assert_eq!(square_b().idx(5), (0..=10, 0..=10, 100.0));
-    assert_eq!(square_c().idx(5), (-5..=5, 0..=10, 100.0));
-    assert_eq!(square_d().idx(5), (0..=10, -5..=5, 100.0));
+    assert_eq!(square_a().idx(5), (0..=5, 0..=5,));
+    assert_eq!(square_b().idx(5), (0..=10, 0..=10,));
+    assert_eq!(square_c().idx(5), (-5..=5, 0..=10,));
+    assert_eq!(square_d().idx(5), (0..=10, -5..=5,));
 }
 
 #[test]

@@ -7,7 +7,7 @@ use crate::{
     diagram::DiagramCore,
 };
 
-pub type IndexXY = (RangeInclusive<i64>, RangeInclusive<i64>, f32);
+pub type IndexXY = (RangeInclusive<i64>, RangeInclusive<i64>);
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum Slot {
     Node,
@@ -18,12 +18,11 @@ pub enum Slot {
 #[derive(Debug, Clone, Copy)]
 pub struct XYSet {
     slot: Slot,
-    size: f32,
     id: usize,
 }
 impl PartialEq for XYSet {
     fn eq(&self, other: &Self) -> bool {
-        self.slot == other.slot && self.size == other.size && self.id == other.id
+        self.slot == other.slot && self.id == other.id
     }
 }
 impl Eq for XYSet {}
@@ -33,10 +32,7 @@ impl PartialOrd for XYSet {
             Some(core::cmp::Ordering::Equal) => {}
             ord => return ord,
         }
-        match self.size.partial_cmp(&other.size) {
-            Some(core::cmp::Ordering::Equal) => {}
-            ord => return ord,
-        }
+
         self.id.partial_cmp(&other.id)
     }
 }
@@ -113,8 +109,8 @@ impl ScreenIndex {
         self.step as usize
     }
     pub fn update(&mut self, dst: &ScreenSlot, old: IndexXY, new: IndexXY) {
-        for (x, y, action, area) in IdxBoxIter::new(old, new, self.step) {
-            let points = (x..=x, y..=y, area);
+        for (x, y, action) in IdxBoxIter::new(old, new, self.step) {
+            let points = (x..=x, y..=y);
             self.manage(dst, points, action);
         }
     }
@@ -147,7 +143,7 @@ impl ScreenIndex {
         LookupPointResult::Screen
     }
     pub fn manage(&mut self, dst: &ScreenSlot, points: IndexXY, action: IdxBoxAction) {
-        let (px, py, area) = points;
+        let (px, py) = points;
         let step = self.step();
         for x in px.step_by(step) {
             for y in py.clone().step_by(step) {
@@ -164,8 +160,8 @@ impl ScreenIndex {
                     tx = unsafe { self.x.get_mut(&y).unwrap_unchecked() }
                 }
                 match action {
-                    IdxBoxAction::Add => tx.add(dst, area),
-                    IdxBoxAction::Remove => tx.remove(dst, area),
+                    IdxBoxAction::Add => tx.add(dst),
+                    IdxBoxAction::Remove => tx.remove(dst),
                 }
                 if tx.is_empty() {
                     self.x.remove(&y);
@@ -185,40 +181,34 @@ impl ScreenBoundY {
         return self.nodes.is_empty();
     }
 
-    pub fn add(&mut self, t: &ScreenSlot, area: f32) {
+    pub fn add(&mut self, t: &ScreenSlot) {
         match t {
             ScreenSlot::Link(l) => self.nodes.insert(XYSet {
                 slot: Slot::Link,
-                size: area,
                 id: *l,
             }),
             ScreenSlot::Node(n) => self.nodes.insert(XYSet {
                 slot: Slot::Node,
-                size: area,
                 id: *n,
             }),
             ScreenSlot::Box(n) => self.nodes.insert(XYSet {
                 slot: Slot::Box,
-                size: area,
                 id: *n,
             }),
         };
     }
-    pub fn remove(&mut self, t: &ScreenSlot, area: f32) {
+    pub fn remove(&mut self, t: &ScreenSlot) {
         match t {
             ScreenSlot::Link(l) => self.nodes.remove(&XYSet {
                 slot: Slot::Link,
-                size: area,
                 id: *l,
             }),
             ScreenSlot::Node(n) => self.nodes.remove(&XYSet {
                 slot: Slot::Node,
-                size: area,
                 id: *n,
             }),
             ScreenSlot::Box(n) => self.nodes.remove(&XYSet {
                 slot: Slot::Box,
-                size: area,
                 id: *n,
             }),
         };

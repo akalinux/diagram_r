@@ -68,5 +68,5 @@ pub const LINK_NODE_MISSING_ERROR: &'static str = "Cannot add Link to node that 
 pub const LINK_BUNDLE_MISSING_ERROR: &'static str = "Cannot add Bundle to node that does not exist";
 pub const FRAME_TICK: f32 = 0.01;
 
-pub const MAX_K: f32 = 3.0;
+pub const MAX_K: f32 = 10.0;
 pub const MIN_K: f32 = 0.0;

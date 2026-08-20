@@ -194,7 +194,6 @@ impl DrawData {
         Square::new(p.x - offset, p.y - offset, side, side)
     }
 
-    /*
     pub fn move_distance(&mut self, distance: &Point) {
         self.index.move_distance(distance);
         for link in &mut self.links {
@@ -208,7 +207,7 @@ impl DrawData {
             animation.0 = animation.0.add_distance(distance);
             animation.1 = animation.1.add_distance(distance);
         }
-    }*/
+    }
 }
 #[derive(Debug)]
 pub struct LinkContainer {

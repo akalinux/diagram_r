@@ -5,12 +5,13 @@ use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 
 use crate::{
-    DiagramOpt, ElementOpt, LabelPosition, Point,
+    DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
     constants::CANVAS_ERROR,
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::LinkContainer,
+    log,
     node::Node,
     render::{BuildRender, CoreRender},
     square::Square,
@@ -91,14 +92,14 @@ impl CoreRender for CanvasRender {
         let node_vec = &diagram.nodes.borrow();
         let boxes_vec = &diagram.boxes.borrow();
         let link_vec = &diagram.links.borrow();
-        for node in boxes_vec.iter() {
+        for node in boxes_vec.iter().rev() {
             self.draw_node(node, diagram, opt, cache, false)?;
         }
 
-        for link in link_vec.iter() {
-            self.draw_link(link, diagram, opt, cache)?;
+        for link in link_vec.iter().rev() {
+            self.draw_link(link, diagram, opt, cache, &t)?;
         }
-        for (node, _) in node_vec.iter() {
+        for (node, _) in node_vec.iter().rev() {
             self.draw_node(node, diagram, opt, cache, false)?;
         }
 
@@ -120,8 +121,7 @@ impl CoreRender for CanvasRender {
 
         for set in &highlights.links {
             let link = &link_vec[set.link];
-            let src = node_vec[link.ls.src].0.layout.get_center();
-            let dst = node_vec[link.ls.dst].0.layout.get_center();
+            let (src, dst, _) = &link.draw_data.links[set.element];
             let width = link.draw_data.line_width * opt.highlight_scale;
 
             self.draw_line(&src, &dst, width, highight_color);
@@ -211,57 +211,70 @@ impl CanvasRender {
         }
         Ok(())
     }
+    pub fn compute_link_text(
+        &self,
+        src: &Point,
+        dst: &Point,
+        text: &String,
+        height: f32,
+        angle: f32,
+        o: &ElementOpt,
+    ) -> Result<(Point, f32), JsValue> {
+        let meta = self.ctx.measure_text(&text)?;
+        let font_height =
+            (meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent()) as f32;
+        let center = src.get_center(dst);
+        let scale = height / font_height as f32;
+        let r = height * scale as f32;
+
+        let p = match o.label_position {
+            // _ => center.scale(1.0 / scale),
+            LabelPosition::Center => center,
+            LabelPosition::Bottom => get_xy(center.x, center.y, r, angle + 90.0),
+            LabelPosition::Top => get_xy(center.x, center.y, r, angle + 270.0),
+        };
+        Ok((p, scale * 0.5))
+    }
+
     pub fn draw_link_text(
         &self,
         src: &Point,
         dst: &Point,
         o: &ElementOpt,
         text: &String,
-        text_height: f32,
+        height: f32,
         angle: f32,
+        opt: &DiagramOpt,
+        t: &Transform,
     ) -> Result<(), JsValue> {
         if text.is_empty() {
             return Ok(());
         }
-        let (_, height) = self.get_text_size(text)?;
-        if height == 0.0 {
+        let (_, font_height) = self.get_text_size(text)?;
+        if font_height == 0.0 {
             return Ok(());
         }
         // don't alow rotation beyond 90 degrees.. as it will invert the text!
 
-        let center = src.get_center(dst);
-        let p = match o.label_position {
-            LabelPosition::Center => center,
-            LabelPosition::Bottom => get_xy(center.x, center.y, text_height, angle + 90.0),
-            LabelPosition::Top => get_xy(center.x, center.y, text_height, angle + 270.0),
-        };
+        let (p, scale) = self.compute_link_text(src, dst, text, height, angle, o)?;
 
-        let scale = text_height as f64 / height;
+        let full_scale = scale * t.k;
+
+        let x = p.x * t.k + t.x;
+        let y = p.y * t.k + t.y;
         let ctx = &self.ctx;
-        ctx.save();
-        match ctx.rotate(angle.to_radians() as f64) {
-            Err(e) => {
-                ctx.restore();
-                return Err(e);
-            }
-            _ => (),
-        };
 
-        match ctx.scale(scale, scale) {
-            Err(e) => {
-                ctx.restore();
-                return Err(e);
-            }
-            _ => (),
+        let new_angle = match angle >= 90.0 && angle <= 270.0 {
+            true => angle + 180.0,
+            false => angle,
         };
-        match self.draw_text(p.x as f64, p.y as f64, text, &o.color) {
-            Err(e) => {
-                ctx.restore();
-                return Err(e);
-            }
-            _ => (),
-        }
-        ctx.restore();
+        let angle = (new_angle).to_radians();
+        let k = (full_scale * angle.cos()) as f64;
+        let r = (full_scale * angle.sin()) as f64;
+        ctx.set_transform(k as f64, r, -r, k as f64, x as f64, y as f64)?;
+
+        self.draw_text(0 as f64, 0 as f64, text, &opt.font_color)?;
+        ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
 
         Ok(())
     }
@@ -271,6 +284,7 @@ impl CanvasRender {
         diagram: &DiagramCore,
         opt: &DiagramOpt,
         cache: &ImgCache,
+        t: &Transform,
     ) -> Result<(), JsValue> {
         let ctx = &self.ctx;
 
@@ -283,13 +297,11 @@ impl CanvasRender {
             get_angle(a.x, a.y, b.x, b.y)
         };
         let width = data.line_width;
-        let text_height = width * 0.5;
         for (i, ld) in link.ls.links.iter().enumerate() {
             // TODO
             let (a, b, _) = &data.links[i];
             let o = diagram.get_opt(ld.opt);
             self.draw_line(a, b, width, &o.color);
-            self.draw_link_text(a, b, o, &ld.label, text_height, angle)?;
         }
 
         ctx.set_line_dash(&self.dashes)?;
@@ -301,6 +313,12 @@ impl CanvasRender {
         for (i, bundle) in link.ls.bundles.iter().enumerate() {
             let target = data.bundle_draw_box(i);
             self.draw_box(&target, opt, diagram.get_opt(bundle.opt), false, &cache)?;
+        }
+        for (i, ld) in link.ls.links.iter().enumerate() {
+            // TODO
+            let (a, b, _) = &data.links[i];
+            let o = diagram.get_opt(ld.opt);
+            self.draw_link_text(a, b, o, &ld.label, width, angle, opt, t)?;
         }
         Ok(())
     }

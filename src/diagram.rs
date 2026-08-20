@@ -404,6 +404,8 @@ impl DiagramCore {
     }
     pub fn move_nodes(&self, distance: &Point, node_ids: &[GroupID]) {
         let mut links = FxHashSet::default();
+        let mut upodated_nodes = FxHashSet::default();
+        upodated_nodes.reserve(node_ids.len());
         let step = self.render_ops.index_step;
         {
             let mut center = self.center.borrow_mut();
@@ -418,6 +420,7 @@ impl DiagramCore {
                     ScreenSlot::Box(*box_id),
                 ),
                 GroupID::Node(node_id) => {
+                    upodated_nodes.insert(*node_id);
                     for lid in &self.nodes.borrow_mut()[*node_id].1 {
                         links.insert(*lid);
                     }
@@ -446,9 +449,14 @@ impl DiagramCore {
                     .borrow_mut()
                     .insert(ss, lc.draw_data.index.idx(step));
             }
-            lc.draw_data =
-                lc.ls
-                    .build_draw_data(&nodes[lc.ls.src].0, &nodes[lc.ls.dst].0, &self.render_ops);
+            let (src, dst) = (lc.ls.src, lc.ls.dst);
+            if upodated_nodes.contains(&src) && upodated_nodes.contains(&dst) {
+                lc.draw_data.move_distance(distance);
+            } else {
+                lc.draw_data =
+                    lc.ls
+                        .build_draw_data(&nodes[src].0, &nodes[dst].0, &self.render_ops);
+            }
             self.update_render(ScreenSlot::Link(lid), distance);
         }
     }

@@ -17,7 +17,8 @@ use crate::{
         DEFAULT_ANIMATION_COLOR, DEFAULT_ANIMATION_DASHES, DEFAULT_COLOR, DEFAULT_FONT_COLOR,
         DEFAULT_FONT_FAMILY, DEFAULT_HIGHLIGHT_ALPHA, DEFAULT_HIGHLIGHT_COLOR,
         DEFAULT_HIGHLIGHT_SCALE, DEFAULT_HOVER_TIMEOUT, DEFAULT_IDX_STEP, DEFAULT_LINK_SCALE,
-        DEFAULT_SCREEN_ZOOM, FRAME_TICK, MAX_K, MIN_K, NODE_FONT_SCALE,
+        DEFAULT_SCREEN_ZOOM, FRAME_TICK, GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH,
+        GRID_SIZE, GRID_SLOTS, MAX_K, MIN_K, NODE_FONT_SCALE,
     },
     utils::to_map_xy,
 };
@@ -149,7 +150,7 @@ extern "C" {
 
 }
 
-#[wasm_bindgen(getter_with_clone,js_name=DiagramOpt)]
+#[wasm_bindgen(getter_with_clone)]
 pub struct DiagramOpt {
     pub timeout: i32,
     pub font_family: String,
@@ -168,9 +169,34 @@ pub struct DiagramOpt {
     pub min_k: f32,
     pub max_k: f32,
     pub font_color: String,
+    pub grid_opt: Option<GridOpt>,
 }
 
-#[wasm_bindgen(js_class=DiagramOpt)]
+#[wasm_bindgen(getter_with_clone)]
+#[derive(Clone)]
+pub struct GridOpt {
+    pub grid_size: u32,
+    pub grid_slots: u32,
+    pub grid_color: String,
+    pub grid_line_width: f32,
+    pub grid_divider_width: f32,
+}
+
+#[wasm_bindgen]
+impl GridOpt {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self {
+            grid_size: GRID_SIZE,
+            grid_slots: GRID_SLOTS,
+            grid_line_width: GRID_LINE_WIDTH,
+            grid_divider_width: GRID_DIVIDER_WIDTH,
+            grid_color: String::from(GRID_COLOR),
+        }
+    }
+}
+
+#[wasm_bindgen]
 impl DiagramOpt {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
@@ -192,6 +218,7 @@ impl DiagramOpt {
             node_font_scale: NODE_FONT_SCALE,
             animation_color: String::from(DEFAULT_ANIMATION_COLOR),
             frame_tick: FRAME_TICK,
+            grid_opt: None,
         }
     }
 }

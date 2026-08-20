@@ -133,3 +133,13 @@ pub fn to_screen_xy(p: &Point, t: &Transform) -> Point {
     let y = py * t.k;
     return Point { x, y };
 }
+
+pub fn angle_check(angle: f32) -> bool {
+    angle >= 90.0 && angle <= 270.0
+}
+pub fn angle_fix(angle: f32) -> f32 {
+    match angle_check(angle) {
+        true => angle + 180.0,
+        false => angle,
+    }
+}

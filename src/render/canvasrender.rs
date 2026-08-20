@@ -10,11 +10,11 @@ use crate::{
     constants::CANVAS_ERROR,
     diagram::DiagramCore,
     imgcache::ImgCache,
-    link::LinkContainer,
+    link::{DrawData, Link, LinkContainer},
     node::Node,
     render::{BuildRender, CoreRender},
     square::Square,
-    utils::{get_angle, get_xy},
+    utils::{angle_check, angle_fix, get_angle, get_xy},
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -35,8 +35,7 @@ pub struct CanvasRender {
     ctx: CanvasRenderingContext2d,
     frame_tick: f32,
     dashes: Array,
-    width: u32,
-    height: u32,
+    canvas: HtmlCanvasElement,
 }
 
 impl BuildRender for CanvasRender {
@@ -55,8 +54,7 @@ impl BuildRender for CanvasRender {
             diagram,
             ctx,
             dashes,
-            height: canvas.height(),
-            width: canvas.width(),
+            canvas,
         }))
     }
 }
@@ -69,23 +67,27 @@ fn animation_dash(src: &Vec<f64>) -> Array {
 }
 impl CoreRender for CanvasRender {
     fn get_width_height(&self) -> (f32, f32) {
-        (self.width as f32, self.height as f32)
+        (self.canvas.width() as f32, self.canvas.height() as f32)
     }
 
     fn render(&self) -> Result<(), JsValue> {
         let context = &self.ctx;
         context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
-        context.clear_rect(0.0, 0.0, self.width as f64, self.height as f64);
+        {
+            let (width, height) = self.get_width_height();
+            context.clear_rect(0.0, 0.0, width as f64, height as f64);
+        }
         let d = unsafe { self.diagram.upgrade().unwrap_unchecked() };
         let diagram = &*d.borrow();
+        let opt = &diagram.render_ops;
         let t = *&*diagram.transform.borrow();
 
-        context.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
         context.set_global_alpha(1.0);
+        self.draw_grid(opt)?;
+        context.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
         context.set_line_dash_offset(self.frame_tick as f64);
 
         let cache = &diagram.img_cache;
-        let opt = &diagram.render_ops;
         context.set_font(&opt.font_family);
 
         let node_vec = &diagram.nodes.borrow();
@@ -149,6 +151,57 @@ impl CoreRender for CanvasRender {
 }
 
 impl CanvasRender {
+    fn draw_grid(&self, dops: &DiagramOpt) -> Result<(), JsValue> {
+        let opt = match &dops.grid_opt {
+            Some(o) => o,
+            None => return Ok(()),
+        };
+        let (width, height) = self.get_width_height();
+        let grid_size = opt.grid_size;
+        let mut slot = 0;
+        let grid_slots = opt.grid_slots;
+        let divider_width = opt.grid_divider_width;
+        let line_width = opt.grid_line_width;
+        let color = &opt.grid_color;
+        let x_offset = (width % grid_size as f32) * 0.5;
+        let y_offset = (height % grid_size as f32) * 0.5;
+
+        for i in (0..width as u32).step_by(grid_size as usize) {
+            slot += 1;
+            let x = i as f32 + x_offset;
+            let pos = slot % grid_slots;
+            let src = Point::new(x, 0.0);
+            let dst = Point::new(x, height as f32);
+            self.draw_line(
+                &src,
+                &dst,
+                match pos == 0 {
+                    false => divider_width,
+                    true => line_width,
+                } as f32,
+                color,
+            );
+        }
+        slot = 0;
+        for i in (grid_size..height as u32).step_by(grid_size as usize) {
+            slot += 1;
+            let pos = slot % grid_slots;
+            let y = i as f32 + y_offset;
+            let src = Point::new(0.0, y);
+            let dst = Point::new(width, y);
+            self.draw_line(
+                &src,
+                &dst,
+                match pos == 0 {
+                    false => divider_width,
+                    true => line_width,
+                } as f32,
+                color,
+            );
+        }
+
+        Ok(())
+    }
     fn draw_node_text_highlight(
         &self,
         square: &Square,
@@ -164,9 +217,9 @@ impl CanvasRender {
         let (w, h) = self.get_text_size(text)?;
         let x = target.x as f64 + (target.width * 0.5) as f64 - w * 0.5;
         let y = match o.label_position {
-            LabelPosition::Top => target.y as f64 - h,
-            LabelPosition::Bottom => target.max_y() as f64,
-            LabelPosition::Center => (target.y + target.height * 0.5) as f64 - h * 0.5,
+            LabelPosition::Top => square.y as f64 - h,
+            LabelPosition::Bottom => square.max_y() as f64,
+            LabelPosition::Center => (square.y + square.height * 0.5) as f64 - h * 0.5,
         };
         ctx.set_fill_style_str(&opt.highlight_color);
         ctx.fill_rect(x, y, w, h);
@@ -224,13 +277,14 @@ impl CanvasRender {
             (meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent()) as f32;
         let center = src.get_center(dst);
         let scale = height / font_height as f32;
-        let r = height * scale as f32;
+        let r = (height + font_height * 0.5) * scale as f32;
 
+        let new_angle = angle_fix(angle);
         let p = match o.label_position {
             // _ => center.scale(1.0 / scale),
             LabelPosition::Center => center,
-            LabelPosition::Bottom => get_xy(center.x, center.y, r, angle + 90.0),
-            LabelPosition::Top => get_xy(center.x, center.y, r, angle + 270.0),
+            LabelPosition::Bottom => get_xy(center.x, center.y, r, new_angle + 90.0),
+            LabelPosition::Top => get_xy(center.x, center.y, r, new_angle + 270.0),
         };
         Ok((p, scale * 0.5))
     }
@@ -263,10 +317,7 @@ impl CanvasRender {
         let y = p.y * t.k + t.y;
         let ctx = &self.ctx;
 
-        let new_angle = match angle >= 90.0 && angle <= 270.0 {
-            true => angle + 180.0,
-            false => angle,
-        };
+        let new_angle = angle_fix(angle);
         let angle = (new_angle).to_radians();
         let k = (full_scale * angle.cos()) as f64;
         let r = (full_scale * angle.sin()) as f64;
@@ -275,6 +326,23 @@ impl CanvasRender {
         self.draw_text(0 as f64, 0 as f64, text, &opt.font_color)?;
         ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
 
+        Ok(())
+    }
+    pub fn draw_sublink(
+        &self,
+        ld: &Link,
+        diagram: &DiagramCore,
+        opt: &DiagramOpt,
+        t: &Transform,
+        data: &DrawData,
+        i: usize,
+        width: f32,
+        angle: f32,
+    ) -> Result<(), JsValue> {
+        let (a, b, _) = &data.links[i];
+        let o = diagram.get_opt(ld.opt);
+        self.draw_line(a, b, width, &o.color);
+        self.draw_link_text(a, b, o, &ld.label, width, angle, opt, t)?;
         Ok(())
     }
     pub fn draw_link(
@@ -296,11 +364,14 @@ impl CanvasRender {
             get_angle(a.x, a.y, b.x, b.y)
         };
         let width = data.line_width;
-        for (i, ld) in link.ls.links.iter().enumerate() {
-            // TODO
-            let (a, b, _) = &data.links[i];
-            let o = diagram.get_opt(ld.opt);
-            self.draw_line(a, b, width, &o.color);
+        if angle_check(angle) {
+            for (i, ld) in link.ls.links.iter().enumerate() {
+                self.draw_sublink(ld, diagram, opt, t, data, i, width, angle)?;
+            }
+        } else {
+            for (i, ld) in link.ls.links.iter().rev().enumerate() {
+                self.draw_sublink(ld, diagram, opt, t, data, i, width, angle)?;
+            }
         }
 
         ctx.set_line_dash(&self.dashes)?;
@@ -312,12 +383,10 @@ impl CanvasRender {
         for (i, bundle) in link.ls.bundles.iter().enumerate() {
             let target = data.bundle_draw_box(i);
             self.draw_box(&target, opt, diagram.get_opt(bundle.opt), false, &cache)?;
-        }
-        for (i, ld) in link.ls.links.iter().enumerate() {
-            // TODO
-            let (a, b, _) = &data.links[i];
-            let o = diagram.get_opt(ld.opt);
-            self.draw_link_text(a, b, o, &ld.label, width, angle, opt, t)?;
+
+            let o = diagram.get_opt(bundle.opt);
+            let (x, y, _, _) = self.text_pos(&target, o, &bundle.label)?;
+            self.draw_text(x as f64, y as f64, &bundle.label, &opt.font_color)?
         }
         Ok(())
     }
@@ -341,7 +410,6 @@ impl CanvasRender {
         }
 
         let (x, y, _, _) = self.text_pos(&node.layout, o, &node.label)?;
-
         self.draw_text(x as f64, y as f64, &node.label, &opts.font_color)
     }
 

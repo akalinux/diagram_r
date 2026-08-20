@@ -6,7 +6,7 @@ use std::{
 use web_sys::HtmlCanvasElement;
 
 use crate::{
-    DiagramOpt, ElementOpt, Point, Transform,
+    DiagramOpt, ElementOpt, GridOpt, Point, Transform,
     bsp::{IndexXY, LookupPointResult, ScreenIndex, ScreenSlot, iter::IdxBoxAction},
     constants::*,
     imgcache::ImgCache,
@@ -81,6 +81,9 @@ impl Diagram {
         Self {
             core: DiagramCore::new(render_ops),
         }
+    }
+    pub fn set_grid_opts(&self, ops: Option<GridOpt>) {
+        self.core.borrow_mut().set_grid_opts(ops);
     }
     pub fn get_transform(&self) -> Transform {
         self.core.borrow().get_transform()
@@ -234,16 +237,22 @@ impl DiagramCore {
                     link: *idx,
                     element: *el,
                 });
-                let bl = &link.ls.bundles[*idx].links;
+                let bl = &link.ls.bundles[*el].links;
                 nodes.reserve(2);
                 nodes.push(link.ls.src);
                 nodes.push(link.ls.dst);
                 links.reserve(bl.len());
+                let src = &link.ls.links;
                 for el in bl {
-                    links.push(LinkAndElement {
-                        link: *idx,
-                        element: *el,
-                    });
+                    match src.get(*el) {
+                        Some(_) => {
+                            links.push(LinkAndElement {
+                                link: *idx,
+                                element: *el,
+                            });
+                        }
+                        _ => (),
+                    }
                 }
             }
             _ => (),
@@ -527,6 +536,9 @@ impl DiagramCore {
 
 // Pointer event code is here
 impl DiagramCore {
+    pub fn set_grid_opts(&mut self, ops: Option<GridOpt>) {
+        self.render_ops.grid_opt = ops;
+    }
     fn render(&self) -> Result<(), JsValue> {
         match (self.img_cache.is_done(), self.render.borrow().as_ref()) {
             (true, Some(r)) => r.render(),

@@ -48,7 +48,7 @@ pub const ZERO_TRANSFORM: Transform = Transform {
 };
 
 pub const DEFAULT_SCREEN_ZOOM: f32 = 0.05;
-pub const DEFAULT_HIGHLIGHT_SCALE: f32 = 1.10;
+pub const DEFAULT_HIGHLIGHT_SCALE: f32 = 1.00;
 pub const DEFAULT_HIGHLIGHT_ALPHA: f32 = 0.5;
 pub const DEFAULT_FONT_FAMILY: &'static str = "24px Arial";
 pub const NODE_FONT_SCALE: f32 = 0.6;
@@ -70,3 +70,8 @@ pub const FRAME_TICK: f32 = 0.01;
 
 pub const MAX_K: f32 = 10.0;
 pub const MIN_K: f32 = 0.0;
+pub const GRID_SIZE: u32 = 15;
+pub const GRID_SLOTS: u32 = 5;
+pub const GRID_COLOR: &'static str = "#c5c9d2";
+pub const GRID_LINE_WIDTH: f32 = 2.2;
+pub const GRID_DIVIDER_WIDTH: f32 = 0.4;

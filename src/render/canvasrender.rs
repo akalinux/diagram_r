@@ -257,14 +257,7 @@ impl CanvasRender {
             return Ok(());
         }
         let ctx = &self.ctx;
-        /*
-        let (w, h) = self.get_text_size(text)?;
-        let x = square.x as f64 + (square.width * HALF) as f64 - w * HALF as f64;
-        let y = match o.label_position {
-            LabelPosition::Top => square.y as f64 - h,
-            LabelPosition::Bottom => square.max_y() as f64,
-            LabelPosition::Center => (square.y + square.height * HALF) as f64 - h * HALF as f64,
-        };*/
+
         let (x, y, w, h) = self.text_pos(square, o, text)?;
         ctx.set_fill_style_str(&opt.highlight_color);
         ctx.fill_rect(x - w * HALF as f64, y - h * HALF as f64, w, h);

@@ -28,7 +28,7 @@ pub const DEFAULT_HOVER_TIMEOUT: i32 = 300;
 // default animation color
 pub const DEFAULT_ANIMATION_COLOR: &'static str = "rgb(147, 25, 204)";
 pub const DEFAULT_HIGHLIGHT_COLOR: &'static str = "#3c3c3c";
-pub const DEFAULT_FONT_COLOR: &'static str = "#3c3c3c";
+pub const DEFAULT_FONT_COLOR: &'static str = "#888787";
 pub const DEFAULT_DIV_STYLE: &'static str =
     "position: relative; height: 100%;widht: 100%;box-sizing: border-box;overflow: clip;";
 

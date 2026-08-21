@@ -75,3 +75,5 @@ pub const GRID_SLOTS: u32 = 5;
 pub const GRID_COLOR: &'static str = "#c5c9d2";
 pub const GRID_LINE_WIDTH: f32 = 2.2;
 pub const GRID_DIVIDER_WIDTH: f32 = 0.4;
+pub const ONE_THIRD: f32 = 1.0 / 3.0;
+pub const HALF: f32 = 0.5;

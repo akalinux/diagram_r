@@ -43,7 +43,7 @@ async function run() {
 
   d.set_data([], [north, south, east, west], [
     etw,
-    nts,
+    //nts,
   ]);
 
   const el = document.getElementById("app") as HTMLCanvasElement;

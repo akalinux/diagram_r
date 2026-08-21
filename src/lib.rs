@@ -16,9 +16,9 @@ use crate::{
     constants::{
         DEFAULT_ANIMATION_COLOR, DEFAULT_ANIMATION_DASHES, DEFAULT_COLOR, DEFAULT_FONT_COLOR,
         DEFAULT_FONT_FAMILY, DEFAULT_HIGHLIGHT_ALPHA, DEFAULT_HIGHLIGHT_COLOR,
-        DEFAULT_HIGHLIGHT_SCALE, DEFAULT_HOVER_TIMEOUT, DEFAULT_IDX_STEP, DEFAULT_LINK_SCALE,
-        DEFAULT_SCREEN_ZOOM, FRAME_TICK, GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH,
-        GRID_SIZE, GRID_SLOTS, MAX_K, MIN_K, NODE_FONT_SCALE,
+        DEFAULT_HOVER_TIMEOUT, DEFAULT_IDX_STEP, DEFAULT_LINK_SCALE, DEFAULT_SCREEN_ZOOM,
+        FRAME_TICK, GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH, GRID_SIZE, GRID_SLOTS, HALF,
+        MAX_K, MIN_K, NODE_FONT_SCALE, ONE_THIRD,
     },
     utils::to_map_xy,
 };
@@ -98,8 +98,14 @@ impl Point {
     }
     pub fn get_center(&self, other: &Self) -> Self {
         Self {
-            x: (self.x + other.x) * 0.5,
-            y: (self.y + other.y) * 0.5,
+            x: (self.x + other.x) * HALF,
+            y: (self.y + other.y) * HALF,
+        }
+    }
+    pub fn get_z_center(&self, a: &Self, b: &Self) -> Point {
+        Self {
+            x: (self.x + a.x + b.x) * ONE_THIRD,
+            y: (self.y + a.y + b.y) * ONE_THIRD,
         }
     }
     pub fn to_map_xy(&self, t: &Transform) -> Self {
@@ -157,7 +163,6 @@ pub struct DiagramOpt {
     pub animation_dashes: Vec<f64>,
     pub highlight_alpha: f32,
     pub highlight_color: String,
-    pub highlight_scale: f32,
     pub link_scale: f32,
     pub callback: Option<Function>,
     pub index_step: i64,
@@ -210,7 +215,6 @@ impl DiagramOpt {
             animation_dashes: Vec::from(DEFAULT_ANIMATION_DASHES),
             highlight_alpha: DEFAULT_HIGHLIGHT_ALPHA,
             highlight_color: String::from(DEFAULT_HIGHLIGHT_COLOR),
-            highlight_scale: DEFAULT_HIGHLIGHT_SCALE,
             interactive: true,
             callback: None,
             link_scale: DEFAULT_LINK_SCALE,

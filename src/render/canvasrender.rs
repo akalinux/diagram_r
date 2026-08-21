@@ -7,8 +7,8 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::CANVAS_ERROR,
-    diagram::DiagramCore,
+    constants::{CANVAS_ERROR, HALF},
+    diagram::{DiagramCore, LinkAndElement},
     imgcache::ImgCache,
     link::{Link, LinkContainer, SubLink},
     node::Node,
@@ -46,6 +46,8 @@ impl BuildRender for CanvasRender {
         let ctx = unpack_canvas(canvas.clone())?;
         ctx.set_text_align(&"center");
         ctx.set_text_baseline(&"middle");
+        //ctx.set_text_align(&"top");
+        //ctx.set_text_baseline(&"left");
         let d = unsafe { diagram.upgrade().unwrap_unchecked() };
         let frame_tick = d.borrow().render_ops.frame_tick;
         let dashes = animation_dash(&d.borrow().render_ops.animation_dashes);
@@ -122,10 +124,11 @@ impl CoreRender for CanvasRender {
 
         for set in &highlights.links {
             let link = &link_vec[set.link];
-            let (src, dst, _, _) = &link.draw_data.links[set.element];
-            let width = link.draw_data.line_width * opt.highlight_scale;
-
-            self.draw_line(&src, &dst, width, highight_color);
+            let smallest_side = node_vec[link.ls.src]
+                .0
+                .layout
+                .smallest_side(&node_vec[link.ls.dst].0.layout);
+            self.draw_link_highlight(link, diagram, set, highight_color, smallest_side)?;
         }
         for set in &highlights.bundles {
             let link = &link_vec[set.link];
@@ -147,10 +150,51 @@ impl CoreRender for CanvasRender {
 
     // this is a stub function required for the render behavior
     fn update(&self, _target: ScreenSlot, _p: &Point) {}
-    fn clear(&self) {}
+    fn clear(&self) {
+        let context = &self.ctx;
+        let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        {
+            let (width, height) = self.get_width_height();
+            context.clear_rect(0.0, 0.0, width as f64, height as f64);
+        }
+    }
 }
 
 impl CanvasRender {
+    fn draw_link_highlight(
+        &self,
+        link: &LinkContainer,
+        diagram: &DiagramCore,
+        set: &LinkAndElement,
+        highight_color: &String,
+        smallest_side: f32,
+    ) -> Result<(), JsValue> {
+        let (src, dst, _, _) = &link.draw_data.links[set.element];
+        let width = link.draw_data.line_width;
+
+        let angle = get_angle(src.x, src.y, dst.x, dst.y);
+        let start = get_xy(dst.x, dst.y, smallest_side * 0.3, angle);
+        let end = src.sub_distance(&dst.get_move_distance(&start));
+        self.draw_line(&start, &end, width, highight_color);
+
+        let target = &link.ls.links[set.element];
+        let text = &target.label;
+        if text.is_empty() {
+            return Ok(());
+        }
+        let (text_width, text_height) = self.get_text_size(text)?;
+        let o = diagram.get_opt(target.opt);
+        let line_width = link.draw_data.line_width;
+        let (p, scale) =
+            self.get_link_text_point_and_scale(src, dst, line_width, angle, o, text_height as f32)?;
+        let width = text_width as f32 * scale;
+        let height = text_height as f32 * scale;
+        let start = get_xy(p.x, p.y, width * HALF, angle);
+        let d = start.get_move_distance(&p);
+        let end = p.add_distance(&d);
+        self.draw_line(&start, &end, height, &highight_color);
+        Ok(())
+    }
     fn draw_grid(&self, dops: &DiagramOpt) -> Result<(), JsValue> {
         let opt = match &dops.grid_opt {
             Some(o) => o,
@@ -163,8 +207,8 @@ impl CanvasRender {
         let divider_width = opt.grid_divider_width;
         let line_width = opt.grid_line_width;
         let color = &opt.grid_color;
-        let x_offset = (width % grid_size as f32) * 0.5;
-        let y_offset = (height % grid_size as f32) * 0.5;
+        let x_offset = (width % grid_size as f32) * HALF;
+        let y_offset = (height % grid_size as f32) * HALF;
 
         for i in (0..width as u32).step_by(grid_size as usize) {
             slot += 1;
@@ -212,17 +256,18 @@ impl CanvasRender {
         if text.is_empty() {
             return Ok(());
         }
-        let target = square.scale(opt.highlight_scale);
         let ctx = &self.ctx;
+        /*
         let (w, h) = self.get_text_size(text)?;
-        let x = target.x as f64 + (target.width * 0.5) as f64 - w * 0.5;
+        let x = square.x as f64 + (square.width * HALF) as f64 - w * HALF as f64;
         let y = match o.label_position {
             LabelPosition::Top => square.y as f64 - h,
             LabelPosition::Bottom => square.max_y() as f64,
-            LabelPosition::Center => (square.y + square.height * 0.5) as f64 - h * 0.5,
-        };
+            LabelPosition::Center => (square.y + square.height * HALF) as f64 - h * HALF as f64,
+        };*/
+        let (x, y, w, h) = self.text_pos(square, o, text)?;
         ctx.set_fill_style_str(&opt.highlight_color);
-        ctx.fill_rect(x, y, w, h);
+        ctx.fill_rect(x - w * HALF as f64, y - h * HALF as f64, w, h);
         Ok(())
     }
     fn draw_line(&self, src: &Point, dst: &Point, width: f32, color: &String) {
@@ -248,7 +293,7 @@ impl CanvasRender {
         if highlight {
             ctx.set_fill_style_str(&opt.highlight_color);
 
-            let (x, y, w, h) = target.scale(opt.highlight_scale).render_points64();
+            let (x, y, w, h) = target.render_points64();
             ctx.fill_rect(x, y, w, h);
         } else {
             let (x, y, w, h) = target.render_points64();
@@ -263,21 +308,18 @@ impl CanvasRender {
         }
         Ok(())
     }
-    pub fn compute_link_text(
+    pub fn get_link_text_point_and_scale(
         &self,
         src: &Point,
         dst: &Point,
-        text: &String,
         height: f32,
         new_angle: f32,
         o: &ElementOpt,
+        font_height: f32,
     ) -> Result<(Point, f32), JsValue> {
-        let meta = self.ctx.measure_text(&text)?;
-        let font_height =
-            (meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent()) as f32;
         let center = src.get_center(dst);
         let scale = height / font_height as f32;
-        let r = (height + font_height * 0.5) * scale as f32;
+        let r = height * 0.75;
 
         let p = match o.label_position {
             // _ => center.scale(1.0 / scale),
@@ -285,7 +327,8 @@ impl CanvasRender {
             LabelPosition::Bottom => get_xy(center.x, center.y, r, new_angle + 90.0),
             LabelPosition::Top => get_xy(center.x, center.y, r, new_angle + 270.0),
         };
-        Ok((p, scale * 0.5))
+
+        Ok((p, scale * HALF))
     }
 
     pub fn draw_link_text(
@@ -294,7 +337,7 @@ impl CanvasRender {
         dst: &Point,
         o: &ElementOpt,
         text: &String,
-        height: f32,
+        line_width: f32,
         new_angle: f32,
         opt: &DiagramOpt,
         t: &Transform,
@@ -302,13 +345,12 @@ impl CanvasRender {
         if text.is_empty() {
             return Ok(());
         }
-        let (_, font_height) = self.get_text_size(text)?;
-        if font_height == 0.0 {
-            return Ok(());
-        }
-        // don't alow rotation beyond 90 degrees.. as it will invert the text!
 
-        let (p, scale) = self.compute_link_text(src, dst, text, height, new_angle, o)?;
+        let meta = self.ctx.measure_text(&text)?;
+        let font_height =
+            (meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent()) as f32;
+        let (p, scale) =
+            self.get_link_text_point_and_scale(src, dst, line_width, new_angle, o, font_height)?;
 
         let full_scale = scale * t.k;
 
@@ -349,6 +391,7 @@ impl CanvasRender {
         self.draw_link_text(a, b, o, &ld.label, width, normalized_angle, opt, t)?;
         Ok(())
     }
+
     pub fn draw_link(
         &self,
         link: &LinkContainer,
@@ -407,7 +450,8 @@ impl CanvasRender {
 
     fn get_text_size(&self, text: &String) -> Result<(f64, f64), JsValue> {
         let meta = self.ctx.measure_text(&text)?;
-        let w = meta.actual_bounding_box_left() + meta.actual_bounding_box_right();
+        let w = meta.width();
+        //meta.font_bounding_box_ascent()
         let height = meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent();
         Ok((w, height))
     }
@@ -418,15 +462,16 @@ impl CanvasRender {
         text: &String,
     ) -> Result<(f64, f64, f64, f64), JsValue> {
         let (width, height) = self.get_text_size(text)?;
-        let x = l.x + l.width * 0.5;
-        let h = (height * 0.5) as f32;
+        let x = l.x + l.width * HALF;
+        let h = height as f32 * HALF;
 
         // We always center on the x axis
         let y = match o.label_position {
             LabelPosition::Top => l.y - h,
             LabelPosition::Bottom => l.max_y() + h,
-            LabelPosition::Center => l.y + l.height * 0.5,
+            LabelPosition::Center => l.y + l.height,
         };
-        Ok((x as f64, y as f64, height, width))
+
+        Ok((x as f64, y as f64, width, height))
     }
 }

@@ -343,11 +343,10 @@ impl LinkContainer {
                 }
             }
             LookupPointResult::Link((i, _)) => {
-                // TODO
-                let (a, b, _, _) = dd.links[*i];
-                Point {
-                    x: (a.x + b.x) / 2.0,
-                    y: (a.y + b.y) / 2.0,
+                let (a, b, x, _) = &dd.links[*i];
+                match x {
+                    Some(c) => c.get_z_center(a, b),
+                    None => a.get_center(&b),
                 }
             }
             LookupPointResult::Bundle((i, _)) => dd.bundles[*i],

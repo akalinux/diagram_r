@@ -173,7 +173,7 @@ impl CanvasRender {
         let width = link.draw_data.line_width;
 
         let angle = get_angle(src.x, src.y, dst.x, dst.y);
-        let start = get_xy(dst.x, dst.y, smallest_side * 0.3, angle);
+        let start = get_xy(dst.x, dst.y, smallest_side * 0.4, angle);
         let end = src.sub_distance(&dst.get_move_distance(&start));
         self.draw_line(&start, &end, width, highight_color);
 

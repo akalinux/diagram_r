@@ -265,7 +265,7 @@ impl CanvasRender {
         }
         let ctx = &self.ctx;
 
-        let (x, y, w, h) = self.text_pos(square, o, text)?;
+        let (x, y, w, h) = self.get_box_text_position(square, o, text)?;
         ctx.set_fill_style_str(&opt.highlight_color);
         ctx.fill_rect(x - w * HALF as f64, y - h * HALF as f64, w, h);
         Ok(())
@@ -420,7 +420,7 @@ impl CanvasRender {
             self.draw_box(&target, opt, diagram.get_opt(bundle.opt), false, &cache)?;
 
             let o = diagram.get_opt(bundle.opt);
-            let (x, y, _, _) = self.text_pos(&target, o, &bundle.label)?;
+            let (x, y, _, _) = self.get_box_text_position(&target, o, &bundle.label)?;
             self.draw_text(x as f64, y as f64, &bundle.label, &opt.font_color)?
         }
         Ok(())
@@ -444,7 +444,7 @@ impl CanvasRender {
             return Ok(());
         }
 
-        let (x, y, _, _) = self.text_pos(&node.layout, o, &node.label)?;
+        let (x, y, _, _) = self.get_box_text_position(&node.layout, o, &node.label)?;
         self.draw_text(x as f64, y as f64, &node.label, &opts.font_color)
     }
 
@@ -455,7 +455,7 @@ impl CanvasRender {
         let height = meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent();
         Ok((w, height))
     }
-    fn text_pos(
+    fn get_box_text_position(
         &self,
         l: &Square,
         o: &ElementOpt,
@@ -469,7 +469,7 @@ impl CanvasRender {
         let y = match o.label_position {
             LabelPosition::Top => l.y - h,
             LabelPosition::Bottom => l.max_y() + h,
-            LabelPosition::Center => l.y + l.height,
+            LabelPosition::Center => l.y + l.height * HALF,
         };
 
         Ok((x as f64, y as f64, width, height))

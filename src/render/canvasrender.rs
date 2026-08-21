@@ -185,8 +185,15 @@ impl CanvasRender {
         let (text_width, text_height) = self.get_text_size(text)?;
         let o = diagram.get_opt(target.opt);
         let line_width = link.draw_data.line_width;
-        let (p, scale) =
-            self.get_link_text_point_and_scale(src, dst, line_width, angle, o, text_height as f32)?;
+        let (normalized_angle, _) = normalize_angle(angle);
+        let (p, scale) = self.get_link_text_point_and_scale(
+            src,
+            dst,
+            line_width,
+            normalized_angle,
+            o,
+            text_height as f32,
+        )?;
         let width = text_width as f32 * scale;
         let height = text_height as f32 * scale;
         let start = get_xy(p.x, p.y, width * HALF, angle);

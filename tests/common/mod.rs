@@ -44,7 +44,7 @@ pub fn nodes_a_b() -> (Node, Node) {
     )
 }
 
-pub fn full_testbox2() -> (FullBox, (Point, f32)) {
+pub fn full_testbox2() -> (FullBox, (Point, f32, f32)) {
     let a = Point::new(0.0, 2.5);
     let b = Point::new(10.0, 2.5);
     let r = 2.5;
@@ -53,14 +53,14 @@ pub fn full_testbox2() -> (FullBox, (Point, f32)) {
 
 pub fn data_lc_b1_l2() -> (Link, Link, Bundle) {
     let c = Bundle::new(1, String::from("test bundle"), vec![0, 1], 0.5);
-    let a = Link::new(1, String::from("link a"), Animation::ToDst, None);
-    let b = Link::new(2, String::from("link b"), Animation::ToDst, None);
+    let a = Link::new(1, String::from("link a"), Animation::ToDst);
+    let b = Link::new(2, String::from("link b"), Animation::ToDst);
     (a, b, c)
 }
 
 pub fn default_link_set(ids: (usize, usize)) -> LinkSet {
     let (a, b, c) = data_lc_b1_l2();
-    LinkSet::new(vec![a, b], vec![c], ids.0, ids.1)
+    LinkSet::new(vec![a, b], vec![c], ids.0, ids.1, None)
 }
 pub fn test_lc_b1_l2(
     src: &Node,
@@ -80,7 +80,7 @@ pub fn test_lc_b1_l3(
     ids: (usize, usize),
 ) -> LinkContainer {
     let (a, b, c) = data_lc_b1_l2();
-    let d = Link::new(2, String::from("link b"), Animation::ToDst, None);
-    let ls = LinkSet::new(vec![a, b, d], vec![c], ids.0, ids.1);
+    let d = Link::new(2, String::from("link b"), Animation::ToDst);
+    let ls = LinkSet::new(vec![a, b, d], vec![c], ids.0, ids.1, None);
     LinkContainer::new(ls, src, dst, opt, id)
 }

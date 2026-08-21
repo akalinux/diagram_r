@@ -6,7 +6,7 @@ use crate::{
     constants::ZERO_POINT,
     node::Node,
     square::Square,
-    utils::{compute_line_box, full_box_from, get_xy, inside_box},
+    utils::{angle_needs_normalization, compute_line_box, full_box_from, get_xy, inside_box},
 };
 pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
@@ -23,7 +23,6 @@ pub struct Link {
     pub opt: usize,
     pub label: String,
     pub animation: Animation,
-    pub arc: Option<Point>,
 }
 
 #[wasm_bindgen(inspectable, getter_with_clone)]
@@ -33,17 +32,25 @@ pub struct LinkSet {
     pub dst: usize,
     pub links: Vec<Link>,
     pub bundles: Vec<Bundle>,
+    pub arc: Option<Point>,
 }
 
 #[wasm_bindgen]
 impl LinkSet {
     #[wasm_bindgen(constructor)]
-    pub fn new(links: Vec<Link>, bundles: Vec<Bundle>, src: usize, dst: usize) -> Self {
+    pub fn new(
+        links: Vec<Link>,
+        bundles: Vec<Bundle>,
+        src: usize,
+        dst: usize,
+        arc: Option<Point>,
+    ) -> Self {
         Self {
             src,
             dst,
             links,
             bundles,
+            arc,
         }
     }
 }
@@ -132,26 +139,54 @@ impl LinkSet {
         let dst_p = dst.layout.get_center();
         let smallest_side = src.layout.smallest_side(&dst.layout);
         let r = smallest_side * 0.5;
-        let ((mut nw, mut ne, sw, se), (mut d, north)) = full_box_from(&src_p, &dst_p, r);
+        let ((mut nw, mut ne, sw, se), (mut d, north, angle)) = full_box_from(&src_p, &dst_p, r);
 
         let idx = Square::from(compute_line_box(&ne, [&nw, &se, &sw]));
+
         let (width, inital_scale, scale) =
             get_line_width(self.links.len(), smallest_side, opt.link_scale);
 
         let mut links = Vec::with_capacity(self.links.len());
+        //log(&format!("{:?},{:?}, {},{}", init, d, width, inital_scale));
+        let arc = {
+            match &self.arc {
+                Some(p) => Some(p.add_distance(&d)),
+                None => None,
+            }
+        };
         d = d.scale(2.0);
         let init = d.scale(inital_scale);
         let chunk = d.scale(scale);
-        //log(&format!("{:?},{:?}, {},{}", init, d, width, inital_scale));
         nw = nw.add_distance(&init);
         ne = ne.add_distance(&init);
-        for (i, link) in self.links.iter().enumerate() {
-            let ix = i as f32;
-            let start = nw.add_distance(&chunk.scale(ix));
-            let end = ne.add_distance(&chunk.scale(ix));
-            let animation = compute_animation(link, &(start, end, None), width * 0.5, north);
-
-            links.push((start, end, None, animation));
+        let sublink_width = width * 0.5;
+        if angle_needs_normalization(angle) {
+            for (i, link) in self.links.iter().enumerate() {
+                links.push(build_sublink(
+                    link,
+                    &nw,
+                    &ne,
+                    &chunk,
+                    i,
+                    arc,
+                    sublink_width,
+                    north,
+                ));
+            }
+        } else {
+            for i in (0..self.links.len()).rev() {
+                let link = &self.links[i];
+                links.push(build_sublink(
+                    link,
+                    &nw,
+                    &ne,
+                    &chunk,
+                    i,
+                    arc,
+                    sublink_width,
+                    north,
+                ));
+            }
         }
         let bundles = self.compute_bunlde_points(&src_p, &dst_p);
 
@@ -164,16 +199,30 @@ impl LinkSet {
         }
     }
 }
-
+fn build_sublink(
+    link: &Link,
+    nw: &Point,
+    ne: &Point,
+    chunk: &Point,
+    i: usize,
+    arc: Option<Point>,
+    width: f32,
+    north: f32,
+) -> (Point, Point, Option<Point>, Option<LineAnimation>) {
+    let ix = i as f32;
+    let start = nw.add_distance(&chunk.scale(ix));
+    let end = ne.add_distance(&chunk.scale(ix));
+    let animation = compute_animation(link, &(start, end, arc), width, north);
+    (start, end, None, animation)
+}
 #[wasm_bindgen]
 impl Link {
     #[wasm_bindgen(constructor)]
-    pub fn new(opt: usize, label: String, animation: Animation, arc: Option<Point>) -> Self {
+    pub fn new(opt: usize, label: String, animation: Animation) -> Self {
         Self {
             opt,
             label,
             animation,
-            arc,
         }
     }
 }

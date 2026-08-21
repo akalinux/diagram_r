@@ -10,8 +10,7 @@ use crate::{
     constants::CANVAS_ERROR,
     diagram::DiagramCore,
     imgcache::ImgCache,
-    link::{DrawData, Link, LinkContainer, SubLink},
-    log,
+    link::{Link, LinkContainer, SubLink},
     node::Node,
     render::{BuildRender, CoreRender},
     square::Square,
@@ -366,21 +365,11 @@ impl CanvasRender {
             let (a, b, _, _) = &data.links[0];
             get_angle(a.x, a.y, b.x, b.y)
         };
-        let (normalized_angle, was_normalized) = normalize_angle(angle);
+        let (normalized_angle, _) = normalize_angle(angle);
         let width = data.line_width;
 
-        if was_normalized {
-            for (i, ld) in link.ls.links.iter().enumerate() {
-                //for i in (0..link.ls.links.len()).rev() {
-                //    let ld = &link.ls.links[i];
-                log(&format!("Reverse: {}", i));
-                self.draw_sublink(ld, diagram, opt, t, &data.links[i], width, normalized_angle)?;
-            }
-        } else {
-            for (i, ld) in link.ls.links.iter().enumerate() {
-                log(&format!("Forward: {}", i));
-                self.draw_sublink(ld, diagram, opt, t, &data.links[i], width, normalized_angle)?;
-            }
+        for (i, ld) in link.ls.links.iter().enumerate() {
+            self.draw_sublink(ld, diagram, opt, t, &data.links[i], width, normalized_angle)?;
         }
 
         for (i, bundle) in link.ls.bundles.iter().enumerate() {

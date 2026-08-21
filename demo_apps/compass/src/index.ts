@@ -30,20 +30,19 @@ async function run() {
   )
 
 
-  let both = new Link(0, "Both", Animation.Both);
-  let link_south_north = new Link(0, "North to South", Animation.ToDst);
-  let link_south_north2 = new Link(0, "South to North", Animation.ToSrc);
-  const bundle = new Bundle(4, "Outside Pairs", Uint32Array.from([0, 2]), 0.25)
-  let nts = new LinkSet([
-    both,
-    link_south_north,
-    link_south_north2,
-  ], [bundle], 0, 1);
-  let link_east_west = new Link(1, "East to West", Animation.Both);
-  let etw = new LinkSet([link_east_west], [], 2, 3)
+  const bundle = new Bundle(4, "First two", Uint32Array.from([0, 1]), 0.25)
+  const bundle2 = new Bundle(4, "Outside Pairs", Uint32Array.from([0, 2]), 0.75)
+  const etw = new LinkSet([
+    new Link(0, "Both", Animation.Both),
+    new Link(0, "East to West", Animation.ToDst),
+    new Link(0, "West to East", Animation.ToSrc),
+  ], [bundle, bundle2], 2, 3);
+  const nts = new LinkSet([
+    new Link(1, "North To South", Animation.Both),
+  ], [], 0, 1);
 
   d.set_data([], [north, south, east, west], [
-    //etw,
+    etw,
     nts,
   ]);
 

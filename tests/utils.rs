@@ -26,7 +26,7 @@ fn full_box_from_testx() {
     let a = Point::new(0.0, 2.5);
     let b = Point::new(10.0, 2.5);
     let r = 2.5;
-    let ((nw, ne, sw, se), (distance, angle)) = full_box_from(&a, &b, r);
+    let ((nw, ne, sw, se), (distance, angle, _)) = full_box_from(&a, &b, r);
     assert_relative_eq!(angle, 270.0, epsilon = 0.001);
     assert_relative_eq!(distance.y, 2.5, epsilon = 0.001);
     assert_relative_eq!(distance.x, 0.0, epsilon = 0.001);

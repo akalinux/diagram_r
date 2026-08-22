@@ -53,9 +53,8 @@ impl BuildRender for CanvasRender {
         let ctx = unpack_canvas(canvas.clone())?;
         ctx.set_text_align(&"center");
         ctx.set_text_baseline(&"middle");
-        //ctx.set_text_align(&"top");
-        //ctx.set_text_baseline(&"left");
         let d = unsafe { diagram.upgrade().unwrap_unchecked() };
+        ctx.set_font(&d.borrow().render_ops.font_family);
         let mut total = 0.0;
         for i in &d.borrow().render_ops.animation_dashes {
             total += *i as f64;
@@ -109,7 +108,6 @@ impl CoreRender for CanvasRender {
         context.set_line_dash_offset(*self.frame_tick.borrow() as f64);
 
         let cache = &diagram.img_cache;
-        context.set_font(&opt.font_family);
 
         let node_vec = &diagram.nodes.borrow();
         let boxes_vec = &diagram.boxes.borrow();
@@ -246,46 +244,27 @@ impl CanvasRender {
         };
         let (width, height) = self.get_width_height();
         let grid_size = opt.grid_size;
-        let mut slot = 0;
         let grid_slots = opt.grid_slots;
         let divider_width = opt.grid_divider_width;
         let line_width = opt.grid_line_width;
         let color = &opt.grid_color;
         let x_offset = (width % grid_size as f32) * HALF;
         let y_offset = (height % grid_size as f32) * HALF;
+        let y_scale = height / width;
+        let mut slot = 0;
+        let (mut p, mut pos);
 
         for i in (0..width as u32).step_by(grid_size as usize) {
             slot += 1;
-            let x = i as f32 + x_offset;
-            let pos = slot % grid_slots;
-            let src = Point::new(x, 0.0);
-            let dst = Point::new(x, height as f32);
-            self.draw_line(
-                &src,
-                &dst,
-                match pos == 0 {
-                    false => divider_width,
-                    true => line_width,
-                } as f32,
-                color,
-            );
-        }
-        slot = 0;
-        for i in (grid_size..height as u32).step_by(grid_size as usize) {
-            slot += 1;
-            let pos = slot % grid_slots;
-            let y = i as f32 + y_offset;
-            let src = Point::new(0.0, y);
-            let dst = Point::new(width, y);
-            self.draw_line(
-                &src,
-                &dst,
-                match pos == 0 {
-                    false => divider_width,
-                    true => line_width,
-                } as f32,
-                color,
-            );
+            p = i as f32 + x_offset;
+            pos = slot % grid_slots;
+            let w = match pos == 0 {
+                false => divider_width,
+                true => line_width,
+            };
+            self.raw_line_draw(p, 0.0, p, height, w, color);
+            p = i as f32 * y_scale + y_offset;
+            self.raw_line_draw(0.0, p, width, p, w, color);
         }
 
         Ok(())
@@ -307,15 +286,18 @@ impl CanvasRender {
         ctx.fill_rect(x - w * HALF as f64, y - h * HALF as f64, w, h);
         Ok(())
     }
-    fn draw_line(&self, src: &Point, dst: &Point, width: f32, color: &String) {
+    fn raw_line_draw(&self, x1: f32, y1: f32, x2: f32, y2: f32, width: f32, color: &String) {
         let ctx = &self.ctx;
         ctx.begin_path();
         ctx.set_line_width(width as f64);
         ctx.set_stroke_style_str(&color);
-        ctx.move_to(src.x as f64, src.y as f64);
-        ctx.line_to(dst.x as f64, dst.y as f64);
+        ctx.move_to(x1 as f64, y1 as f64);
+        ctx.line_to(x2 as f64, y2 as f64);
 
         ctx.stroke();
+    }
+    fn draw_line(&self, src: &Point, dst: &Point, width: f32, color: &String) {
+        self.raw_line_draw(src.x, src.y, dst.x, dst.y, width, color);
     }
     pub fn draw_box(
         &self,

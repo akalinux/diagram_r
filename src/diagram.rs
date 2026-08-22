@@ -1,4 +1,4 @@
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use std::{
     cell::RefCell,
     rc::{Rc, Weak},
@@ -48,9 +48,11 @@ pub enum GroupID {
 
 pub type NodeSet = (Node, Vec<usize>);
 
+#[derive(Clone, Debug)]
 pub enum CurrentTarget {
     Move(Vec<MoveTarget>, Point),
     Screen(Point),
+    Lookup(Point),
     None,
 }
 
@@ -76,7 +78,7 @@ pub struct DiagramCore {
     pub img_cache: ImgCache,
     pub render: RefCell<Option<Box<dyn CoreRender>>>,
     pub timeout: RefCell<Option<Timeout>>,
-    pub current_target: RefCell<Option<(LookupPointResult, Point)>>,
+    pub current_target: RefCell<CurrentTarget>,
     pub highlights: RefCell<Option<HighlightTargets>>,
     pub watcher: RefCell<Option<PointerWatcher>>,
 }
@@ -188,7 +190,7 @@ impl DiagramCore {
     pub fn new(render_ops: DiagramOpt) -> Rc<RefCell<Self>> {
         let mut res = Self {
             timeout: RefCell::new(None),
-            current_target: RefCell::new(None),
+            current_target: RefCell::new(CurrentTarget::None),
             highlights: RefCell::new(None),
             this: Weak::new(),
             nodes: RefCell::new(Vec::new()),
@@ -376,15 +378,20 @@ impl DiagramCore {
     }
 
     pub fn get_related_nodes(&self, node_ids: &[GroupID]) -> Vec<MoveTarget> {
-        let mut ids = FxHashSet::default();
+        let mut ids = FxHashSet::with_capacity_and_hasher(node_ids.len(), FxBuildHasher::default());
         let boxes = self.boxes.borrow();
         let nodes = self.nodes.borrow();
-        ids.reserve(node_ids.len());
 
         for group in node_ids {
             let node = match group {
-                GroupID::Box(id) => &boxes[*id],
-                GroupID::Node(id) => &nodes[*id].0,
+                GroupID::Box(id) => {
+                    ids.insert(MoveTarget::Box(*id));
+                    &boxes[*id]
+                }
+                GroupID::Node(id) => {
+                    ids.insert(MoveTarget::Node(*id));
+                    &nodes[*id].0
+                }
             };
             for id in &node.nodes {
                 // defensive code.. peope do people things..
@@ -434,8 +441,18 @@ impl DiagramCore {
                         ScreenSlot::Node(*node_id),
                     )
                 }
-                // TODO
-                MoveTarget::Link(_) => continue,
+                MoveTarget::Link(id) => {
+                    let dd = &mut self.links.borrow_mut()[*id].draw_data;
+                    dd.move_arc(distance);
+                    let ss = ScreenSlot::Link(*id);
+
+                    if !self.pending_updates.borrow().contains_key(&ss) {
+                        self.pending_updates
+                            .borrow_mut()
+                            .insert(ss, dd.index.idx(step));
+                    }
+                    continue;
+                }
             };
             if !self.pending_updates.borrow().contains_key(&ss) {
                 self.pending_updates
@@ -447,9 +464,10 @@ impl DiagramCore {
 
         let mut all_links = self.links.borrow_mut();
         let nodes = self.nodes.borrow();
+        let (mut lc, mut ss);
         for lid in links {
-            let lc = &mut all_links[lid];
-            let ss = ScreenSlot::Link(lid);
+            lc = &mut all_links[lid];
+            ss = ScreenSlot::Link(lid);
 
             if !self.pending_updates.borrow().contains_key(&ss) {
                 self.pending_updates
@@ -561,39 +579,36 @@ impl DiagramCore {
         let this = unsafe { self.this.upgrade().unwrap_unchecked() };
 
         let job = move || {
-            match this.borrow().current_target.replace(None) {
-                Some((l, p)) => {
-                    match l {
-                        LookupPointResult::NoMatch => {
-                            let np = this.borrow().to_map_xy(&p);
-                            let res = this.borrow().contains_point(&np);
-                            let event = match &res {
-                                LookupPointResult::Box(id) => CoreMouseEvent::MoseOverBox(*id),
-                                LookupPointResult::Node(id) => CoreMouseEvent::MoseOverNode(*id),
-                                LookupPointResult::Link(id) => {
-                                    CoreMouseEvent::MouseOverLink(LinkAndElement::new(id.0, id.1))
-                                }
-                                LookupPointResult::Bundle(id) => {
-                                    CoreMouseEvent::MouseOverBundle(LinkAndElement::new(id.0, id.1))
-                                }
-
-                                _ => {
-                                    this.borrow().current_target.replace(Some((l, p)));
-                                    return;
-                                }
-                            };
-                            let higlights = this.borrow().get_highlights(&res);
-                            this.borrow().highlights.replace(Some(higlights));
-                            let _ = this.borrow().render();
-                            this.borrow().run_callback(event, &p);
+            let core = this.borrow();
+            let mut check = core.current_target.borrow_mut();
+            match &mut *check {
+                CurrentTarget::Lookup(p) => {
+                    let np = this.borrow().to_map_xy(p);
+                    let res = this.borrow().contains_point(&np);
+                    let event = match &res {
+                        LookupPointResult::Box(id) => CoreMouseEvent::MoseOverBox(*id),
+                        LookupPointResult::Node(id) => CoreMouseEvent::MoseOverNode(*id),
+                        LookupPointResult::Link(id) => {
+                            CoreMouseEvent::MouseOverLink(LinkAndElement::new(id.0, id.1))
+                        }
+                        LookupPointResult::Bundle(id) => {
+                            CoreMouseEvent::MouseOverBundle(LinkAndElement::new(id.0, id.1))
                         }
                         _ => {
-                            this.borrow().current_target.replace(Some((l, p)));
+                            *check = CurrentTarget::None;
                             return;
                         }
                     };
+                    let higlights = this.borrow().get_highlights(&res);
+                    this.borrow().highlights.replace(Some(higlights));
+                    let _ = this.borrow().render();
+                    this.borrow().run_callback(event, p);
+                    *check = CurrentTarget::None;
+                    return;
                 }
-                None => {}
+                _ => {
+                    return;
+                }
             };
         };
         match Timeout::new(job, self.render_ops.timeout) {
@@ -609,69 +624,59 @@ impl DiagramCore {
         let lp = self.to_map_xy(p);
         let res = self.contains_point(&lp);
 
-        // grab the center of what ever was clicked on
-        match &res {
-            LookupPointResult::NoMatch => {
-                // screen is always a synthetic fall through
-                self.current_target
-                    .replace(Some((LookupPointResult::Screen, *p)));
-                return;
-            }
-            _ => (),
-        };
-
-        self.current_target.replace(Some((res, *p)));
+        self.current_target
+            .replace(self.get_current_target(&res, p));
     }
     pub fn on_mouse_up(&self, p: &Point) {
-        let res = self.move_lookup(p);
         // still need to update the index
-        match self.current_target.borrow().as_ref() {
-            Some((l, _)) => match l {
-                LookupPointResult::Screen | LookupPointResult::NoMatch => (),
-                _ => self.finish_move(),
-            },
-            _ => (),
+        if self.move_current_target(p) {
+            self.finish_move();
+        } else {
+            return;
         }
-        self.current_target
-            .replace(Some((LookupPointResult::NoMatch, *p)));
+        let res = self.current_target.replace(CurrentTarget::Lookup(*p));
+
         self.set_timeout();
-        let g = match res {
-            Some(g) => g,
-            None => return,
-        };
-        let mut nodes = Vec::new();
-        let mut boxes = Vec::new();
-        for o in g {
-            match o {
-                MoveTarget::Box(b) => boxes.push(NodeChanges {
-                    id: b,
-                    layout: self.boxes.borrow()[b].layout,
-                }),
-                MoveTarget::Node(b) => nodes.push(NodeChanges {
-                    id: b,
-                    layout: self.nodes.borrow()[b].0.layout,
-                }),
-                // TODO
-                MoveTarget::Link(_) => continue,
+        if let CurrentTarget::Move(g, _) = res {
+            let mut nodes = Vec::new();
+            let mut boxes = Vec::new();
+            for o in g {
+                match o {
+                    MoveTarget::Box(b) => boxes.push(NodeChanges {
+                        id: b,
+                        layout: self.boxes.borrow()[b].layout,
+                    }),
+                    MoveTarget::Node(b) => nodes.push(NodeChanges {
+                        id: b,
+                        layout: self.nodes.borrow()[b].0.layout,
+                    }),
+                    // TODO
+                    MoveTarget::Link(_) => continue,
+                }
             }
+            let moved = MovedElements { nodes, boxes };
+            self.run_callback(CoreMouseEvent::Moved(moved), p);
         }
-        let moved = MovedElements { nodes, boxes };
-        self.run_callback(CoreMouseEvent::Moved(moved), p);
     }
-    pub fn on_mouse_enter(&self, p: &Point) {
-        self.current_target
-            .replace(Some((LookupPointResult::NoMatch, *p)));
-    }
-    pub fn on_mouse_leave(&self, _: &Point) {
+
+    fn interaction_reset(&self) {
         self.clear_timeout();
-        self.current_target.replace(None);
+        self.current_target.replace(CurrentTarget::None);
         self.highlights.replace(None);
+    }
+
+    pub fn on_mouse_enter(&self, _: &Point) {
+        self.interaction_reset()
+    }
+
+    pub fn on_mouse_leave(&self, _: &Point) {
+        self.interaction_reset();
     }
 
     fn get_current_target(&self, lookup: &LookupPointResult, p: &Point) -> CurrentTarget {
         CurrentTarget::Move(
             match lookup {
-                LookupPointResult::NoMatch | LookupPointResult::Screen => {
+                LookupPointResult::NoMatch => {
                     return CurrentTarget::Screen(*p);
                 }
                 LookupPointResult::Box(id) => self.get_related_nodes(&[GroupID::Box(*id)]),
@@ -684,60 +689,49 @@ impl DiagramCore {
             *p,
         )
     }
-    fn move_lookup(&self, p: &Point) -> Option<Vec<MoveTarget>> {
-        match self.current_target.borrow_mut().as_mut() {
-            Some((l, op)) => {
-                let nodes = match l {
-                    LookupPointResult::NoMatch => {
-                        *op = *p;
-                        self.set_timeout();
-                        return None;
-                    }
-                    LookupPointResult::Screen => {
-                        let distance = op.get_move_distance(p);
-                        *op = *p;
-                        {
-                            let mut t = self.transform.borrow_mut();
-                            t.x += distance.x;
-                            t.y += distance.y;
-                        }
-                        let _ = self.render();
-                        return None;
-                    }
-                    LookupPointResult::Box(id) => self.get_related_nodes(&[GroupID::Box(*id)]),
-                    LookupPointResult::Node(id) => self.get_related_nodes(&[GroupID::Node(*id)]),
-                    LookupPointResult::Bundle((link_id, _))
-                    | LookupPointResult::Link((link_id, _)) => {
-                        let link = &self.links.borrow()[*link_id].ls;
-                        vec![MoveTarget::Node(link.src), MoveTarget::Node(link.dst)]
-                    }
-                };
-                let distance = &op
-                    .get_move_distance(p)
-                    .scale(1.0 / self.transform.borrow().k);
-                self.move_nodes(&distance, &nodes);
-                *op = *p;
-                let _ = self.render();
-                return Some(nodes);
+    /// Moves the current targets
+    fn move_current_target(&self, p: &Point) -> bool {
+        let mut check = self.current_target.borrow_mut();
+        self.highlights.replace(None);
+        let (nodes, op) = match &mut *check {
+            CurrentTarget::None => {
+                // in this case we need to transition from none to our current lookup
+                *check = CurrentTarget::Lookup(*p);
+                self.set_timeout();
+                return false;
             }
-            None => (),
-        }
-        // if we got here.. then we need to setup for timeout
-        self.current_target
-            .replace(Some((LookupPointResult::NoMatch, *p)));
-        self.set_timeout();
-        None
+            CurrentTarget::Screen(op) => {
+                let distance = op.get_move_distance(p);
+                *op = *p;
+                {
+                    let mut t = self.transform.borrow_mut();
+                    t.x += distance.x;
+                    t.y += distance.y;
+                }
+                self.clear_timeout();
+                let _ = self.render();
+                return true;
+            }
+            CurrentTarget::Move(nodes, op) => (nodes, op),
+            CurrentTarget::Lookup(op) => {
+                *op = *p;
+                self.set_timeout();
+                return false;
+            }
+        };
+        self.clear_timeout();
+        let distance = &op
+            .get_move_distance(p)
+            .scale(1.0 / self.transform.borrow().k);
+        self.move_nodes(&distance, nodes);
+        *op = *p;
+        let _ = self.render();
+        true
     }
     pub fn on_mouse_move(&self, p: &Point) {
-        self.clear_timeout();
-        let res = self.highlights.replace(None);
-
-        match (self.move_lookup(p), res) {
-            (None, Some(_)) => {
-                let _ = self.render();
-            }
-            _ => (),
-        };
+        if self.move_current_target(p) {
+            let _ = self.render();
+        }
     }
 
     fn get_width_height(&self) -> (f32, f32) {

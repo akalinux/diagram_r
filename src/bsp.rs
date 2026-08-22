@@ -49,7 +49,6 @@ pub enum LookupPointResult {
     Link((usize, usize)),
     Node(usize),
     Box(usize),
-    Screen,
     NoMatch,
 }
 
@@ -140,7 +139,7 @@ impl ScreenIndex {
                 }
             }
         }
-        LookupPointResult::Screen
+        LookupPointResult::NoMatch
     }
     pub fn manage(&mut self, dst: &ScreenSlot, points: IndexXY, action: IdxBoxAction) {
         let (px, py) = points;

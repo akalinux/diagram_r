@@ -6,7 +6,7 @@ use crate::{
     constants::{HALF, ZERO_POINT},
     node::Node,
     square::Square,
-    utils::{angle_needs_normalization, compute_line_box, full_box_from, get_xy, inside_box},
+    utils::{angle_needs_normalization, compute_line_box, full_box_from, inside_box},
 };
 pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
@@ -73,33 +73,32 @@ pub fn compute_animation(
     link: &Link,
     clink: &ComputedLink,
     width: f32,
-    angle_north: f32,
+    d: &Point,
 ) -> Option<LineAnimation> {
     match link.animation {
         Animation::Both => {
-            let (aw, _, init_step) = compute_animation_width(1.0, width * 1.50, 2);
-            let new_width = aw * HALF;
+            let new_width = width * HALF;
 
-            let ne = get_xy(clink.0.x, clink.0.y, init_step, angle_north);
-            let d = ne.get_move_distance(&clink.0);
-            let arc = match &clink.2 {
-                Some(p) => Some(p.sub_distance(&d)),
-                None => None,
-            };
-            let nw = clink.1.sub_distance(&d);
-            let mut res = Vec::with_capacity(2);
-            res.push((ne, nw, arc, new_width));
-
-            res.push((
-                clink.1.add_distance(&d),
-                clink.0.add_distance(&d),
-                match &clink.2 {
-                    Some(p) => Some(p.add_distance(&d)),
-                    None => None,
-                },
-                new_width,
-            ));
-            Some(res)
+            Some(vec![
+                (
+                    clink.0.sub_distance(&d),
+                    clink.1.sub_distance(&d),
+                    match &clink.2 {
+                        Some(p) => Some(p.add_distance(&d)),
+                        None => None,
+                    },
+                    new_width,
+                ),
+                (
+                    clink.1.add_distance(&d),
+                    clink.0.add_distance(&d),
+                    match &clink.2 {
+                        Some(p) => Some(p.add_distance(&d)),
+                        None => None,
+                    },
+                    new_width,
+                ),
+            ])
         }
         Animation::ToSrc => {
             let (aw, _, _) = compute_animation_width(1.0, width, 1);
@@ -139,7 +138,7 @@ impl LinkSet {
         let dst_p = dst.layout.get_center();
         let smallest_side = src.layout.smallest_side(&dst.layout);
         let r = smallest_side * 0.5;
-        let ((nw, ne, sw, se), (d, north, angle)) = full_box_from(&src_p, &dst_p, r);
+        let ((nw, ne, sw, se), (d, _, angle)) = full_box_from(&src_p, &dst_p, r);
 
         let idx = Square::from(compute_line_box(&ne, [&nw, &se, &sw]));
 
@@ -147,7 +146,6 @@ impl LinkSet {
             get_line_width(self.links.len(), smallest_side, opt.link_scale);
 
         let mut links = Vec::with_capacity(self.links.len());
-        //log(&format!("{:?},{:?}, {},{}", init, d, width, inital_scale));
         let arc = {
             match &self.arc {
                 Some(p) => Some(p.add_distance(&d)),
@@ -162,7 +160,8 @@ impl LinkSet {
         let chunk = distance.scale(scale);
         let start = left.add_distance(&init);
         let end = right.add_distance(&init);
-        let sublink_width = width * 0.5;
+        let sublink_width = width * HALF;
+        let animation_distance = init.scale(0.25);
 
         for (i, link) in self.links.iter().enumerate() {
             links.push(build_sublink(
@@ -173,7 +172,7 @@ impl LinkSet {
                 i,
                 arc,
                 sublink_width,
-                north,
+                &animation_distance,
             ));
         }
         let bundles = self.compute_bunlde_points(&src_p, &dst_p);
@@ -195,12 +194,12 @@ fn build_sublink(
     i: usize,
     arc: Option<Point>,
     width: f32,
-    north: f32,
+    animation_distance: &Point,
 ) -> (Point, Point, Option<Point>, Option<LineAnimation>) {
     let ix = i as f32;
     let start = nw.add_distance(&chunk.scale(ix));
     let end = ne.add_distance(&chunk.scale(ix));
-    let animation = compute_animation(link, &(start, end, arc), width, north);
+    let animation = compute_animation(link, &(start, end, arc), width, animation_distance);
     (start, end, None, animation)
 }
 #[wasm_bindgen]
@@ -253,6 +252,9 @@ impl DrawData {
         Square::new(p.x - offset, p.y - offset, side, side)
     }
 
+    pub fn move_arc(&mut self, _distance: &Point) {
+        // TODO!!
+    }
     pub fn move_distance(&mut self, distance: &Point) {
         self.index.move_distance(distance);
         for link in &mut self.links {

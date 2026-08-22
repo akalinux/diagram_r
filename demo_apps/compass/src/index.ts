@@ -15,18 +15,19 @@ async function run() {
    
    
   */
-  const north = new Node(new Square(365, 20, 60, 60), "North", 0, new Uint32Array());
-  const south = new Node(new Square(365, 520, 60, 60), "South", 1, new Uint32Array());
-  const west = new Node(new Square(10, 265, 60, 60), "West", 2, new Uint32Array());
-  const east = new Node(new Square(730, 265, 60, 60), "East", 3, new Uint32Array());
-  console.log(north.toJSON());
+  const north = new Node(new Square(365, 20, 60, 60), "North", 0,);
+  const south = new Node(new Square(365, 520, 60, 60), "South", 1);
+  const west = new Node(new Square(10, 265, 60, 60), "West", 2,);
+  const east = new Node(new Square(730, 265, 60, 60), "East", 3);
+  const box = new Node(new Square(5, 5, 790, 590), "Container", 5, Uint32Array.of(0, 1, 2, 3));
 
   d.set_element_options([
     new ElementOpt("images/router_up.svg", "lightgreen", LabelPosition.Top),
-    new ElementOpt("images/router_down.svg", "pink", LabelPosition.Center),
-    new ElementOpt("images/router_unknown.svg", "lightblue", LabelPosition.Center),
+    new ElementOpt("images/router_down.svg", "pink", LabelPosition.Top),
+    new ElementOpt("images/router_unknown.svg", "lightblue", LabelPosition.Top),
     new ElementOpt("images/firewall_down.svg", "pink", LabelPosition.Bottom),
     new ElementOpt("images/bundle.svg", "lightblue", LabelPosition.Bottom),
+    new ElementOpt("", "lightblue", LabelPosition.Center),
   ],
   )
 
@@ -43,7 +44,7 @@ async function run() {
   ], [], 0, 1);
 
   //               0      1      2     3
-  d.set_data([], [north, south, west, east], [
+  d.set_data([box], [north, south, west, east], [
     etw,
     //nts,
   ]);

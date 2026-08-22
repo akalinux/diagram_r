@@ -60,7 +60,6 @@ pub struct DiagramCore {
     pub pending_updates: RefCell<FxHashMap<ScreenSlot, IndexXY>>,
 
     pub transform: RefCell<Transform>,
-    pub groups: RefCell<FxHashMap<u32, FxHashSet<GroupID>>>, // group_id,set->node_ids
     pub img_cache: ImgCache,
     pub render: RefCell<Option<Box<dyn CoreRender>>>,
     pub timeout: RefCell<Option<Timeout>>,
@@ -187,7 +186,6 @@ impl DiagramCore {
             render_ops,
             center: RefCell::new(ZERO_POINT),
             transform: RefCell::new(ZERO_TRANSFORM),
-            groups: RefCell::new(FxHashMap::default()),
             img_cache: ImgCache::new(Weak::new()),
             pending_updates: RefCell::new(FxHashMap::default()),
             render: RefCell::new(None),
@@ -290,7 +288,6 @@ impl DiagramCore {
         center.x += node.layout.x;
         center.y += node.layout.x;
 
-        self.update_groups(&node.groups, id, as_node);
         let points = node.layout.idx(self.render_ops.index_step);
         let ss = match as_node {
             true => ScreenSlot::Node(id),
@@ -356,30 +353,11 @@ impl DiagramCore {
         Ok(id)
     }
 
-    fn update_groups(&self, groups: &Vec<u32>, id: usize, as_node: bool) {
-        let mut grps = self.groups.borrow_mut();
-        for group in groups {
-            let set = match grps.get_mut(group) {
-                Some(s) => s,
-                None => {
-                    let s = FxHashSet::default();
-                    grps.insert(*group, s);
-                    unsafe { grps.get_mut(group).unwrap_unchecked() }
-                }
-            };
-
-            set.insert(match as_node {
-                true => GroupID::Node(id),
-                false => GroupID::Box(id),
-            });
-        }
-    }
     fn clear(&mut self) {
         self.nodes.borrow_mut().clear();
         self.boxes.borrow_mut().clear();
         self.links.borrow_mut().clear();
         self.idx.borrow_mut().clear();
-        self.groups.borrow_mut().clear();
         self.center.replace(ZERO_POINT);
         self.clear_render();
     }
@@ -388,18 +366,24 @@ impl DiagramCore {
         let mut ids = FxHashSet::default();
         let boxes = self.boxes.borrow();
         let nodes = self.nodes.borrow();
-        let groups = self.groups.borrow();
         ids.reserve(node_ids.len());
+
         for group in node_ids {
             ids.insert(*group);
             let node = match group {
                 GroupID::Box(id) => &boxes[*id],
                 GroupID::Node(id) => &nodes[*id].0,
             };
-            for gid in &node.groups {
-                let group = unsafe { groups.get(gid).unwrap_unchecked() };
-                for node_id in group {
-                    ids.insert(*node_id);
+            for id in &node.nodes {
+                // defensive code.. peope do people things..
+                if nodes.get(*id).is_some() {
+                    ids.insert(GroupID::Node(*id));
+                }
+            }
+            for id in &node.boxes {
+                // defensive code.. peope do people things..
+                if boxes.get(*id).is_some() {
+                    ids.insert(GroupID::Box(*id));
                 }
             }
         }

@@ -1,24 +1,41 @@
 use crate::square::Square;
 use std::{cmp::Ordering, hash::Hash};
 use wasm_bindgen::prelude::*;
+
 #[wasm_bindgen(inspectable, getter_with_clone)]
 #[derive(Clone, Debug)]
 pub struct Node {
     pub layout: Square,
     pub label: String,
     pub opt: usize,
-    pub groups: Vec<u32>,
+    pub nodes: Vec<usize>,
+    pub boxes: Vec<usize>,
 }
 
 #[wasm_bindgen]
 impl Node {
     #[wasm_bindgen(constructor)]
-    pub fn new(layout: Square, label: String, opt: usize, groups: Vec<u32>) -> Self {
+    pub fn new(
+        layout: Square,
+        label: String,
+        opt: usize,
+        nodes: Option<Vec<usize>>,
+        boxes: Option<Vec<usize>>,
+    ) -> Self {
+        let nodes = match nodes {
+            Some(nodes) => nodes,
+            None => Vec::new(),
+        };
+        let boxes = match boxes {
+            Some(nodes) => nodes,
+            None => Vec::new(),
+        };
         Self {
             label,
             layout,
             opt,
-            groups,
+            nodes,
+            boxes,
         }
     }
 }

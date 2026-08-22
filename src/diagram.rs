@@ -48,6 +48,12 @@ pub enum GroupID {
 
 pub type NodeSet = (Node, Vec<usize>);
 
+pub enum CurrentTarget {
+    Move(Vec<GroupID>, Point),
+    Screen(Point),
+    None,
+}
+
 pub struct DiagramCore {
     pub this: Weak<RefCell<Self>>,
     pub el_ops: Vec<ElementOpt>,
@@ -650,6 +656,23 @@ impl DiagramCore {
         self.clear_timeout();
         self.current_target.replace(None);
         self.highlights.replace(None);
+    }
+
+    fn get_current_target(&self, lookup: &LookupPointResult, p: &Point) -> CurrentTarget {
+        CurrentTarget::Move(
+            match lookup {
+                LookupPointResult::NoMatch | LookupPointResult::Screen => {
+                    return CurrentTarget::Screen(*p);
+                }
+                LookupPointResult::Box(id) => self.get_related_nodes(&[GroupID::Box(*id)]),
+                LookupPointResult::Node(id) => self.get_related_nodes(&[GroupID::Node(*id)]),
+                LookupPointResult::Bundle((link_id, _)) | LookupPointResult::Link((link_id, _)) => {
+                    let link = &self.links.borrow()[*link_id].ls;
+                    vec![GroupID::Node(link.src), GroupID::Node(link.dst)]
+                }
+            },
+            *p,
+        )
     }
     fn move_lookup(&self, p: &Point) -> Option<Vec<GroupID>> {
         match self.current_target.borrow_mut().as_mut() {

@@ -49,9 +49,16 @@ pub enum GroupID {
 pub type NodeSet = (Node, Vec<usize>);
 
 pub enum CurrentTarget {
-    Move(Vec<GroupID>, Point),
+    Move(Vec<MoveTarget>, Point),
     Screen(Point),
     None,
+}
+
+#[derive(Hash, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MoveTarget {
+    Node(usize),
+    Box(usize),
+    Link(usize),
 }
 
 pub struct DiagramCore {
@@ -368,14 +375,13 @@ impl DiagramCore {
         self.clear_render();
     }
 
-    pub fn get_related_nodes(&self, node_ids: &[GroupID]) -> Vec<GroupID> {
+    pub fn get_related_nodes(&self, node_ids: &[GroupID]) -> Vec<MoveTarget> {
         let mut ids = FxHashSet::default();
         let boxes = self.boxes.borrow();
         let nodes = self.nodes.borrow();
         ids.reserve(node_ids.len());
 
         for group in node_ids {
-            ids.insert(*group);
             let node = match group {
                 GroupID::Box(id) => &boxes[*id],
                 GroupID::Node(id) => &nodes[*id].0,
@@ -383,13 +389,13 @@ impl DiagramCore {
             for id in &node.nodes {
                 // defensive code.. peope do people things..
                 if nodes.get(*id).is_some() {
-                    ids.insert(GroupID::Node(*id));
+                    ids.insert(MoveTarget::Node(*id));
                 }
             }
             for id in &node.boxes {
                 // defensive code.. peope do people things..
                 if boxes.get(*id).is_some() {
-                    ids.insert(GroupID::Box(*id));
+                    ids.insert(MoveTarget::Box(*id));
                 }
             }
         }
@@ -401,7 +407,7 @@ impl DiagramCore {
             let _ = self.render();
         }
     }
-    pub fn move_nodes(&self, distance: &Point, node_ids: &[GroupID]) {
+    pub fn move_nodes(&self, distance: &Point, node_ids: &[MoveTarget]) {
         let mut links = FxHashSet::default();
         let mut upodated_nodes = FxHashSet::default();
         upodated_nodes.reserve(node_ids.len());
@@ -414,11 +420,11 @@ impl DiagramCore {
 
         for group in node_ids {
             let (node, ss) = match group {
-                GroupID::Box(box_id) => (
+                MoveTarget::Box(box_id) => (
                     &mut self.boxes.borrow_mut()[*box_id],
                     ScreenSlot::Box(*box_id),
                 ),
-                GroupID::Node(node_id) => {
+                MoveTarget::Node(node_id) => {
                     upodated_nodes.insert(*node_id);
                     for lid in &self.nodes.borrow_mut()[*node_id].1 {
                         links.insert(*lid);
@@ -428,6 +434,8 @@ impl DiagramCore {
                         ScreenSlot::Node(*node_id),
                     )
                 }
+                // TODO
+                MoveTarget::Link(_) => continue,
             };
             if !self.pending_updates.borrow().contains_key(&ss) {
                 self.pending_updates
@@ -635,14 +643,16 @@ impl DiagramCore {
         let mut boxes = Vec::new();
         for o in g {
             match o {
-                GroupID::Box(b) => boxes.push(NodeChanges {
+                MoveTarget::Box(b) => boxes.push(NodeChanges {
                     id: b,
                     layout: self.boxes.borrow()[b].layout,
                 }),
-                GroupID::Node(b) => nodes.push(NodeChanges {
+                MoveTarget::Node(b) => nodes.push(NodeChanges {
                     id: b,
                     layout: self.nodes.borrow()[b].0.layout,
                 }),
+                // TODO
+                MoveTarget::Link(_) => continue,
             }
         }
         let moved = MovedElements { nodes, boxes };
@@ -668,13 +678,13 @@ impl DiagramCore {
                 LookupPointResult::Node(id) => self.get_related_nodes(&[GroupID::Node(*id)]),
                 LookupPointResult::Bundle((link_id, _)) | LookupPointResult::Link((link_id, _)) => {
                     let link = &self.links.borrow()[*link_id].ls;
-                    vec![GroupID::Node(link.src), GroupID::Node(link.dst)]
+                    vec![MoveTarget::Node(link.src), MoveTarget::Node(link.dst)]
                 }
             },
             *p,
         )
     }
-    fn move_lookup(&self, p: &Point) -> Option<Vec<GroupID>> {
+    fn move_lookup(&self, p: &Point) -> Option<Vec<MoveTarget>> {
         match self.current_target.borrow_mut().as_mut() {
             Some((l, op)) => {
                 let nodes = match l {
@@ -699,7 +709,7 @@ impl DiagramCore {
                     LookupPointResult::Bundle((link_id, _))
                     | LookupPointResult::Link((link_id, _)) => {
                         let link = &self.links.borrow()[*link_id].ls;
-                        vec![GroupID::Node(link.src), GroupID::Node(link.dst)]
+                        vec![MoveTarget::Node(link.src), MoveTarget::Node(link.dst)]
                     }
                 };
                 let distance = &op

@@ -6,7 +6,7 @@ use diagram_r::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
     constants::ZERO_POINT,
-    diagram::{DiagramCore, GroupID, HighlightTargets, LinkAndElement},
+    diagram::{DiagramCore, HighlightTargets, LinkAndElement, MoveTarget},
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -201,7 +201,7 @@ fn test_move_box() {
 
     diagram.borrow_mut().move_nodes(
         distance,
-        &[GroupID::Box(0), GroupID::Node(0), GroupID::Node(1)],
+        &[MoveTarget::Box(0), MoveTarget::Node(0), MoveTarget::Node(1)],
     );
     diagram.borrow_mut().finish_move();
 

@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Weak};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 
 use js_sys::Array;
 use wasm_bindgen::{JsCast, JsValue};
@@ -12,7 +15,7 @@ use crate::{
     imgcache::ImgCache,
     link::{Link, LinkContainer, SubLink},
     node::Node,
-    render::{BuildRender, CoreRender},
+    render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
     utils::{get_angle, get_xy, normalize_angle},
 };
@@ -33,9 +36,13 @@ pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, J
 pub struct CanvasRender {
     diagram: Weak<RefCell<DiagramCore>>,
     ctx: CanvasRenderingContext2d,
-    frame_tick: f32,
+    frame_tick: RefCell<f64>,
+    // total and tick per frame
+    total_and_offset: (f64, f64),
     dashes: Array,
     canvas: HtmlCanvasElement,
+    frame_timer: RefCell<Option<Rc<RefCell<FrameTimer>>>>,
+    animate: RefCell<bool>,
 }
 
 impl BuildRender for CanvasRender {
@@ -49,21 +56,32 @@ impl BuildRender for CanvasRender {
         //ctx.set_text_align(&"top");
         //ctx.set_text_baseline(&"left");
         let d = unsafe { diagram.upgrade().unwrap_unchecked() };
-        let frame_tick = d.borrow().render_ops.frame_tick;
+        let mut total = 0.0;
+        for i in &d.borrow().render_ops.animation_dashes {
+            total += *i as f64;
+        }
+        // work around for js doubling when just 1 is applied
+        if d.borrow().render_ops.animation_dashes.len() == 1 {
+            total *= 2.0;
+        }
+        let offset = total / d.borrow().render_ops.frame_rate as f64;
         let dashes = animation_dash(&d.borrow().render_ops.animation_dashes);
         Ok(Box::new(Self {
-            frame_tick,
+            total_and_offset: (total, offset),
+            frame_tick: RefCell::new(total),
             diagram,
             ctx,
             dashes,
             canvas,
+            frame_timer: RefCell::new(None),
+            animate: RefCell::new(false),
         }))
     }
 }
-fn animation_dash(src: &Vec<f64>) -> Array {
+fn animation_dash(src: &Vec<i32>) -> Array {
     let res = Array::new();
     for dash in src {
-        res.push(&JsValue::from_f64(*dash));
+        res.push(&JsValue::from(*dash));
     }
     res
 }
@@ -73,6 +91,7 @@ impl CoreRender for CanvasRender {
     }
 
     fn render(&self) -> Result<(), JsValue> {
+        self.animate.replace(false);
         let context = &self.ctx;
         context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
         {
@@ -87,7 +106,7 @@ impl CoreRender for CanvasRender {
         context.set_global_alpha(1.0);
         self.draw_grid(opt)?;
         context.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
-        context.set_line_dash_offset(self.frame_tick as f64);
+        context.set_line_dash_offset(*self.frame_tick.borrow() as f64);
 
         let cache = &diagram.img_cache;
         context.set_font(&opt.font_family);
@@ -104,6 +123,17 @@ impl CoreRender for CanvasRender {
         }
         for (node, _) in node_vec.iter().rev() {
             self.draw_node(node, diagram, opt, cache, false)?;
+        }
+
+        if *self.animate.borrow() {
+            if self.frame_timer.borrow().is_none() {
+                let ft = FrameTimer::new(self.diagram.clone())?;
+                self.frame_timer.replace(Some(ft));
+            }
+        } else {
+            if self.frame_timer.borrow().is_some() {
+                self.frame_timer.replace(None);
+            }
         }
 
         let h = diagram.highlights.borrow();
@@ -157,6 +187,13 @@ impl CoreRender for CanvasRender {
             let (width, height) = self.get_width_height();
             context.clear_rect(0.0, 0.0, width as f64, height as f64);
         }
+    }
+    fn animate(&self) -> Result<(), JsValue> {
+        let (total, offset) = self.total_and_offset;
+        let tick = (*self.frame_tick.borrow() - offset) % total;
+
+        self.frame_tick.replace(tick);
+        self.render()
     }
 }
 
@@ -278,7 +315,6 @@ impl CanvasRender {
         ctx.move_to(src.x as f64, src.y as f64);
         ctx.line_to(dst.x as f64, dst.y as f64);
 
-        ctx.close_path();
         ctx.stroke();
     }
     pub fn draw_box(
@@ -383,6 +419,9 @@ impl CanvasRender {
         self.draw_line(a, b, width, &o.color);
         if let Some(list) = animations {
             self.ctx.set_line_dash(&self.dashes)?;
+            if list.len() != 0 {
+                self.animate.replace(true);
+            }
             for (src, dst, _, width) in list {
                 self.draw_line(src, dst, *width, &opt.animation_color);
             }

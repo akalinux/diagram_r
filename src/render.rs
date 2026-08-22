@@ -6,6 +6,7 @@ pub mod timeout;
 use wasm_bindgen::JsValue;
 use web_sys::HtmlCanvasElement;
 pub mod pointerwatcher;
+pub mod rendertimer;
 use crate::{Point, bsp::ScreenSlot, diagram::DiagramCore};
 
 pub trait BuildRender {
@@ -20,4 +21,5 @@ pub trait CoreRender {
     fn update(&self, target: ScreenSlot, distance: &Point);
     fn clear(&self);
     fn get_width_height(&self) -> (f32, f32);
+    fn animate(&self) -> Result<(), JsValue>;
 }

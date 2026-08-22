@@ -34,7 +34,7 @@ pub const DEFAULT_DIV_STYLE: &'static str =
 
 pub const DEFAULT_CANVAS_STYLE: &'static str =
     "position: absolute;box-sizing: border-box;overflow: clip;";
-pub const DEFAULT_ANIMATION_DASHES: [f64; 2] = [5.0, 15.0];
+pub const DEFAULT_ANIMATION_DASHES: [i32; 2] = [5, 5];
 pub const DEFAULT_ANIMATION_WIDTH_SCALE: f32 = 1.0 / 3.0;
 
 pub const ZERO_POINT: Point = Point { x: 0.0, y: 0.0 };
@@ -51,8 +51,6 @@ pub const DEFAULT_SCREEN_ZOOM: f32 = 0.05;
 pub const DEFAULT_HIGHLIGHT_SCALE: f32 = 1.00;
 pub const DEFAULT_HIGHLIGHT_ALPHA: f32 = 0.5;
 pub const DEFAULT_FONT_FAMILY: &'static str = "24px Arial";
-pub const NODE_FONT_SCALE: f32 = 0.6;
-pub const DEFAULT_TEXT_ALIGN: &'static str = "center";
 /// This is the size of the index in pixels.
 /// Most monitors modern monitors default to width: 1920, height: 1080, so we assum half the width, or 960.
 pub const DEFAULT_IDX_STEP: i64 = 960;
@@ -66,7 +64,6 @@ pub const DOM_ERROR: &'static str = "No `document` exists";
 pub const EL_ERROR: &'static str = "No Element by the given `id`, exists";
 pub const LINK_NODE_MISSING_ERROR: &'static str = "Cannot add Link to node that does not exist";
 pub const LINK_BUNDLE_MISSING_ERROR: &'static str = "Cannot add Bundle to node that does not exist";
-pub const FRAME_TICK: f32 = 0.01;
 
 pub const MAX_K: f32 = 10.0;
 pub const MIN_K: f32 = 0.0;
@@ -77,3 +74,4 @@ pub const GRID_LINE_WIDTH: f32 = 2.2;
 pub const GRID_DIVIDER_WIDTH: f32 = 0.4;
 pub const ONE_THIRD: f32 = 1.0 / 3.0;
 pub const HALF: f32 = 0.5;
+pub const DEFAULT_FRAMERATE: u32 = 20;

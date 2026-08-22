@@ -15,10 +15,10 @@ use wasm_bindgen::prelude::*;
 use crate::{
     constants::{
         DEFAULT_ANIMATION_COLOR, DEFAULT_ANIMATION_DASHES, DEFAULT_COLOR, DEFAULT_FONT_COLOR,
-        DEFAULT_FONT_FAMILY, DEFAULT_HIGHLIGHT_ALPHA, DEFAULT_HIGHLIGHT_COLOR,
+        DEFAULT_FONT_FAMILY, DEFAULT_FRAMERATE, DEFAULT_HIGHLIGHT_ALPHA, DEFAULT_HIGHLIGHT_COLOR,
         DEFAULT_HOVER_TIMEOUT, DEFAULT_IDX_STEP, DEFAULT_LINK_SCALE, DEFAULT_SCREEN_ZOOM,
-        FRAME_TICK, GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH, GRID_SIZE, GRID_SLOTS, HALF,
-        MAX_K, MIN_K, NODE_FONT_SCALE, ONE_THIRD,
+        GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH, GRID_SIZE, GRID_SLOTS, HALF, MAX_K, MIN_K,
+        ONE_THIRD,
     },
     utils::to_map_xy,
 };
@@ -160,21 +160,20 @@ extern "C" {
 pub struct DiagramOpt {
     pub timeout: i32,
     pub font_family: String,
-    pub animation_dashes: Vec<f64>,
+    pub animation_dashes: Vec<i32>,
     pub highlight_alpha: f32,
     pub highlight_color: String,
     pub link_scale: f32,
     pub callback: Option<Function>,
     pub index_step: i64,
-    pub node_font_scale: f32,
     pub animation_color: String,
-    pub frame_tick: f32,
     pub interactive: bool,
     pub wheel_move: f32,
     pub min_k: f32,
     pub max_k: f32,
     pub font_color: String,
     pub grid_opt: Option<GridOpt>,
+    pub frame_rate: u32,
 }
 
 #[wasm_bindgen(getter_with_clone)]
@@ -219,10 +218,9 @@ impl DiagramOpt {
             callback: None,
             link_scale: DEFAULT_LINK_SCALE,
             index_step: DEFAULT_IDX_STEP,
-            node_font_scale: NODE_FONT_SCALE,
             animation_color: String::from(DEFAULT_ANIMATION_COLOR),
-            frame_tick: FRAME_TICK,
             grid_opt: None,
+            frame_rate: DEFAULT_FRAMERATE,
         }
     }
 }

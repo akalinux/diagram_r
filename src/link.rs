@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::*;
 use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
-    constants::ZERO_POINT,
+    constants::{HALF, ZERO_POINT},
     node::Node,
     square::Square,
     utils::{angle_needs_normalization, compute_line_box, full_box_from, get_xy, inside_box},
@@ -77,7 +77,8 @@ pub fn compute_animation(
 ) -> Option<LineAnimation> {
     match link.animation {
         Animation::Both => {
-            let (aw, _, init_step) = compute_animation_width(1.0, width, 2);
+            let (aw, _, init_step) = compute_animation_width(1.0, width * 1.50, 2);
+            let new_width = aw * HALF;
 
             let ne = get_xy(clink.0.x, clink.0.y, init_step, angle_north);
             let d = ne.get_move_distance(&clink.0);
@@ -87,16 +88,16 @@ pub fn compute_animation(
             };
             let nw = clink.1.sub_distance(&d);
             let mut res = Vec::with_capacity(2);
-            res.push((ne, nw, arc, aw));
+            res.push((ne, nw, arc, new_width));
 
             res.push((
-                clink.0.add_distance(&d),
                 clink.1.add_distance(&d),
+                clink.0.add_distance(&d),
                 match &clink.2 {
                     Some(p) => Some(p.add_distance(&d)),
                     None => None,
                 },
-                aw,
+                new_width,
             ));
             Some(res)
         }
@@ -106,7 +107,6 @@ pub fn compute_animation(
         }
         Animation::ToDst => {
             let (aw, _, _) = compute_animation_width(1.0, width, 1);
-
             Some(Vec::from([(clink.0, clink.1, clink.2, aw)]))
         }
         _ => None,
@@ -139,7 +139,7 @@ impl LinkSet {
         let dst_p = dst.layout.get_center();
         let smallest_side = src.layout.smallest_side(&dst.layout);
         let r = smallest_side * 0.5;
-        let ((mut nw, mut ne, sw, se), (mut d, north, angle)) = full_box_from(&src_p, &dst_p, r);
+        let ((nw, ne, sw, se), (d, north, angle)) = full_box_from(&src_p, &dst_p, r);
 
         let idx = Square::from(compute_line_box(&ne, [&nw, &se, &sw]));
 
@@ -154,39 +154,27 @@ impl LinkSet {
                 None => None,
             }
         };
-        d = d.scale(2.0);
-        let init = d.scale(inital_scale);
-        let chunk = d.scale(scale);
-        nw = nw.add_distance(&init);
-        ne = ne.add_distance(&init);
+        let (distance, left, right) = match angle_needs_normalization(angle) {
+            false => (d.scale(-2.0), sw, se),
+            true => (d.scale(2.0), nw, ne),
+        };
+        let init = distance.scale(inital_scale);
+        let chunk = distance.scale(scale);
+        let start = left.add_distance(&init);
+        let end = right.add_distance(&init);
         let sublink_width = width * 0.5;
-        if angle_needs_normalization(angle) {
-            for (i, link) in self.links.iter().enumerate() {
-                links.push(build_sublink(
-                    link,
-                    &nw,
-                    &ne,
-                    &chunk,
-                    i,
-                    arc,
-                    sublink_width,
-                    north,
-                ));
-            }
-        } else {
-            for i in (0..self.links.len()).rev() {
-                let link = &self.links[i];
-                links.push(build_sublink(
-                    link,
-                    &nw,
-                    &ne,
-                    &chunk,
-                    i,
-                    arc,
-                    sublink_width,
-                    north,
-                ));
-            }
+
+        for (i, link) in self.links.iter().enumerate() {
+            links.push(build_sublink(
+                link,
+                &start,
+                &end,
+                &chunk,
+                i,
+                arc,
+                sublink_width,
+                north,
+            ));
         }
         let bundles = self.compute_bunlde_points(&src_p, &dst_p);
 

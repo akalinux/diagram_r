@@ -19,6 +19,7 @@ async function run() {
   const south = new Node(new Square(365, 520, 60, 60), "South", 1, new Uint32Array());
   const west = new Node(new Square(10, 265, 60, 60), "West", 2, new Uint32Array());
   const east = new Node(new Square(730, 265, 60, 60), "East", 3, new Uint32Array());
+  console.log(north.toJSON());
 
   d.set_element_options([
     new ElementOpt("images/router_up.svg", "lightgreen", LabelPosition.Top),
@@ -33,15 +34,16 @@ async function run() {
   const bundle = new Bundle(4, "First two", Uint32Array.from([0, 1]), 0.25)
   const bundle2 = new Bundle(4, "Outside Pairs", Uint32Array.from([0, 2]), 0.75)
   const etw = new LinkSet([
-    new Link(0, "Both", Animation.Both),
-    new Link(0, "East to West", Animation.ToDst),
-    new Link(0, "West to East", Animation.ToSrc),
+    new Link(0, "Both", Animation.Both), // 0
+    new Link(0, "West to East", Animation.ToDst),  // 1
+    new Link(0, "East to West", Animation.ToSrc),  // 2
   ], [bundle, bundle2], 2, 3);
   const nts = new LinkSet([
     new Link(1, "North To South", Animation.Both),
   ], [], 0, 1);
 
-  d.set_data([], [north, south, east, west], [
+  //               0      1      2     3
+  d.set_data([], [north, south, west, east], [
     etw,
     //nts,
   ]);

@@ -539,9 +539,15 @@ impl DiagramCore {
     pub fn set_grid_opts(&mut self, ops: Option<GridOpt>) {
         self.render_ops.grid_opt = ops;
     }
-    fn render(&self) -> Result<(), JsValue> {
+    pub fn render(&self) -> Result<(), JsValue> {
         match (self.img_cache.is_done(), self.render.borrow().as_ref()) {
             (true, Some(r)) => r.render(),
+            _ => Ok(()),
+        }
+    }
+    pub fn animate(&self) -> Result<(), JsValue> {
+        match (self.img_cache.is_done(), self.render.borrow().as_ref()) {
+            (true, Some(r)) => r.animate(),
             _ => Ok(()),
         }
     }

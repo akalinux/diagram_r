@@ -26,7 +26,7 @@ pub const DEFAULT_BUNDLE_COLOR: &'static str = "rgb(225, 143, 56)";
 pub const DEFAULT_HOVER_TIMEOUT: i32 = 300;
 
 // default animation color
-pub const DEFAULT_ANIMATION_COLOR: &'static str = "rgb(147, 25, 204)";
+pub const DEFAULT_ANIMATION_COLOR: &'static str = "rgb(121, 118, 123)";
 pub const DEFAULT_HIGHLIGHT_COLOR: &'static str = "#3c3c3c";
 pub const DEFAULT_FONT_COLOR: &'static str = "#888787";
 pub const DEFAULT_DIV_STYLE: &'static str =
@@ -34,7 +34,7 @@ pub const DEFAULT_DIV_STYLE: &'static str =
 
 pub const DEFAULT_CANVAS_STYLE: &'static str =
     "position: absolute;box-sizing: border-box;overflow: clip;";
-pub const DEFAULT_ANIMATION_DASHES: [i32; 2] = [5, 5];
+pub const DEFAULT_ANIMATION_DASHES: [i32; 2] = [15, 5];
 pub const DEFAULT_ANIMATION_WIDTH_SCALE: f32 = 1.0 / 3.0;
 
 pub const ZERO_POINT: Point = Point { x: 0.0, y: 0.0 };

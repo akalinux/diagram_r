@@ -28,6 +28,7 @@ async function run() {
     new ElementOpt("images/firewall_down.svg", "pink", LabelPosition.Bottom),
     new ElementOpt("images/bundle.svg", "lightblue", LabelPosition.Bottom),
     new ElementOpt("", "lightblue", LabelPosition.Center),
+    new ElementOpt("", "pink", LabelPosition.Center),
   ],
   )
 
@@ -38,15 +39,15 @@ async function run() {
     new Link(0, "Both", Animation.Both), // 0
     new Link(0, "West to East", Animation.ToDst),  // 1
     new Link(0, "East to West", Animation.ToSrc),  // 2
+    new Link(6, "Dead", Animation.None),  // 2
   ], [bundle, bundle2], 2, 3);
-  const nts = new LinkSet([
-    new Link(1, "North To South", Animation.Both),
-  ], [], 0, 1);
+  const nts = LinkSet.link(0, 1, 1, "North To South", Animation.Both);
+
 
   //               0      1      2     3
   d.set_data([box], [north, south, west, east], [
     etw,
-    //nts,
+    nts,
   ]);
 
   const el = document.getElementById("app") as HTMLCanvasElement;

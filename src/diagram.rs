@@ -460,6 +460,7 @@ impl DiagramCore {
                     .insert(ss, node.layout.idx(step));
             }
             node.layout.move_distance(distance);
+            self.update_render(ss);
         }
 
         let mut all_links = self.links.borrow_mut();
@@ -482,13 +483,13 @@ impl DiagramCore {
                     lc.ls
                         .build_draw_data(&nodes[src].0, &nodes[dst].0, &self.render_ops);
             }
-            self.update_render(ScreenSlot::Link(lid), distance);
+            self.update_render(ScreenSlot::Link(lid));
         }
     }
-    fn update_render(&self, target: ScreenSlot, distance: &Point) {
+    fn update_render(&self, target: ScreenSlot) {
         let rs = self.render.borrow();
         match rs.as_ref() {
-            Some(render) => render.as_ref().update(target, distance),
+            Some(render) => render.as_ref().update(target),
             None => (),
         }
     }

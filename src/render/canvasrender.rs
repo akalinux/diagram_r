@@ -177,7 +177,7 @@ impl CoreRender for CanvasRender {
     }
 
     // this is a stub function required for the render behavior
-    fn update(&self, _target: ScreenSlot, _p: &Point) {}
+    fn update(&self, _target: ScreenSlot) {}
     fn clear(&self) {
         let context = &self.ctx;
         let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);

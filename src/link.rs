@@ -37,6 +37,16 @@ pub struct LinkSet {
 
 #[wasm_bindgen]
 impl LinkSet {
+    pub fn link(src: usize, dst: usize, opt: usize, label: String, animation: Animation) -> Self {
+        let link = Link::new(opt, label, animation);
+        Self {
+            src,
+            dst,
+            links: vec![link],
+            bundles: Vec::new(),
+            arc: None,
+        }
+    }
     #[wasm_bindgen(constructor)]
     pub fn new(
         links: Vec<Link>,
@@ -100,14 +110,8 @@ pub fn compute_animation(
                 ),
             ])
         }
-        Animation::ToSrc => {
-            let (aw, _, _) = compute_animation_width(1.0, width, 1);
-            Some(Vec::from([(clink.1, clink.0, clink.2, aw)]))
-        }
-        Animation::ToDst => {
-            let (aw, _, _) = compute_animation_width(1.0, width, 1);
-            Some(Vec::from([(clink.0, clink.1, clink.2, aw)]))
-        }
+        Animation::ToSrc => Some(vec![(clink.1, clink.0, clink.2, width)]),
+        Animation::ToDst => Some(vec![(clink.0, clink.1, clink.2, width)]),
         _ => None,
     }
 }

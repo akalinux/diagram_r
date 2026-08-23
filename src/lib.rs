@@ -10,6 +10,7 @@ pub mod utils;
 use std::ops::Add;
 
 use js_sys::Function;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::{
@@ -76,11 +77,13 @@ impl ElementOpt {
     }
 }
 #[wasm_bindgen(inspectable)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
 }
+
+impl Eq for Point {}
 
 impl Add for Point {
     type Output = Self;
@@ -92,10 +95,14 @@ impl Add for Point {
     }
 }
 
+#[wasm_bindgen]
 impl Point {
+    #[wasm_bindgen(constructor)]
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
+}
+impl Point {
     pub fn get_center(&self, other: &Self) -> Self {
         Self {
             x: (self.x + other.x) * HALF,

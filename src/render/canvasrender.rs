@@ -11,9 +11,9 @@ use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
     constants::{CANVAS_ERROR, HALF},
-    diagram::{DiagramCore, LinkAndElement},
+    diagram::DiagramCore,
     imgcache::ImgCache,
-    link::{Link, LinkContainer, SubLink},
+    link::{ArcType, LineAnimation, Link, LinkContainer, SubLink},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
@@ -141,7 +141,6 @@ impl CoreRender for CanvasRender {
             None => return Ok(()),
         };
 
-        let highight_color = &opt.highlight_color;
         context.set_global_alpha(opt.highlight_alpha as f64);
         for id in &highlights.boxes {
             let node = &boxes_vec[*id];
@@ -151,12 +150,15 @@ impl CoreRender for CanvasRender {
         }
 
         for set in &highlights.links {
-            let link = &link_vec[set.link];
-            let smallest_side = node_vec[link.ls.src]
-                .0
-                .layout
-                .smallest_side(&node_vec[link.ls.dst].0.layout);
-            self.draw_link_highlight(link, diagram, set, highight_color, smallest_side)?;
+            let lc = &link_vec[set.link];
+            let width = lc.draw_data.line_width;
+            let link = &lc.ls.links[set.element];
+            let data = &lc.draw_data.links[set.element];
+            let src = &node_vec[lc.ls.src].0.layout;
+            let dst = &node_vec[lc.ls.dst].0.layout;
+            let angle = get_angle(src.x, src.y, dst.x, dst.y);
+            let (normalized_angle, _) = normalize_angle(angle);
+            self.draw_sublink(link, diagram, opt, &t, data, width, normalized_angle, true)?;
         }
         for set in &highlights.bundles {
             let link = &link_vec[set.link];
@@ -196,47 +198,6 @@ impl CoreRender for CanvasRender {
 }
 
 impl CanvasRender {
-    fn draw_link_highlight(
-        &self,
-        link: &LinkContainer,
-        diagram: &DiagramCore,
-        set: &LinkAndElement,
-        highight_color: &String,
-        smallest_side: f32,
-    ) -> Result<(), JsValue> {
-        let (src, dst, _, _) = &link.draw_data.links[set.element];
-        let width = link.draw_data.line_width;
-
-        let angle = get_angle(src.x, src.y, dst.x, dst.y);
-        let start = get_xy(dst.x, dst.y, smallest_side * 0.4, angle);
-        let end = src.sub_distance(&dst.get_move_distance(&start));
-        self.draw_line(&start, &end, width, highight_color);
-
-        let target = &link.ls.links[set.element];
-        let text = &target.label;
-        if text.is_empty() {
-            return Ok(());
-        }
-        let (text_width, text_height) = self.get_text_size(text)?;
-        let o = diagram.get_opt(target.opt);
-        let line_width = link.draw_data.line_width;
-        let (normalized_angle, _) = normalize_angle(angle);
-        let (p, scale) = self.get_link_text_point_and_scale(
-            src,
-            dst,
-            line_width,
-            normalized_angle,
-            o,
-            text_height as f32,
-        )?;
-        let width = text_width as f32 * scale;
-        let height = text_height as f32 * scale;
-        let start = get_xy(p.x, p.y, width * HALF, angle);
-        let d = start.get_move_distance(&p);
-        let end = p.add_distance(&d);
-        self.draw_line(&start, &end, height, &highight_color);
-        Ok(())
-    }
     fn draw_grid(&self, dops: &DiagramOpt) -> Result<(), JsValue> {
         let opt = match &dops.grid_opt {
             Some(o) => o,
@@ -359,16 +320,27 @@ impl CanvasRender {
         new_angle: f32,
         opt: &DiagramOpt,
         t: &Transform,
+        highlight: bool,
     ) -> Result<(), JsValue> {
         if text.is_empty() {
             return Ok(());
         }
 
-        let meta = self.ctx.measure_text(&text)?;
-        let font_height =
-            (meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent()) as f32;
+        let (fw, fh) = self.get_text_size(text)?;
+        let font_height = fh as f32;
         let (p, scale) =
             self.get_link_text_point_and_scale(src, dst, line_width, new_angle, o, font_height)?;
+        if highlight {
+            let start = get_xy(p.x, p.y, fw as f32 * HALF * scale, new_angle);
+            let end = p.add_distance(&start.get_move_distance(&p));
+            self.draw_line(
+                &start,
+                &end,
+                font_height as f32 * scale,
+                &opt.highlight_color,
+            );
+            return Ok(());
+        }
 
         let full_scale = scale * t.k;
 
@@ -386,6 +358,7 @@ impl CanvasRender {
 
         Ok(())
     }
+
     pub fn draw_sublink(
         &self,
         ld: &Link,
@@ -395,24 +368,81 @@ impl CanvasRender {
         data: &SubLink,
         width: f32,
         normalized_angle: f32,
+        highlight: bool,
     ) -> Result<(), JsValue> {
-        let (a, b, _, animations) = data;
+        let (a, b, ap, animations) = data;
         let o = diagram.get_opt(ld.opt);
-        self.draw_line(a, b, width, &o.color);
-        if let Some(list) = animations {
+        let color = match highlight {
+            true => &opt.highlight_color,
+            false => &o.color,
+        };
+
+        match ap {
+            Some(arc) => match arc.mode {
+                ArcType::Arc => todo!("will get there"),
+                ArcType::Joint => {
+                    let p = &arc.point;
+                    self.draw_line(a, p, width, color);
+                    self.draw_line(p, b, width, color);
+
+                    if !highlight {
+                        self.draw_link_animations(animations, &opt.animation_color)?;
+                    }
+                    let angle_a = get_angle(a.x, a.y, p.x, p.y);
+                    let (na, _) = normalize_angle(angle_a);
+                    self.draw_link_text(a, p, o, &ld.label, width, na, opt, t, highlight)?;
+                    let angle_b = get_angle(p.x, p.y, b.x, b.y);
+                    let (nb, _) = normalize_angle(angle_b);
+                    self.draw_link_text(p, b, o, &ld.label, width, nb, opt, t, highlight)
+                }
+            },
+            None => {
+                self.draw_line(a, b, width, color);
+
+                if !highlight {
+                    self.draw_link_animations(animations, &opt.animation_color)?;
+                }
+                self.draw_link_text(
+                    a,
+                    b,
+                    o,
+                    &ld.label,
+                    width,
+                    normalized_angle,
+                    opt,
+                    t,
+                    highlight,
+                )
+            }
+        }
+    }
+
+    pub fn draw_link_animations(
+        &self,
+        animation: &Option<LineAnimation>,
+        color: &String,
+    ) -> Result<(), JsValue> {
+        if let Some(list) = animation {
             self.ctx.set_line_dash(&self.dashes)?;
             if list.len() != 0 {
                 self.animate.replace(true);
             }
-            for (src, dst, _, width) in list {
-                self.draw_line(src, dst, *width, &opt.animation_color);
+            for (src, dst, ap, width) in list {
+                match ap {
+                    Some(arc) => match arc.mode {
+                        ArcType::Joint => {
+                            self.draw_line(src, &arc.point, *width, color);
+                            self.draw_line(&arc.point, dst, *width, color);
+                        }
+                        ArcType::Arc => todo!("will get there"),
+                    },
+                    None => self.draw_line(src, dst, *width, color),
+                };
             }
             self.ctx.set_line_dash(&Array::new())?;
         }
-        self.draw_link_text(a, b, o, &ld.label, width, normalized_angle, opt, t)?;
         Ok(())
     }
-
     pub fn draw_link(
         &self,
         link: &LinkContainer,
@@ -433,7 +463,16 @@ impl CanvasRender {
         let width = data.line_width;
 
         for (i, ld) in link.ls.links.iter().enumerate() {
-            self.draw_sublink(ld, diagram, opt, t, &data.links[i], width, normalized_angle)?;
+            self.draw_sublink(
+                ld,
+                diagram,
+                opt,
+                t,
+                &data.links[i],
+                width,
+                normalized_angle,
+                false,
+            )?;
         }
 
         for (i, bundle) in link.ls.bundles.iter().enumerate() {

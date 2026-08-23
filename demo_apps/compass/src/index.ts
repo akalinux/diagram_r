@@ -1,6 +1,6 @@
 
 
-import init, { Square, Node, Link, Bundle, DiagramOpt, ElementOpt, Diagram, Point, LabelPosition, Animation, LinkSet, GridOpt } from '../../../pkg/diagram_r';
+import init, { LinePoint, ArcType, Square, Node, Link, Bundle, DiagramOpt, ElementOpt, Diagram, Point, LabelPosition, Animation, LinkSet, GridOpt } from '../../../pkg/diagram_r';
 async function run() {
 
 
@@ -18,7 +18,7 @@ async function run() {
   const north = new Node(new Square(365, 20, 60, 60), "North", 0,);
   const south = new Node(new Square(365, 520, 60, 60), "South", 1);
   const west = new Node(new Square(10, 265, 60, 60), "West", 2,);
-  const east = new Node(new Square(730, 265, 60, 60), "East", 3);
+  const east = new Node(new Square(430, 265, 60, 60), "East", 3);
   const box = new Node(new Square(5, 5, 790, 590), "Container", 5, Uint32Array.of(0, 1, 2, 3));
 
   d.set_element_options([
@@ -42,7 +42,7 @@ async function run() {
     new Link(6, "Dead", Animation.None),  // 2
   ], [bundle, bundle2], 2, 3);
   const nts = LinkSet.link(0, 1, 1, "North To South", Animation.Both);
-
+  nts.point = new LinePoint(new Point(700, 275), ArcType.Joint);
 
   //               0      1      2     3
   d.set_data([box], [north, south, west, east], [

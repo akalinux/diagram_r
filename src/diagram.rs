@@ -477,7 +477,7 @@ impl DiagramCore {
             }
             let (src, dst) = (lc.ls.src, lc.ls.dst);
             if upodated_nodes.contains(&src) && upodated_nodes.contains(&dst) {
-                lc.draw_data.move_distance(distance);
+                lc.move_distance(distance);
             } else {
                 lc.draw_data =
                     lc.ls

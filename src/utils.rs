@@ -46,7 +46,7 @@ pub fn triangle_area(x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) -> f3
 }
 
 /// Provides the [Corners] from the given 4 [Point] instances.
-pub fn compute_line_box(ne: &Point, points: [&Point; 3]) -> Corners {
+pub fn compute_line_box(ne: &Point, points: &[&Point]) -> Corners {
     let mut min_x = ne.x;
     let mut max_x = ne.x;
     let mut min_y = ne.y;

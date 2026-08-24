@@ -4,6 +4,7 @@ mod common;
 use approx::assert_relative_eq;
 use common::*;
 use diagram_r::DiagramOpt;
+use diagram_r::link::iters::{FullBoxAccumulate, LineIter};
 use diagram_r::{Point, bsp::LookupPointResult, constants::ZERO_POINT};
 use wasm_bindgen_test::wasm_bindgen_test;
 #[test]
@@ -46,4 +47,68 @@ fn link_container_update_tests() {
     assert_relative_eq!(lc.get_center(&res).y, left.y, epsilon = 0.001);
 
     assert_eq!(lc.contains_point(&ZERO_POINT), LookupPointResult::NoMatch);
+}
+
+#[test]
+fn test_line_iter() {
+    let mut iter = LineIter::new(&Point::new(0.0, 3.0), &Point::new(10.0, 3.0), 6.0, 2);
+    let mut left = Point::new(0.0, 1.5);
+    let mut right = Point::new(10.0, 1.5);
+    let mut res = iter.next().unwrap();
+    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
+    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
+    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
+    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
+    left.y = 4.5;
+    right.y = 4.5;
+    res = iter.next().unwrap();
+    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
+    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
+    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
+    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
+    assert!(iter.next().is_none());
+
+    iter = LineIter::new(&Point::new(10.0, 3.0), &Point::new(0.0, 3.0), 6.0, 2);
+    right = Point::new(0.0, 1.5);
+    left = Point::new(10.0, 1.5);
+    res = iter.next().unwrap();
+    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
+    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
+    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
+    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
+    right.y = 4.5;
+    left.y = 4.5;
+    res = iter.next().unwrap();
+    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
+    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
+    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
+    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
+    assert!(iter.next().is_none());
+    iter = LineIter::new(&Point::new(10.0, 3.0), &Point::new(0.0, 3.0), 6.0, 1);
+    right = Point::new(0.0, 3.0);
+    left = Point::new(10.0, 3.0);
+    res = iter.next().unwrap();
+    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
+    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
+    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
+    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
+    assert!(iter.next().is_none());
+}
+
+#[test]
+pub fn point_accumualte_test() {
+    let mut a = FullBoxAccumulate::new();
+    a.step(&Point { x: 1.0, y: 1.0 });
+    a.step(&Point { x: 2.0, y: 1.0 });
+    a.step(&Point { x: 1.5, y: 2.0 });
+    a.step(&Point { x: 1.5, y: 2.0 });
+    assert_eq!(
+        a.full_box_from(),
+        (
+            (Point::new(1.0, 1.0)),
+            (Point::new(2.0, 1.0)),
+            (Point::new(1.0, 2.0)),
+            (Point::new(2.0, 2.0)),
+        )
+    )
 }

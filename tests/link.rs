@@ -102,13 +102,5 @@ pub fn point_accumualte_test() {
     a.step(&Point { x: 2.0, y: 1.0 });
     a.step(&Point { x: 1.5, y: 2.0 });
     a.step(&Point { x: 1.5, y: 2.0 });
-    assert_eq!(
-        a.full_box_from(),
-        (
-            (Point::new(1.0, 1.0)),
-            (Point::new(2.0, 1.0)),
-            (Point::new(1.0, 2.0)),
-            (Point::new(2.0, 2.0)),
-        )
-    )
+    assert_eq!(a.full_box_from(), (1.0, 2.0, 1.0, 2.0))
 }

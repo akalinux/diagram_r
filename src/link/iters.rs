@@ -2,7 +2,8 @@ use crate::{
     Point,
     constants::HALF,
     link::get_line_width,
-    utils::{FullBox, angle_needs_normalization, get_angle, get_xy},
+    square::Corners,
+    utils::{angle_needs_normalization, get_angle, get_xy},
 };
 
 pub struct LineIter {
@@ -43,14 +44,8 @@ impl FullBoxAccumulate {
             None => self.0 = Some((p.x, p.x, p.y, p.y)),
         }
     }
-    pub fn full_box_from(self) -> FullBox {
-        let (min_x, max_x, min_y, max_y) = unsafe { self.0.unwrap_unchecked() };
-        (
-            Point { x: min_x, y: min_y },
-            Point { x: max_x, y: min_y },
-            Point { x: min_x, y: max_y },
-            Point { x: max_x, y: max_y },
-        )
+    pub fn full_box_from(self) -> Corners {
+        unsafe { self.0.unwrap_unchecked() }
     }
 }
 impl LineIter {

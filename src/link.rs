@@ -4,6 +4,7 @@ use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
     constants::{HALF, ZERO_POINT},
+    link::iters::{FullBoxAccumulate, LineIter},
     node::Node,
     square::Square,
     utils::{
@@ -193,78 +194,31 @@ impl LinkSet {
     pub fn build_draw_data(&self, src: &Node, dst: &Node, opt: &DiagramOpt) -> DrawData {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
-        let smallest_side = src.layout.smallest_side(&dst.layout);
-        let r = smallest_side * 0.5;
-        let ((nw, ne, sw, se), (d, _, angle)) = full_box_from(&src_p, &dst_p, r);
+        let mut accumulate = FullBoxAccumulate::new();
+        let side = src.layout.smallest_side(&dst.layout) * opt.link_scale;
 
-        let idx = match &self.point {
-            None => Square::from(compute_line_box(&ne, &[&nw, &se, &sw])),
-            Some(arc) => match &arc.mode {
-                ArcType::Joint => Square::from(compute_line_box(&ne, &[&nw, &se, &sw, &arc.point])),
-                ArcType::Arc => todo!("will get there"),
-            },
-        };
-
-        let (width, inital_scale, scale) = get_line_width(self.links.len(), smallest_side);
-
+        let iter = LineIter::new(&src_p, &dst_p, side, self.links.len());
+        let animation_distance = iter.init.scale(0.25);
+        let width = iter.width;
         let mut links = Vec::with_capacity(self.links.len());
-
-        let (distance, left, right) = match angle_needs_normalization(angle) {
-            false => (d.scale(-2.0), sw, se),
-            true => (d.scale(2.0), nw, ne),
-        };
-        let init = distance.scale(inital_scale);
-        let chunk = distance.scale(scale);
-        let start = left.add_distance(&init);
-        let end = right.add_distance(&init);
-        let sublink_width = width * HALF;
-        let animation_distance = init.scale(0.25);
-
-        for (i, link) in self.links.iter().enumerate() {
-            links.push(self.build_sublink(
-                link,
-                &start,
-                &end,
-                &chunk,
-                i,
-                sublink_width,
-                &animation_distance,
-            ));
+        for (i, (a, b)) in iter.enumerate() {
+            let link = &self.links[i];
+            accumulate.step(&a);
+            accumulate.step(&b);
+            let animation =
+                compute_animation(link, &(a, b, None), width * HALF, &animation_distance);
+            links.push((a, b, None, animation));
         }
         let bundles = self.compute_bunlde_points(&src_p, &dst_p);
+        let index = Square::from(accumulate.full_box_from());
 
         DrawData {
             line_width: width,
-            bundle_side: smallest_side * opt.link_scale,
+            bundle_side: side,
             bundles,
             links,
-            index: idx,
+            index,
         }
-    }
-    fn build_sublink(
-        &self,
-        link: &Link,
-        nw: &Point,
-        ne: &Point,
-        chunk: &Point,
-        i: usize,
-        width: f32,
-        animation_distance: &Point,
-    ) -> (Point, Point, Option<LinePoint>, Option<LineAnimation>) {
-        let ix = i as f32;
-        let d = chunk.scale(ix);
-        let start = nw.add_distance(&d);
-        let end = ne.add_distance(&d);
-        let arc = match &self.point {
-            Some(lp) => {
-                let center = lp.add_distance(&d);
-                Some(center)
-            }
-            None => None,
-        };
-
-        let animation = compute_animation(link, &(start, end, arc), width, animation_distance);
-        (start, end, arc, animation)
     }
 }
 

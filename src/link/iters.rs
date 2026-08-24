@@ -1,54 +1,55 @@
-use std::mem;
+use crate::{
+    Point,
+    constants::HALF,
+    link::get_line_width,
+    utils::{FullBox, angle_needs_normalization, full_box_from},
+};
 
-use crate::{Point, square::Square};
-
-pub struct BundlePointIter {
-    next: Option<(usize, Point)>,
-    distance: Point,
-    side: f64,
-    last: usize,
-    offset: f64,
-    src: Point,
+pub struct LineIter {
+    pub start: Point,
+    pub end: Point,
+    pub distance: Point,
+    pub line_width: f32,
+    pub total: usize,
+    pub pos: usize,
+    pub init: Point,
 }
-impl BundlePointIter {
-    pub fn pos(i: usize, src: &Point, d: &Point) -> (usize, Point) {
-        (
-            i,
-            Point::new(src.x + d.x * i as f64, src.x + d.y * i as f64),
-        )
-    }
 
-    pub fn new(src: &Point, dst: &Point, bundles: usize, side: f64) -> Self {
-        let distance = src.get_move_distance(dst).scale(1.0 / (bundles * 2) as f64);
-        let (next, last) = match bundles == 0 {
-            true => (None, 0),
-            false => (Some(Self::pos(1, src, &distance)), bundles * 2),
+impl LineIter {
+    pub fn new(src: Point, dst: Point, full_width: f32, total: usize) -> Self {
+        let ((nw, ne, sw, se), (d, _, angle)) = full_box_from(&src, &dst, full_width);
+        let (width, inital_scale, scale) = get_line_width(total, full_width);
+
+        let (distance, left, right) = match angle_needs_normalization(angle) {
+            false => (d.scale(-2.0), sw, se),
+            true => (d.scale(2.0), nw, ne),
         };
+        let init = distance.scale(inital_scale);
+        let chunk = distance.scale(scale);
+        let start = left.add_distance(&init);
+        let end = right.add_distance(&init);
         Self {
-            src: *src,
-            side,
-            distance,
-            last,
-            offset: side * 0.5,
-            next,
+            start,
+            end,
+            distance: chunk,
+            init,
+            total,
+            pos: 0,
+            line_width: width * HALF,
         }
     }
 }
-impl Iterator for BundlePointIter {
-    type Item = Square;
+
+impl Iterator for LineIter {
+    type Item = (Point, Point);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (next, last) = match &self.next {
-            Some((pos, p)) => {
-                let next = Some(Self::pos(pos + 2, &self.src, &self.distance));
-                let x = p.x - self.offset;
-                let y = p.x - self.offset;
-                let last = Some(Square::new(x, y, self.side, self.side));
-                (next, last)
-            }
-            None => return None,
-        };
-        let _ = mem::replace(&mut self.next, next);
-        last
+        if self.pos > self.total {
+            return None;
+        }
+        let i = self.pos as f32;
+        self.pos += 1;
+        let d = self.distance.scale(i);
+        Some((self.start.add_distance(&d), self.end.add_distance(&d)))
     }
 }

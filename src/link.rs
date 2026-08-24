@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-
+pub mod iters;
 use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
@@ -152,8 +152,7 @@ pub fn compute_animation(
 pub type LineAnimation = Vec<(Point, Point, Option<LinePoint>, f32)>;
 pub type ComputedLink = (Point, Point, Option<LinePoint>);
 
-fn get_line_width(total_links: usize, smallest_side: f32, link_scale: f32) -> (f32, f32, f32) {
-    let full_width = smallest_side * link_scale;
+pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
     let incremental_scale = 1.0 / total_links as f32;
     let (virtual_count, inital_scale) = match total_links {
         1 => (2.0, 0.5),
@@ -206,8 +205,7 @@ impl LinkSet {
             },
         };
 
-        let (width, inital_scale, scale) =
-            get_line_width(self.links.len(), smallest_side, opt.link_scale);
+        let (width, inital_scale, scale) = get_line_width(self.links.len(), smallest_side);
 
         let mut links = Vec::with_capacity(self.links.len());
 

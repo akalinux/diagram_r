@@ -158,7 +158,17 @@ impl CoreRender for CanvasRender {
             let dst = &node_vec[lc.ls.dst].0.layout;
             let angle = get_angle(src.x, src.y, dst.x, dst.y);
             let (normalized_angle, _) = normalize_angle(angle);
-            self.draw_sublink(link, diagram, opt, &t, data, width, normalized_angle, true)?;
+            self.draw_sublink(
+                link,
+                diagram,
+                opt,
+                &t,
+                data,
+                width,
+                normalized_angle,
+                true,
+                lc.id,
+            )?;
         }
         for set in &highlights.bundles {
             let link = &link_vec[set.link];
@@ -257,6 +267,7 @@ impl CanvasRender {
 
         ctx.stroke();
     }
+
     fn draw_line(&self, src: &Point, dst: &Point, width: f32, color: &String) {
         self.raw_line_draw(src.x, src.y, dst.x, dst.y, width, color);
     }
@@ -359,6 +370,21 @@ impl CanvasRender {
         Ok(())
     }
 
+    fn draw_arc(&self, p: &Point, color: &String, width: f32) -> Result<(), JsValue> {
+        let ctx = &self.ctx;
+        ctx.begin_path();
+        ctx.arc(
+            p.x as f64,
+            p.y as f64,
+            (width * HALF) as f64,
+            0.0,
+            2.0 * std::f64::consts::PI,
+        )?;
+        ctx.set_fill_style_str(color);
+        ctx.fill();
+        //self.ctx.stroke();
+        Ok(())
+    }
     pub fn draw_sublink(
         &self,
         ld: &Link,
@@ -369,6 +395,7 @@ impl CanvasRender {
         width: f32,
         normalized_angle: f32,
         highlight: bool,
+        link_id: usize,
     ) -> Result<(), JsValue> {
         let (a, b, ap, animations) = data;
         let o = diagram.get_opt(ld.opt);
@@ -382,24 +409,41 @@ impl CanvasRender {
                 ArcType::Arc => todo!("will get there"),
                 ArcType::Joint => {
                     let p = &arc.point;
-                    self.draw_line(a, p, width, color);
-                    self.draw_line(p, b, width, color);
 
-                    if !highlight {
+                    if highlight {
+                        let (mut angle, mut s, mut d);
+                        for (src, dst) in [(a, p), (b, p)] {
+                            angle = get_angle(dst.x, dst.y, src.x, src.y);
+                            s = get_xy(src.x, src.y, width, angle);
+                            d = dst.add_distance(&s.get_move_distance(src).scale(HALF));
+                            self.draw_line(&s, &d, width, color);
+                        }
+                        self.draw_arc(p, color, width)?;
+                    } else {
+                        self.draw_line(a, p, width, color);
+                        self.draw_line(p, b, width, color);
+                        self.draw_arc(p, color, width)?;
                         self.draw_link_animations(animations, &opt.animation_color)?;
                     }
-                    let angle_a = get_angle(a.x, a.y, p.x, p.y);
-                    let (na, _) = normalize_angle(angle_a);
-                    self.draw_link_text(a, p, o, &ld.label, width, na, opt, t, highlight)?;
-                    let angle_b = get_angle(p.x, p.y, b.x, b.y);
-                    let (nb, _) = normalize_angle(angle_b);
-                    self.draw_link_text(p, b, o, &ld.label, width, nb, opt, t, highlight)
+                    for (a, p) in [(a, p), (p, b)] {
+                        let angle = get_angle(a.x, a.y, p.x, p.y);
+                        let (na, _) = normalize_angle(angle);
+                        self.draw_link_text(a, p, o, &ld.label, width, na, opt, t, highlight)?;
+                    }
+                    Ok(())
                 }
             },
             None => {
-                self.draw_line(a, b, width, color);
+                if highlight {
+                    let angle = get_angle(b.x, b.y, a.x, a.y);
+                    let (src, dst) = diagram.link_src_dst(link_id);
 
-                if !highlight {
+                    let width = src.layout.smallest_side(&dst.layout) * 0.25;
+                    let start = get_xy(a.x, a.y, width, angle);
+                    let end = b.add_distance(&start.get_move_distance(a));
+                    self.draw_line(&start, &end, width, color);
+                } else {
+                    self.draw_line(a, b, width, color);
                     self.draw_link_animations(animations, &opt.animation_color)?;
                 }
                 self.draw_link_text(
@@ -472,6 +516,7 @@ impl CanvasRender {
                 width,
                 normalized_angle,
                 false,
+                link.id,
             )?;
         }
 

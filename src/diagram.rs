@@ -1,6 +1,7 @@
 use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use std::{
     cell::RefCell,
+    mem,
     rc::{Rc, Weak},
 };
 use web_sys::HtmlCanvasElement;
@@ -151,6 +152,7 @@ pub struct HighlightTargets {
     pub boxes: Vec<usize>,
     pub links: Vec<LinkAndElement>,
     pub bundles: Vec<LinkAndElement>,
+    pub arc: Option<usize>,
 }
 
 #[wasm_bindgen]
@@ -227,7 +229,9 @@ impl DiagramCore {
         let mut links = Vec::new();
         let mut bundles = Vec::new();
         let mut boxes = Vec::new();
+        let mut arc = None;
         match lookup {
+            LookupPointResult::Arc(id) => arc = Some(*id),
             LookupPointResult::Link((idx, el)) => {
                 links.push(LinkAndElement {
                     link: *idx,
@@ -275,6 +279,7 @@ impl DiagramCore {
             boxes,
             links,
             bundles,
+            arc,
         }
     }
 
@@ -337,6 +342,22 @@ impl DiagramCore {
         Ok(())
     }
 
+    pub fn get_link_src_dst<'n>(&self, id: usize) -> Option<(&Node, &Node)> {
+        let links = self.links.borrow();
+        let lc = match links.get(id) {
+            Some(l) => l,
+            None => return None,
+        };
+        let nodes = self.nodes.borrow();
+        let (src, dst) = (lc.ls.src, lc.ls.dst);
+        match (nodes.get(src), nodes.get(dst)) {
+            (Some(a), Some(b)) => unsafe { mem::transmute(Some((&a.0, &b.0))) },
+            _ => None,
+        }
+    }
+    pub fn link_src_dst(&self, id: usize) -> (&Node, &Node) {
+        unsafe { self.get_link_src_dst(id).unwrap_unchecked() }
+    }
     fn add_link(&self, ls: LinkSet) -> Result<usize, JsValue> {
         if ls.links.len() == 0 {
             return Err(JsValue::from(LINK_ADD_ERROR));
@@ -442,15 +463,18 @@ impl DiagramCore {
                     )
                 }
                 MoveTarget::Link(id) => {
-                    let dd = &mut self.links.borrow_mut()[*id].draw_data;
-                    dd.move_arc(distance);
                     let ss = ScreenSlot::Link(*id);
 
                     if !self.pending_updates.borrow().contains_key(&ss) {
+                        let link = &self.links.borrow_mut()[*id];
+
                         self.pending_updates
                             .borrow_mut()
-                            .insert(ss, dd.index.idx(step));
+                            .insert(ss, link.draw_data.index.idx(step));
                     }
+                    let (src, dst) = self.link_src_dst(*id);
+                    let link = &mut self.links.borrow_mut()[*id];
+                    link.move_arc(distance, src, dst, &self.render_ops);
                     continue;
                 }
             };
@@ -680,6 +704,7 @@ impl DiagramCore {
                 LookupPointResult::NoMatch => {
                     return CurrentTarget::Screen(*p);
                 }
+                LookupPointResult::Arc(id) => vec![MoveTarget::Link(*id)],
                 LookupPointResult::Box(id) => self.get_related_nodes(&[GroupID::Box(*id)]),
                 LookupPointResult::Node(id) => self.get_related_nodes(&[GroupID::Node(*id)]),
                 LookupPointResult::Bundle((link_id, _)) | LookupPointResult::Link((link_id, _)) => {

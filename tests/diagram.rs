@@ -49,7 +49,8 @@ fn test_highlights() {
             nodes: vec![0],
             links: vec![],
             boxes: vec![],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -58,7 +59,8 @@ fn test_highlights() {
             nodes: vec![1],
             links: vec![],
             boxes: vec![],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -67,7 +69,8 @@ fn test_highlights() {
             nodes: vec![],
             links: vec![],
             boxes: vec![0],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -79,7 +82,8 @@ fn test_highlights() {
                 element: 0
             }],
             boxes: vec![],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -91,7 +95,8 @@ fn test_highlights() {
                 element: 1
             }],
             boxes: vec![],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -112,7 +117,8 @@ fn test_highlights() {
             bundles: vec![LinkAndElement {
                 link: 0,
                 element: 0
-            },]
+            },],
+            arc: None,
         }
     );
 }

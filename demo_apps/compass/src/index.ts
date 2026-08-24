@@ -41,8 +41,15 @@ async function run() {
     new Link(0, "East to West", Animation.ToSrc),  // 2
     new Link(6, "Dead", Animation.None),  // 2
   ], [bundle, bundle2], 2, 3);
-  const nts = LinkSet.link(0, 1, 1, "North To South", Animation.Both);
-  nts.point = new LinePoint(new Point(700, 275), ArcType.Joint);
+  const nts = new LinkSet(
+    [
+      new Link(0, "Both", Animation.Both),
+      new Link(0, "South To North", Animation.ToSrc),
+    ], [new Bundle(4, "Both", Uint32Array.from([0, 1]), 0.25)],
+    0, 1,
+    new LinePoint(new Point(700, 275), ArcType.Joint)
+  );
+
 
   //               0      1      2     3
   d.set_data([box], [north, south, west, east], [

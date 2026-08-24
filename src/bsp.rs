@@ -47,6 +47,7 @@ impl Ord for XYSet {
 pub enum LookupPointResult {
     Bundle((usize, usize)),
     Link((usize, usize)),
+    Arc(usize),
     Node(usize),
     Box(usize),
     NoMatch,
@@ -120,6 +121,7 @@ impl ScreenIndex {
             for set in screen.nodes.iter() {
                 match set.slot {
                     Slot::Link => match d.links.borrow()[set.id].contains_point(p) {
+                        LookupPointResult::Arc(id) => return LookupPointResult::Arc(id),
                         LookupPointResult::Link(res) => return LookupPointResult::Link(res),
                         LookupPointResult::Bundle(res) => {
                             return LookupPointResult::Bundle(res);

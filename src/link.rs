@@ -6,7 +6,10 @@ use crate::{
     constants::{HALF, ZERO_POINT},
     node::Node,
     square::Square,
-    utils::{angle_needs_normalization, compute_line_box, full_box_from, inside_box},
+    utils::{
+        angle_needs_normalization, compute_line_box, full_box_from, get_angle, get_xy, inside_box,
+        inside_circle,
+    },
 };
 pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
@@ -69,23 +72,16 @@ impl LinePoint {
 pub struct LinkSet {
     pub src: usize,
     pub dst: usize,
+
+    #[wasm_bindgen(skip)]
     pub links: Vec<Link>,
+    #[wasm_bindgen(skip)]
     pub bundles: Vec<Bundle>,
     pub point: Option<LinePoint>,
 }
 
 #[wasm_bindgen]
 impl LinkSet {
-    pub fn link(src: usize, dst: usize, opt: usize, label: String, animation: Animation) -> Self {
-        let link = Link::new(opt, label, animation);
-        Self {
-            src,
-            dst,
-            links: vec![link],
-            bundles: Vec::new(),
-            point: None,
-        }
-    }
     #[wasm_bindgen(constructor)]
     pub fn new(
         links: Vec<Link>,
@@ -104,18 +100,55 @@ impl LinkSet {
     }
 }
 
-pub fn compute_animation_width(link_scale: f32, r: f32, links: usize) -> (f32, f32, f32) {
-    //let lc = self.compute_node_scale(nodes) as f32;
-    let offset = match links {
-        1 => 0,
-        _ => 1,
-    };
-    let lc = (2 * links - offset) as f32;
-    let scaled = r * link_scale;
-    let width = scaled / lc;
-    let step = scaled / (links as f32);
-    return (width, step, step * 0.5);
+pub fn compute_animation(
+    link: &Link,
+    clink: &ComputedLink,
+    width: f32,
+    d: &Point,
+) -> Option<LineAnimation> {
+    match link.animation {
+        Animation::Both => {
+            let new_width = width * HALF;
+
+            match &clink.2 {
+                Some(arc) => match &arc.mode {
+                    ArcType::Arc => None,
+                    ArcType::Joint => {
+                        let mut links = Vec::with_capacity(4);
+
+                        for (a, b) in [(&clink.0, &arc.point), (&clink.1, &arc.point)] {
+                            let angle = get_angle(a.x, a.y, b.x, b.y);
+                            let s = get_xy(a.x, a.y, new_width, angle + 90.0);
+                            let d = s.get_move_distance(a);
+                            links.push((a.add_distance(&d), b.add_distance(&d), None, new_width));
+                            links.push((b.sub_distance(&d), a.sub_distance(&d), None, new_width));
+                        }
+
+                        Some(links)
+                    }
+                },
+                None => Some(vec![
+                    (
+                        clink.0.sub_distance(&d),
+                        clink.1.sub_distance(&d),
+                        None,
+                        new_width,
+                    ),
+                    (
+                        clink.1.add_distance(&d),
+                        clink.0.add_distance(&d),
+                        None,
+                        new_width,
+                    ),
+                ]),
+            }
+        }
+        Animation::ToSrc => Some(vec![(clink.1, clink.0, clink.2, width)]),
+        Animation::ToDst => Some(vec![(clink.0, clink.1, clink.2, width)]),
+        _ => None,
+    }
 }
+
 pub type LineAnimation = Vec<(Point, Point, Option<LinePoint>, f32)>;
 pub type ComputedLink = (Point, Point, Option<LinePoint>);
 
@@ -137,14 +170,14 @@ impl LinkSet {
             Some(arc) => match &arc.mode {
                 ArcType::Arc => todo!("Not there yet!"),
                 ArcType::Joint => {
-                    let da = src.get_move_distance(&arc.point);
-                    let db = arc.point.get_move_distance(dst);
                     for bundle in &self.bundles {
+                        let (start, end) = match bundle.pos > HALF {
+                            true => (&arc.point, dst),
+                            false => (src, &arc.point),
+                        };
                         let scale = bundle.pos * 2.0;
-                        points.push(match bundle.pos > HALF {
-                            true => db.add_distance(&db.scale(scale)),
-                            false => da.add_distance(&da.scale(scale)),
-                        });
+                        let d = start.get_move_distance(end);
+                        points.push(start.add_distance(&d.scale(scale)));
                     }
                 }
             },
@@ -157,43 +190,7 @@ impl LinkSet {
         }
         points
     }
-    pub fn compute_animation(
-        &self,
-        link: &Link,
-        clink: &ComputedLink,
-        width: f32,
-        d: &Point,
-    ) -> Option<LineAnimation> {
-        match link.animation {
-            Animation::Both => {
-                let new_width = width * HALF;
 
-                Some(vec![
-                    (
-                        clink.0.sub_distance(&d),
-                        clink.1.sub_distance(&d),
-                        match &clink.2 {
-                            Some(p) => Some(p.sub_distance(&d)),
-                            None => None,
-                        },
-                        new_width,
-                    ),
-                    (
-                        clink.1.add_distance(&d),
-                        clink.0.add_distance(&d),
-                        match &clink.2 {
-                            Some(p) => Some(p.add_distance(&d)),
-                            None => None,
-                        },
-                        new_width,
-                    ),
-                ])
-            }
-            Animation::ToSrc => Some(vec![(clink.1, clink.0, clink.2, width)]),
-            Animation::ToDst => Some(vec![(clink.0, clink.1, clink.2, width)]),
-            _ => None,
-        }
-    }
     pub fn build_draw_data(&self, src: &Node, dst: &Node, opt: &DiagramOpt) -> DrawData {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
@@ -261,11 +258,14 @@ impl LinkSet {
         let start = nw.add_distance(&d);
         let end = ne.add_distance(&d);
         let arc = match &self.point {
-            Some(lp) => Some(lp.add_distance(&d)),
+            Some(lp) => {
+                let center = lp.add_distance(&d);
+                Some(center)
+            }
             None => None,
         };
 
-        let animation = self.compute_animation(link, &(start, end, arc), width, animation_distance);
+        let animation = compute_animation(link, &(start, end, arc), width, animation_distance);
         (start, end, arc, animation)
     }
 }
@@ -320,9 +320,6 @@ impl DrawData {
         Square::new(p.x - offset, p.y - offset, side, side)
     }
 
-    pub fn move_arc(&mut self, _distance: &Point) {
-        // TODO!!
-    }
     pub fn move_distance(&mut self, distance: &Point) {
         self.index.move_distance(distance);
         for link in &mut self.links {
@@ -330,17 +327,18 @@ impl DrawData {
             link.1 = link.1.add_distance(distance);
             match &mut link.2 {
                 Some(arc) => arc.point = arc.point.add_distance(distance),
-
                 None => (),
             };
             if let Some(list) = &mut link.3 {
-                for (src, dst, arc, _) in list {
+                for i in 0..list.len() {
+                    let (src, dst, ap, _) = &mut list[i];
+
                     *src = src.add_distance(distance);
                     *dst = dst.add_distance(distance);
-                    *arc = match arc {
-                        Some(p) => Some(p.add_distance(distance)),
-                        None => None,
-                    };
+                    match ap {
+                        Some(lp) => lp.point = lp.point.add_distance(distance),
+                        _ => (),
+                    }
                 }
             }
         }
@@ -349,11 +347,12 @@ impl DrawData {
         }
     }
 }
+
 #[derive(Debug)]
 pub struct LinkContainer {
     pub ls: LinkSet,
     pub draw_data: DrawData,
-    id: usize,
+    pub id: usize,
 }
 
 impl LinkContainer {
@@ -363,6 +362,13 @@ impl LinkContainer {
             None => (),
         };
         self.draw_data.move_distance(distance);
+    }
+    pub fn move_arc(&mut self, distance: &Point, src: &Node, dst: &Node, opt: &DiagramOpt) {
+        match &mut self.ls.point {
+            Some(lp) => lp.point = lp.point.add_distance(distance),
+            None => (),
+        }
+        self.draw_data = self.ls.build_draw_data(src, dst, opt);
     }
     pub fn contains_point(&self, p: &Point) -> LookupPointResult {
         let dd = &self.draw_data;
@@ -380,12 +386,16 @@ impl LinkContainer {
                     ArcType::Arc => todo!("FIXME!"),
                     ArcType::Joint => {
                         let center = &arc.point;
+                        let width = dd.line_width * HALF;
+                        if inside_circle(p, &arc.point, width) {
+                            return LookupPointResult::Arc(self.id);
+                        }
 
-                        let (mut pb, _) = full_box_from(src, center, dd.line_width * 0.5);
+                        let (mut pb, _) = full_box_from(src, center, width);
                         if inside_box(&pb, p) {
                             return LookupPointResult::Link((self.id, i));
                         }
-                        (pb, _) = full_box_from(center, dst, dd.line_width * 0.5);
+                        (pb, _) = full_box_from(center, dst, width);
                         if inside_box(&pb, p) {
                             return LookupPointResult::Link((self.id, i));
                         }

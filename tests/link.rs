@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 mod common;
-use approx::{assert_relative_eq, assert_relative_ne};
+use approx::assert_relative_eq;
 use common::*;
 use diagram_r::DiagramOpt;
 use diagram_r::link::iters::{ArcIter, FullBoxAccumulate, LineIter};
@@ -95,6 +95,13 @@ pub fn arc_iter_tests() {
     let b = Point::new(10.0, 0.0);
     let c = Point::new(10.0, 10.00);
     let mut iter = ArcIter::new(&a, &b, &c, 5.0, 1);
+
+    // Basically the lines should look like this
+    //   __
+    //      \
+    //       \
+    //        |
+    //        |
 
     let ((a, b), (c, d)) = unsafe { iter.next().unwrap_unchecked() };
     assert_relative_eq!(a.x, 0.0, epsilon = 0.001);

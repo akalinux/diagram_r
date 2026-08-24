@@ -4,13 +4,10 @@ use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
     constants::{HALF, ZERO_POINT},
-    link::iters::{FullBoxAccumulate, LineIter},
+    link::iters::{ArcIter, FullBoxAccumulate, LineIter},
     node::Node,
     square::Square,
-    utils::{
-        angle_needs_normalization, compute_line_box, full_box_from, get_angle, get_xy, inside_box,
-        inside_circle,
-    },
+    utils::{full_box_from, get_angle, get_xy, inside_box, inside_circle},
 };
 pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
@@ -197,18 +194,54 @@ impl LinkSet {
         let mut accumulate = FullBoxAccumulate::new();
         let side = src.layout.smallest_side(&dst.layout) * opt.link_scale;
 
-        let iter = LineIter::new(&src_p, &dst_p, side, self.links.len());
-        let animation_distance = iter.init.scale(0.25);
-        let width = iter.width;
-        let mut links = Vec::with_capacity(self.links.len());
-        for (i, (a, b)) in iter.enumerate() {
-            let link = &self.links[i];
-            accumulate.step(&a);
-            accumulate.step(&b);
-            let animation =
-                compute_animation(link, &(a, b, None), width * HALF, &animation_distance);
-            links.push((a, b, None, animation));
-        }
+        let (links, width) = match self.point {
+            None => {
+                let iter = LineIter::new(&src_p, &dst_p, side, self.links.len());
+                let animation_distance = iter.init.scale(0.25);
+                let width = iter.width;
+                let mut links = Vec::with_capacity(self.links.len());
+                for (i, (a, b)) in iter.enumerate() {
+                    let link = &self.links[i];
+                    accumulate.step(&a);
+                    accumulate.step(&b);
+                    let animation =
+                        compute_animation(link, &(a, b, None), width * HALF, &animation_distance);
+                    links.push((a, b, None, animation));
+                }
+                (links, width)
+            }
+            Some(lp) => {
+                // unlke the above block, this generates 3 lines for every one link provided!!!
+                let mut links = Vec::with_capacity(self.links.len() * 3);
+                let iter = ArcIter::new(&src_p, &lp.point, &dst_p, side, self.links.len());
+                let width = iter.a.width;
+                let animation_distance_start = iter.a.init.scale(0.25);
+                let animation_distance_center = iter.init.scale(0.25);
+                let animation_distance_end = iter.b.init.scale(0.25);
+                for (i, ((a, b), (c, d))) in iter.enumerate() {
+                    let link = &self.links[i];
+                    accumulate.step(&a);
+                    accumulate.step(&b);
+                    accumulate.step(&c);
+                    accumulate.step(&d);
+                    for (a, b, animation_distance) in [
+                        (a, b, animation_distance_start),
+                        (b, c, animation_distance_center),
+                        (c, d, animation_distance_end),
+                    ] {
+                        let animation = compute_animation(
+                            link,
+                            &(a, b, None),
+                            width * HALF,
+                            &animation_distance,
+                        );
+                        links.push((a, b, None, animation));
+                    }
+                }
+
+                (links, width)
+            }
+        };
         let bundles = self.compute_bunlde_points(&src_p, &dst_p);
         let index = Square::from(accumulate.full_box_from());
 
@@ -337,19 +370,17 @@ impl LinkContainer {
                 Some(arc) => match &arc.mode {
                     ArcType::Arc => todo!("FIXME!"),
                     ArcType::Joint => {
-                        let center = &arc.point;
+                        let dd = &self.draw_data;
                         let width = dd.line_width * HALF;
-                        if inside_circle(p, &arc.point, width) {
-                            return LookupPointResult::Arc(self.id);
-                        }
-
-                        let (mut pb, _) = full_box_from(src, center, width);
-                        if inside_box(&pb, p) {
-                            return LookupPointResult::Link((self.id, i));
-                        }
-                        (pb, _) = full_box_from(center, dst, width);
-                        if inside_box(&pb, p) {
-                            return LookupPointResult::Link((self.id, i));
+                        for i in (0..self.draw_data.links.len()).step_by(3) {
+                            for o in 0..3 {
+                                let id = i + o;
+                                let link = &dd.links[id];
+                                let (pb, _) = full_box_from(&link.0, &link.1, width);
+                                if inside_box(&pb, p) {
+                                    return LookupPointResult::Link((self.id, i));
+                                }
+                            }
                         }
                     }
                 },

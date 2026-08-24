@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 mod common;
-use approx::{assert_relative_eq, assert_relative_ne};
+use approx::assert_relative_eq;
 use diagram_r::{
     Point,
     constants::ZERO_POINT,

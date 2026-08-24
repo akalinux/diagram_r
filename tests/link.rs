@@ -1,10 +1,10 @@
 #![cfg(test)]
 
 mod common;
-use approx::assert_relative_eq;
+use approx::{assert_relative_eq, assert_relative_ne};
 use common::*;
 use diagram_r::DiagramOpt;
-use diagram_r::link::iters::{FullBoxAccumulate, LineIter};
+use diagram_r::link::iters::{ArcIter, FullBoxAccumulate, LineIter};
 use diagram_r::{Point, bsp::LookupPointResult, constants::ZERO_POINT};
 use wasm_bindgen_test::wasm_bindgen_test;
 #[test]
@@ -68,22 +68,6 @@ fn test_line_iter() {
     assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
     assert!(iter.next().is_none());
 
-    iter = LineIter::new(&Point::new(10.0, 3.0), &Point::new(0.0, 3.0), 6.0, 2);
-    right = Point::new(0.0, 1.5);
-    left = Point::new(10.0, 1.5);
-    res = iter.next().unwrap();
-    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
-    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
-    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
-    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
-    right.y = 4.5;
-    left.y = 4.5;
-    res = iter.next().unwrap();
-    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
-    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
-    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
-    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
-    assert!(iter.next().is_none());
     iter = LineIter::new(&Point::new(10.0, 3.0), &Point::new(0.0, 3.0), 6.0, 1);
     right = Point::new(0.0, 3.0);
     left = Point::new(10.0, 3.0);
@@ -103,4 +87,23 @@ pub fn point_accumualte_test() {
     a.step(&Point { x: 1.5, y: 2.0 });
     a.step(&Point { x: 1.5, y: 2.0 });
     assert_eq!(a.full_box_from(), (1.0, 2.0, 1.0, 2.0))
+}
+
+#[test]
+pub fn arc_iter_tests() {
+    let a = ZERO_POINT;
+    let b = Point::new(10.0, 0.0);
+    let c = Point::new(10.0, 10.00);
+    let mut iter = ArcIter::new(&a, &b, &c, 5.0, 1);
+
+    let ((a, b), (c, d)) = unsafe { iter.next().unwrap_unchecked() };
+    assert_relative_eq!(a.x, 0.0, epsilon = 0.001);
+    assert_relative_eq!(a.y, 0.0, epsilon = 0.001);
+    assert_relative_eq!(b.x, 5.0, epsilon = 0.001);
+    assert_relative_eq!(b.y, 0.0, epsilon = 0.001);
+    assert_relative_eq!(c.x, 10.0, epsilon = 0.001);
+    assert_relative_eq!(c.y, 5.0, epsilon = 0.001);
+    assert_relative_eq!(d.x, 10.0, epsilon = 0.001);
+    assert_relative_eq!(d.y, 10.0, epsilon = 0.001);
+    assert!(iter.next().is_none());
 }

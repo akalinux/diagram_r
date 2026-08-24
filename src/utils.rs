@@ -22,23 +22,26 @@ pub fn to_fixed_px(n: f32) -> String {
 
 pub fn get_xy(cx: f32, cy: f32, r: f32, degree: f32) -> Point {
     let rad = degree.to_radians();
-
+    get_xy_r(cx, cy, r, rad)
+}
+pub fn get_xy_r(cx: f32, cy: f32, r: f32, rad: f32) -> Point {
     let x = cx + r * rad.cos();
     let y = cy + r * rad.sin();
     Point { x, y }
 }
 
-pub fn get_angle(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+pub fn get_radians(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     let dx = x1 - x2;
     let dy = y1 - y2;
+    dy.atan2(dx)
+}
 
-    //let base = dy.atan2(dx) * RAD2DEG; //- 180;
-    let base = dy.atan2(dx).to_degrees();
-    if base < 0.0 {
-        return base + 360.0;
+pub fn get_angle(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+    let base = get_radians(x1, y1, x2, y2).to_degrees();
+    match base < 0.0 {
+        true => base + 360.0,
+        false => base,
     }
-
-    base
 }
 
 pub fn triangle_area(x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) -> f32 {
@@ -142,4 +145,9 @@ pub fn normalize_angle(angle: f32) -> (f32, bool) {
         true => (angle + 180.0, true),
         false => (angle, false),
     }
+}
+
+pub fn invert_dst(src: &Point, dst: &Point, r: f32) -> (Point, f32) {
+    let rad = get_radians(src.x, src.y, dst.x, dst.y);
+    (get_xy_r(dst.x, dst.y, r, rad), rad)
 }

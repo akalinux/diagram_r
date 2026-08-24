@@ -1,9 +1,9 @@
 use crate::{
     Point,
-    constants::HALF,
+    constants::{HALF, NINTY_DEGREES},
     link::get_line_width,
     square::Corners,
-    utils::{angle_needs_normalization, get_angle, get_xy},
+    utils::{get_radians, get_xy_r, invert_dst},
 };
 
 pub struct LineIter {
@@ -14,8 +14,6 @@ pub struct LineIter {
     pub total: usize,
     pub pos: usize,
     pub init: Point,
-    pub angle: f32,
-    pub normalized: bool,
 }
 
 pub struct FullBoxAccumulate(Option<(f32, f32, f32, f32)>);
@@ -49,29 +47,30 @@ impl FullBoxAccumulate {
     }
 }
 impl LineIter {
-    pub fn new(src: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
+    pub fn shared(
+        src: &Point,
+        dst: &Point,
+        full_width: f32,
+        total: usize,
+        width: f32,
+        inital_scale: f32,
+        scale: f32,
+    ) -> Self {
         let r = full_width * HALF;
-        let angle = get_angle(src.x, src.y, dst.x, dst.y);
-        let north = angle + 90.0;
-        let nw = get_xy(src.x, src.y, r, north);
-        let d = nw.get_move_distance(src);
-        let (width, inital_scale, scale) = get_line_width(total, full_width);
+        let rad = get_radians(src.x, src.y, dst.x, dst.y);
+        let north = rad + NINTY_DEGREES;
+        let left = get_xy_r(src.x, src.y, r, north);
 
-        let (distance, left, right, normalized) = match angle_needs_normalization(angle) {
-            false => (
-                d.scale(-2.0),
-                src.add_distance(&d),
-                dst.add_distance(&d),
-                false,
-            ),
-            true => (d.scale(2.0), nw, dst.sub_distance(&d), true),
-        };
+        let d = left.get_move_distance(src);
+
+        let right = dst.sub_distance(&d);
+        let distance = d.scale(2.0);
+
         let init = distance.scale(inital_scale);
         let chunk = distance.scale(scale);
         let start = left.add_distance(&init);
         let end = right.add_distance(&init);
         Self {
-            angle,
             start,
             end,
             distance: chunk,
@@ -79,8 +78,11 @@ impl LineIter {
             total: total - 1,
             pos: 0,
             width,
-            normalized,
         }
+    }
+    pub fn new(src: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
+        let (width, inital_scale, scale) = get_line_width(total, full_width);
+        Self::shared(src, dst, full_width, total, width, inital_scale, scale)
     }
 }
 
@@ -95,5 +97,38 @@ impl Iterator for LineIter {
         self.pos += 1;
         let d = self.distance.scale(i);
         Some((self.start.add_distance(&d), self.end.add_distance(&d)))
+    }
+}
+
+pub struct ArcIter {
+    pub a: LineIter,
+    pub b: LineIter,
+    pub init: Point,
+}
+
+impl ArcIter {
+    pub fn new(begin: &Point, center: &Point, end: &Point, full_width: f32, total: usize) -> Self {
+        let (width, inital_scale, scale) = get_line_width(total, full_width);
+        let (a_end, rad_a) = invert_dst(begin, center, full_width);
+        let a = LineIter::shared(begin, &a_end, full_width, total, width, inital_scale, scale);
+        let (b_end, _) = invert_dst(center, end, full_width);
+
+        let b = LineIter::shared(&b_end, end, full_width, total, width, inital_scale, scale);
+
+        let center_start = get_xy_r(a_end.x, a_end.y, full_width, rad_a + NINTY_DEGREES);
+        let d = center_start.get_move_distance(center);
+        let init = d.scale(inital_scale);
+
+        Self { a, b, init }
+    }
+}
+impl Iterator for ArcIter {
+    type Item = ((Point, Point), (Point, Point));
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match (self.a.next(), self.b.next()) {
+            (Some(a), Some(b)) => Some((a, b)),
+            _ => None,
+        }
     }
 }

@@ -1,11 +1,11 @@
 #![cfg(test)]
 
 mod common;
-use approx::assert_relative_eq;
+use approx::{assert_relative_eq, assert_relative_ne};
 use diagram_r::{
     Point,
     constants::ZERO_POINT,
-    utils::{full_box_from, get_angle, inside_box},
+    utils::{full_box_from, get_angle, inside_box, invert_dst},
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -51,4 +51,11 @@ fn inside_box_tests() {
     assert!(inside_box(&pbox, &Point::new(5.0, 2.5)));
     // outside
     assert!(!inside_box(&pbox, &Point::new(15.0, 2.5)));
+}
+
+#[test]
+fn invert_dst_test() {
+    let (p, _) = invert_dst(&Point { x: 0.0, y: 5.0 }, &Point { x: 5.0, y: 5.0 }, 5.0);
+    assert_relative_eq!(p.x, 0.0, epsilon = 0.001);
+    assert_relative_eq!(p.y, 5.0, epsilon = 0.001);
 }

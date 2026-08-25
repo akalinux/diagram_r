@@ -348,13 +348,16 @@ impl LinkContainer {
                     ArcType::Joint => {
                         let dd = &self.draw_data;
                         let width = dd.line_width * HALF;
+                        if inside_circle(p, &arc.point, width) {
+                            return LookupPointResult::Arc(self.id);
+                        }
                         for i in 0..self.ls.links.len() {
                             for o in 0..3 {
                                 let id = i * 3 + o;
                                 let link = &dd.links[id];
                                 if o < 2 {
                                     if inside_circle(p, &link.1, width) {
-                                        return LookupPointResult::Arc(self.id);
+                                        return LookupPointResult::Link((self.id, i));
                                     }
                                 }
                                 let (pb, _) = full_box_from(&link.0, &link.1, width);
@@ -390,6 +393,7 @@ impl LinkContainer {
     pub fn get_center(&self, check: &LookupPointResult) -> Point {
         let dd = &self.draw_data;
         match check {
+            LookupPointResult::Arc(_) => unsafe { self.ls.point.unwrap_unchecked().point },
             LookupPointResult::Link(_) => {
                 let mut start = ZERO_POINT;
                 for (a, b, _) in &dd.links {

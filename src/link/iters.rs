@@ -3,7 +3,7 @@ use crate::{
     constants::{HALF, NINTY_DEGREES},
     link::get_line_width,
     square::Corners,
-    utils::{get_radians, get_xy_r, invert_dst},
+    utils::{get_radians, get_xy_r, offset_from_src},
 };
 
 pub struct LineIter {
@@ -109,11 +109,15 @@ pub struct ArcIter {
 impl ArcIter {
     pub fn new(begin: &Point, center: &Point, end: &Point, full_width: f32, total: usize) -> Self {
         let (width, inital_scale, scale) = get_line_width(total, full_width);
-        let (a_end, rad_a) = invert_dst(begin, center, full_width);
-        let a = LineIter::shared(begin, &a_end, full_width, total, width, inital_scale, scale);
-        let (b_end, _) = invert_dst(center, end, full_width);
+        let (d1, rad_a) = offset_from_src(center, begin, full_width);
+        let a_end = center.add_distance(&center.sub_distance(&d1));
 
-        let b = LineIter::shared(&b_end, end, full_width, total, width, inital_scale, scale);
+        let (d2, _) = offset_from_src(center, end, full_width);
+        let b_start = center.add_distance(&center.sub_distance(&d2));
+
+        let a = LineIter::shared(begin, &a_end, full_width, total, width, inital_scale, scale);
+
+        let b = LineIter::shared(&b_start, end, full_width, total, width, inital_scale, scale);
 
         let center_start = get_xy_r(a_end.x, a_end.y, full_width, rad_a + NINTY_DEGREES);
         let d = center_start.get_move_distance(center);

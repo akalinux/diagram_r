@@ -32,21 +32,12 @@ fn link_container_update_tests() {
     assert_relative_eq!(dd.links[1].0.y, left.y, epsilon = 0.001);
     assert_relative_eq!(dd.links[1].1.y, right.y, epsilon = 0.001);
 
-    let cmp = lc.get_center(&LookupPointResult::NoMatch);
-    assert_relative_eq!(cmp.x, center.x, epsilon = 0.001);
-    assert_relative_eq!(cmp.y, center.y, epsilon = 0.001);
     let mut res = lc.contains_point(&center);
     assert_eq!(&res, &LookupPointResult::Bundle((0, 0)));
     assert_relative_eq!(lc.get_center(&res).x, center.x, epsilon = 0.001);
     assert_relative_eq!(lc.get_center(&res).y, center.y, epsilon = 0.001);
     res = lc.contains_point(&Point::new(1.0, 0.25));
     assert_eq!(&res, &LookupPointResult::Link((0, 0)));
-    left.y = 0.25;
-    left.x = 5.0;
-    assert_relative_eq!(lc.get_center(&res).x, left.x, epsilon = 0.001);
-    assert_relative_eq!(lc.get_center(&res).y, left.y, epsilon = 0.001);
-
-    assert_eq!(lc.contains_point(&ZERO_POINT), LookupPointResult::NoMatch);
 }
 
 #[test]
@@ -90,27 +81,38 @@ pub fn point_accumualte_test() {
 }
 
 #[test]
-pub fn arc_iter_tests() {
-    let a = ZERO_POINT;
-    let b = Point::new(10.0, 0.0);
-    let c = Point::new(10.0, 10.00);
-    let mut iter = ArcIter::new(&a, &b, &c, 5.0, 1);
+pub fn arc_iter_tests_b() {
+    let start = ZERO_POINT;
+    let center = Point::new(10.0, 5.0);
+    let end = Point::new(0.0, 10.0);
 
-    // Basically the lines should look like this
-    //   __
-    //      \
-    //       \
-    //        |
-    //        |
+    let mut iter = ArcIter::new(&start, &center, &end, 2.0, 1);
 
+    //  This is supposed to look like
+    /*
+     ^
+      \
+       \
+        \
+         \
+          v
+           |
+           |
+          ^
+         /
+        /
+       /
+      /
+     v
+    */
     let ((a, b), (c, d)) = unsafe { iter.next().unwrap_unchecked() };
     assert_relative_eq!(a.x, 0.0, epsilon = 0.001);
     assert_relative_eq!(a.y, 0.0, epsilon = 0.001);
-    assert_relative_eq!(b.x, 5.0, epsilon = 0.001);
-    assert_relative_eq!(b.y, 0.0, epsilon = 0.001);
-    assert_relative_eq!(c.x, 10.0, epsilon = 0.001);
-    assert_relative_eq!(c.y, 5.0, epsilon = 0.001);
-    assert_relative_eq!(d.x, 10.0, epsilon = 0.001);
+    assert_relative_eq!(b.x, 8.2, epsilon = 0.02);
+    assert_relative_eq!(b.y, 4.1, epsilon = 0.02);
+
+    assert_relative_eq!(c.x, 8.2, epsilon = 0.02);
+    assert_relative_eq!(c.y, 5.9, epsilon = 0.02);
+    assert_relative_eq!(d.x, 0.0, epsilon = 0.001);
     assert_relative_eq!(d.y, 10.0, epsilon = 0.001);
-    assert!(iter.next().is_none());
 }

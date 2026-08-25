@@ -174,6 +174,7 @@ pub struct DiagramOpt {
     pub callback: Option<Function>,
     pub index_step: i64,
     pub animation_color: String,
+    pub animate: bool,
     pub interactive: bool,
     pub wheel_move: f32,
     pub min_k: f32,
@@ -228,6 +229,7 @@ impl DiagramOpt {
             animation_color: String::from(DEFAULT_ANIMATION_COLOR),
             grid_opt: None,
             frame_rate: DEFAULT_FRAMERATE,
+            animate: true,
         }
     }
 }

@@ -1,6 +1,10 @@
 use js_sys::Number;
 
-use crate::{Point, Transform, constants::AREA_SCALE_EPSILON, square::Corners};
+use crate::{
+    Point, Transform,
+    constants::{AREA_SCALE_EPSILON, THREE_SIXTY},
+    square::Corners,
+};
 
 pub type AngleNorthSouth = (f32, f32, f32);
 pub type FullBox = (Point, Point, Point, Point);
@@ -33,7 +37,11 @@ pub fn get_xy_r(cx: f32, cy: f32, r: f32, rad: f32) -> Point {
 pub fn get_radians(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     let dx = x1 - x2;
     let dy = y1 - y2;
-    dy.atan2(dx)
+    let base = dy.atan2(dx);
+    match base < 0.0 {
+        true => base + THREE_SIXTY,
+        false => base,
+    }
 }
 
 pub fn get_angle(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
@@ -147,7 +155,8 @@ pub fn normalize_angle(angle: f32) -> (f32, bool) {
     }
 }
 
-pub fn invert_dst(src: &Point, dst: &Point, r: f32) -> (Point, f32) {
-    let rad = get_radians(src.x, src.y, dst.x, dst.y);
-    (get_xy_r(dst.x, dst.y, r, rad), rad)
+pub fn offset_from_src(src: &Point, dst: &Point, r: f32) -> (Point, f32) {
+    let base = get_radians(src.x, src.y, dst.x, dst.y);
+
+    (get_xy_r(src.x, src.y, r, base), base)
 }

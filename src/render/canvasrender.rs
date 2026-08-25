@@ -13,7 +13,7 @@ use crate::{
     constants::{CANVAS_ERROR, HALF},
     diagram::DiagramCore,
     imgcache::ImgCache,
-    link::{ArcType, LineAnimation, Link, LinkContainer, SubLink},
+    link::{ArcType, LineAnimation, LinkContainer},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
@@ -123,7 +123,7 @@ impl CoreRender for CanvasRender {
             self.draw_node(node, diagram, opt, cache, false)?;
         }
 
-        if *self.animate.borrow() {
+        if opt.animate && *self.animate.borrow() {
             if self.frame_timer.borrow().is_none() {
                 let ft = FrameTimer::new(self.diagram.clone())?;
                 self.frame_timer.replace(Some(ft));
@@ -151,24 +151,8 @@ impl CoreRender for CanvasRender {
 
         for set in &highlights.links {
             let lc = &link_vec[set.link];
-            let width = lc.draw_data.line_width;
-            let link = &lc.ls.links[set.element];
-            let data = &lc.draw_data.links[set.element];
-            let src = &node_vec[lc.ls.src].0.layout;
-            let dst = &node_vec[lc.ls.dst].0.layout;
-            let angle = get_angle(src.x, src.y, dst.x, dst.y);
-            let (normalized_angle, _) = normalize_angle(angle);
-            self.draw_sublink(
-                link,
-                diagram,
-                opt,
-                &t,
-                data,
-                width,
-                normalized_angle,
-                true,
-                lc.id,
-            )?;
+
+            self.draw_sublink(lc, set.element, diagram, opt, &t, true)?;
         }
         for set in &highlights.bundles {
             let link = &link_vec[set.link];
@@ -387,104 +371,91 @@ impl CanvasRender {
     }
     pub fn draw_sublink(
         &self,
-        ld: &Link,
+        lc: &LinkContainer,
+        i: usize,
         diagram: &DiagramCore,
         opt: &DiagramOpt,
         t: &Transform,
-        data: &SubLink,
-        width: f32,
-        normalized_angle: f32,
         highlight: bool,
-        link_id: usize,
     ) -> Result<(), JsValue> {
-        let (a, b, ap, animations) = data;
-        let o = diagram.get_opt(ld.opt);
+        let link = &lc.ls.links[i];
+        let o = diagram.get_opt(link.opt);
         let color = match highlight {
             true => &opt.highlight_color,
             false => &o.color,
         };
-
-        match ap {
-            Some(arc) => match arc.mode {
-                ArcType::Arc => todo!("will get there"),
+        let text = &link.label;
+        let dd = &lc.draw_data;
+        let width = dd.line_width;
+        let o = diagram.get_opt(link.opt);
+        match &lc.ls.point {
+            Some(arc) => match &arc.mode {
+                ArcType::Arc => todo!("FIXME!"),
                 ArcType::Joint => {
-                    let p = &arc.point;
-
-                    if highlight {
-                        let (mut angle, mut s, mut d);
-                        for (src, dst) in [(a, p), (b, p)] {
-                            angle = get_angle(dst.x, dst.y, src.x, src.y);
-                            s = get_xy(src.x, src.y, width, angle);
-                            d = dst.add_distance(&s.get_move_distance(src).scale(HALF));
-                            self.draw_line(&s, &d, width, color);
+                    for el in 0..3 {
+                        let id = i * 3 + el;
+                        let (a, b, animations) = &dd.links[id];
+                        if el < 2 {
+                            self.draw_arc(b, color, width)?;
                         }
-                        self.draw_arc(p, color, width)?;
-                    } else {
-                        self.draw_line(a, p, width, color);
-                        self.draw_line(p, b, width, color);
-                        self.draw_arc(p, color, width)?;
-                        self.draw_link_animations(animations, &opt.animation_color)?;
-                    }
-                    for (a, p) in [(a, p), (p, b)] {
-                        let angle = get_angle(a.x, a.y, p.x, p.y);
-                        let (na, _) = normalize_angle(angle);
-                        self.draw_link_text(a, p, o, &ld.label, width, na, opt, t, highlight)?;
+                        self.draw_link_line(
+                            a, b, width, text, opt, highlight, animations, color, t, o,
+                        )?;
                     }
                     Ok(())
                 }
             },
             None => {
-                if highlight {
-                    let angle = get_angle(b.x, b.y, a.x, a.y);
-                    let (src, dst) = diagram.link_src_dst(link_id);
-
-                    let width = src.layout.smallest_side(&dst.layout) * 0.25;
-                    let start = get_xy(a.x, a.y, width, angle);
-                    let end = b.add_distance(&start.get_move_distance(a));
-                    self.draw_line(&start, &end, width, color);
-                } else {
-                    self.draw_line(a, b, width, color);
-                    self.draw_link_animations(animations, &opt.animation_color)?;
-                }
-                self.draw_link_text(
-                    a,
-                    b,
-                    o,
-                    &ld.label,
-                    width,
-                    normalized_angle,
-                    opt,
-                    t,
-                    highlight,
-                )
+                let (a, b, animations) = &dd.links[i];
+                self.draw_link_line(a, b, width, text, opt, highlight, animations, color, t, o)
             }
         }
+    }
+    fn draw_link_line(
+        &self,
+        a: &Point,
+        b: &Point,
+        width: f32,
+        text: &String,
+        opt: &DiagramOpt,
+        highlight: bool,
+        animations: &LineAnimation,
+        color: &String,
+        t: &Transform,
+        o: &ElementOpt,
+    ) -> Result<(), JsValue> {
+        self.draw_line(a, b, width, color);
+        match highlight {
+            false => self.draw_link_animations(animations, &opt.animation_color)?,
+            true => (),
+        };
+        let angle = get_angle(a.x, a.y, b.x, b.y);
+        let (normalized_angle, _) = normalize_angle(angle);
+        self.draw_link_text(a, b, o, text, width, normalized_angle, opt, t, highlight)
     }
 
     pub fn draw_link_animations(
         &self,
-        animation: &Option<LineAnimation>,
+        animation: &LineAnimation,
         color: &String,
     ) -> Result<(), JsValue> {
-        if let Some(list) = animation {
-            self.ctx.set_line_dash(&self.dashes)?;
-            if list.len() != 0 {
+        match animation {
+            LineAnimation::Both(width, a, b, c, d) => {
                 self.animate.replace(true);
+                self.ctx.set_line_dash(&self.dashes)?;
+                self.draw_line(a, b, *width, color);
+                self.draw_line(c, d, *width, color);
+                self.ctx.set_line_dash(&Array::new())?;
             }
-            for (src, dst, ap, width) in list {
-                match ap {
-                    Some(arc) => match arc.mode {
-                        ArcType::Joint => {
-                            self.draw_line(src, &arc.point, *width, color);
-                            self.draw_line(&arc.point, dst, *width, color);
-                        }
-                        ArcType::Arc => todo!("will get there"),
-                    },
-                    None => self.draw_line(src, dst, *width, color),
-                };
+            LineAnimation::Side(width, a, b) => {
+                self.animate.replace(true);
+                self.ctx.set_line_dash(&self.dashes)?;
+                self.draw_line(a, b, *width, color);
+                self.ctx.set_line_dash(&Array::new())?;
             }
-            self.ctx.set_line_dash(&Array::new())?;
+            LineAnimation::None => (),
         }
+
         Ok(())
     }
     pub fn draw_link(
@@ -495,30 +466,10 @@ impl CanvasRender {
         cache: &ImgCache,
         t: &Transform,
     ) -> Result<(), JsValue> {
+        for i in 0..link.ls.links.len() {
+            self.draw_sublink(link, i, diagram, opt, t, false)?;
+        }
         let data = &link.draw_data;
-        if data.links.len() == 0 {
-            return Ok(());
-        }
-        let angle = {
-            let (a, b, _, _) = &data.links[0];
-            get_angle(a.x, a.y, b.x, b.y)
-        };
-        let (normalized_angle, _) = normalize_angle(angle);
-        let width = data.line_width;
-
-        for (i, ld) in link.ls.links.iter().enumerate() {
-            self.draw_sublink(
-                ld,
-                diagram,
-                opt,
-                t,
-                &data.links[i],
-                width,
-                normalized_angle,
-                false,
-                link.id,
-            )?;
-        }
 
         for (i, bundle) in link.ls.bundles.iter().enumerate() {
             let target = data.bundle_draw_box(i);

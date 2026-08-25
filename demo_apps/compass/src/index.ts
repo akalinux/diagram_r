@@ -8,13 +8,9 @@ async function run() {
 
   let opt = new DiagramOpt();
   opt.grid_opt = new GridOpt();
+  //opt.animate = false;
   const d = new Diagram(opt);
-  /* 800x600
-    width: 60px
-    height: 60px,
-   
-   
-  */
+
   const north = new Node(new Square(365, 20, 60, 60), "North", 0,);
   const south = new Node(new Square(365, 520, 60, 60), "South", 1);
   const west = new Node(new Square(10, 265, 60, 60), "West", 2,);

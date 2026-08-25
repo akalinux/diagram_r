@@ -7,7 +7,7 @@ use crate::{
     link::iters::{ArcIter, FullBoxAccumulate, LineIter},
     node::Node,
     square::Square,
-    utils::{full_box_from, get_angle, get_xy, inside_box, inside_circle},
+    utils::{full_box_from, inside_box, inside_circle},
 };
 pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
@@ -103,51 +103,30 @@ pub fn compute_animation(
     clink: &ComputedLink,
     width: f32,
     d: &Point,
-) -> Option<LineAnimation> {
+) -> LineAnimation {
     match link.animation {
         Animation::Both => {
             let new_width = width * HALF;
 
-            match &clink.2 {
-                Some(arc) => match &arc.mode {
-                    ArcType::Arc => None,
-                    ArcType::Joint => {
-                        let mut links = Vec::with_capacity(4);
-
-                        for (a, b) in [(&clink.0, &arc.point), (&clink.1, &arc.point)] {
-                            let angle = get_angle(a.x, a.y, b.x, b.y);
-                            let s = get_xy(a.x, a.y, new_width, angle + 90.0);
-                            let d = s.get_move_distance(a);
-                            links.push((a.add_distance(&d), b.add_distance(&d), None, new_width));
-                            links.push((b.sub_distance(&d), a.sub_distance(&d), None, new_width));
-                        }
-
-                        Some(links)
-                    }
-                },
-                None => Some(vec![
-                    (
-                        clink.0.sub_distance(&d),
-                        clink.1.sub_distance(&d),
-                        None,
-                        new_width,
-                    ),
-                    (
-                        clink.1.add_distance(&d),
-                        clink.0.add_distance(&d),
-                        None,
-                        new_width,
-                    ),
-                ]),
-            }
+            LineAnimation::Both(
+                new_width,
+                clink.0.sub_distance(&d),
+                clink.1.sub_distance(&d),
+                clink.1.add_distance(&d),
+                clink.0.add_distance(&d),
+            )
         }
-        Animation::ToSrc => Some(vec![(clink.1, clink.0, clink.2, width)]),
-        Animation::ToDst => Some(vec![(clink.0, clink.1, clink.2, width)]),
-        _ => None,
+        Animation::ToSrc => LineAnimation::Side(width, clink.1, clink.0),
+        Animation::ToDst => LineAnimation::Side(width, clink.0, clink.1),
+        _ => LineAnimation::None,
     }
 }
-
-pub type LineAnimation = Vec<(Point, Point, Option<LinePoint>, f32)>;
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LineAnimation {
+    None,
+    Both(f32, Point, Point, Point, Point),
+    Side(f32, Point, Point),
+}
 pub type ComputedLink = (Point, Point, Option<LinePoint>);
 
 pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
@@ -206,7 +185,7 @@ impl LinkSet {
                     accumulate.step(&b);
                     let animation =
                         compute_animation(link, &(a, b, None), width * HALF, &animation_distance);
-                    links.push((a, b, None, animation));
+                    links.push((a, b, animation));
                 }
                 (links, width)
             }
@@ -235,7 +214,7 @@ impl LinkSet {
                             width * HALF,
                             &animation_distance,
                         );
-                        links.push((a, b, None, animation));
+                        links.push((a, b, animation));
                     }
                 }
 
@@ -287,7 +266,7 @@ impl Bundle {
     }
 }
 
-pub type SubLink = (Point, Point, Option<LinePoint>, Option<LineAnimation>);
+pub type SubLink = (Point, Point, LineAnimation);
 #[derive(Debug, PartialEq)]
 pub struct DrawData {
     pub line_width: f32,
@@ -310,20 +289,17 @@ impl DrawData {
         for link in &mut self.links {
             link.0 = link.0.add_distance(distance);
             link.1 = link.1.add_distance(distance);
-            match &mut link.2 {
-                Some(arc) => arc.point = arc.point.add_distance(distance),
-                None => (),
-            };
-            if let Some(list) = &mut link.3 {
-                for i in 0..list.len() {
-                    let (src, dst, ap, _) = &mut list[i];
 
-                    *src = src.add_distance(distance);
-                    *dst = dst.add_distance(distance);
-                    match ap {
-                        Some(lp) => lp.point = lp.point.add_distance(distance),
-                        _ => (),
+            match &mut link.2 {
+                LineAnimation::None => (),
+                LineAnimation::Both(_, a, b, c, d) => {
+                    for p in [a, b, c, d] {
+                        *p = p.add_distance(distance);
                     }
+                }
+                LineAnimation::Side(_, a, b) => {
+                    *a = a.add_distance(distance);
+                    *b = b.add_distance(distance);
                 }
             }
         }
@@ -365,17 +341,22 @@ impl LinkContainer {
             }
         }
         for (i, _) in self.ls.links.iter().enumerate() {
-            let (src, dst, ap, _) = &dd.links[i];
-            match ap {
+            let (src, dst, _) = &dd.links[i];
+            match &self.ls.point {
                 Some(arc) => match &arc.mode {
                     ArcType::Arc => todo!("FIXME!"),
                     ArcType::Joint => {
                         let dd = &self.draw_data;
                         let width = dd.line_width * HALF;
-                        for i in (0..self.draw_data.links.len()).step_by(3) {
+                        for i in 0..self.ls.links.len() {
                             for o in 0..3 {
-                                let id = i + o;
+                                let id = i * 3 + o;
                                 let link = &dd.links[id];
+                                if o < 2 {
+                                    if inside_circle(p, &link.1, width) {
+                                        return LookupPointResult::Arc(self.id);
+                                    }
+                                }
                                 let (pb, _) = full_box_from(&link.0, &link.1, width);
                                 if inside_box(&pb, p) {
                                     return LookupPointResult::Link((self.id, i));
@@ -385,7 +366,7 @@ impl LinkContainer {
                     }
                 },
                 None => {
-                    let (pb, _) = full_box_from(src, dst, dd.line_width * 0.5);
+                    let (pb, _) = full_box_from(src, dst, dd.line_width * HALF);
                     if inside_box(&pb, p) {
                         return LookupPointResult::Link((self.id, i));
                     }
@@ -409,26 +390,12 @@ impl LinkContainer {
     pub fn get_center(&self, check: &LookupPointResult) -> Point {
         let dd = &self.draw_data;
         match check {
-            LookupPointResult::NoMatch => {
-                let mut x = 0.0;
-                let mut y = 0.0;
-                // TODO
-                for (a, b, _, _) in &dd.links {
-                    x += a.x + b.x;
-                    y += a.y + b.y;
+            LookupPointResult::Link(_) => {
+                let mut start = ZERO_POINT;
+                for (a, b, _) in &dd.links {
+                    start = start.add_distance(a).add_distance(b);
                 }
-                let count = (self.ls.links.len() * 2) as f32;
-                Point {
-                    x: x / count,
-                    y: y / count,
-                }
-            }
-            LookupPointResult::Link((i, _)) => {
-                let (a, b, x, _) = &dd.links[*i];
-                match x {
-                    Some(c) => c.get_z_center(a, b),
-                    None => a.get_center(&b),
-                }
+                start.scale(1.0 / dd.links.len() as f32)
             }
             LookupPointResult::Bundle((i, _)) => dd.bundles[*i],
             _ => ZERO_POINT,

@@ -76,4 +76,6 @@ pub const ONE_THIRD: f32 = 1.0 / 3.0;
 pub const HALF: f32 = 0.5;
 pub const DEFAULT_FRAMERATE: u32 = 20;
 pub const NINTY_DEGREES: f32 = (90.0 as f32).to_radians();
-pub const ONE_EIGHTY_DEGREES: f32 = (180.0 as f32).to_radians();
+pub const ONE_HUNDRED_EIGHTY_DEGREES: f32 = (180.0 as f32).to_radians();
+pub const TWO_SEVENTY_DEGREES: f32 = (270.0 as f32).to_radians();
+pub const THREE_SIXTY: f32 = (360.0 as f32).to_radians();

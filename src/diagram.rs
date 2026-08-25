@@ -54,6 +54,7 @@ pub enum CurrentTarget {
     Move(Vec<MoveTarget>, Point),
     Screen(Point),
     Lookup(Point),
+    Highlight,
     None,
 }
 
@@ -628,7 +629,7 @@ impl DiagramCore {
                     this.borrow().highlights.replace(Some(higlights));
                     let _ = this.borrow().render();
                     this.borrow().run_callback(event, p);
-                    *check = CurrentTarget::None;
+                    *check = CurrentTarget::Highlight;
                     return;
                 }
                 _ => {
@@ -720,6 +721,11 @@ impl DiagramCore {
         let mut check = self.current_target.borrow_mut();
         self.highlights.replace(None);
         let (nodes, op) = match &mut *check {
+            CurrentTarget::Highlight => {
+                *check = CurrentTarget::Lookup(*p);
+                self.set_timeout();
+                return true;
+            }
             CurrentTarget::None => {
                 // in this case we need to transition from none to our current lookup
                 *check = CurrentTarget::Lookup(*p);

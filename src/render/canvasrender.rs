@@ -392,10 +392,10 @@ impl CanvasRender {
             Some(arc) => match &arc.mode {
                 ArcType::Arc => todo!("FIXME!"),
                 ArcType::Joint => {
-                    for el in 0..3 {
-                        let id = i * 3 + el;
+                    for el in 0..2 {
+                        let id = i * 2 + el;
                         let (a, b, animations) = &dd.links[id];
-                        if el < 2 {
+                        if el == 0 {
                             self.draw_arc(b, color, width)?;
                         }
                         self.draw_link_line(

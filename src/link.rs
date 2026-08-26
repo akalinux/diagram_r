@@ -195,7 +195,6 @@ impl LinkSet {
                 let iter = ArcIter::new(&src_p, &lp.point, &dst_p, side, self.links.len());
                 let width = iter.a.width;
                 let animation_distance_start = iter.a.init.scale(0.25);
-                let animation_distance_center = iter.init.scale(0.25);
                 let animation_distance_end = iter.b.init.scale(0.25);
                 for (i, ((a, b), (c, d))) in iter.enumerate() {
                     let link = &self.links[i];
@@ -205,7 +204,6 @@ impl LinkSet {
                     accumulate.step(&d);
                     for (a, b, animation_distance) in [
                         (a, b, animation_distance_start),
-                        (b, c, animation_distance_center),
                         (c, d, animation_distance_end),
                     ] {
                         let animation = compute_animation(
@@ -353,9 +351,9 @@ impl LinkContainer {
                         }
                         for i in 0..self.ls.links.len() {
                             for o in 0..3 {
-                                let id = i * 3 + o;
+                                let id = i * 2 + o;
                                 let link = &dd.links[id];
-                                if o < 2 {
+                                if o == 0 {
                                     if inside_circle(p, &link.1, width) {
                                         return LookupPointResult::Link((self.id, i));
                                     }

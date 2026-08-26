@@ -8,12 +8,14 @@ async function run() {
 
   let opt = new DiagramOpt();
   opt.grid_opt = new GridOpt();
+  opt.link_scale = 1;
   //opt.animate = false;
   const d = new Diagram(opt);
 
   const north = new Node(new Square(365, 20, 60, 60), "North", 0,);
   const south = new Node(new Square(365, 520, 60, 60), "South", 1);
   const west = new Node(new Square(10, 265, 60, 60), "West", 2,);
+  //const west = new Node(new Square(0, 0, 60, 60), "West", 2,);
   const east = new Node(new Square(430, 265, 60, 60), "East", 3);
   const box = new Node(new Square(5, 5, 790, 590), "Container", 5, Uint32Array.of(0, 1, 2, 3));
 

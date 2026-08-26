@@ -1,11 +1,21 @@
+use std::mem::offset_of;
+
 use crate::{
     Point,
     constants::{HALF, NINTY_DEGREES},
-    link::get_line_width,
     square::Corners,
-    utils::{get_radians, get_xy_r, offset_from_src},
+    utils::{get_radians, get_xy_r, offset_from_dst, offset_from_src},
 };
 
+pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
+    let incremental_scale = 1.0 / total_links as f32;
+    let (virtual_count, inital_scale) = match total_links {
+        1 => (2.0, 0.5),
+        _ => (total_links as f32 * 2.0 - 1.0, incremental_scale * 0.5),
+    };
+    let link_width = full_width / virtual_count;
+    (link_width, inital_scale, incremental_scale)
+}
 pub struct LineIter {
     pub start: Point,
     pub end: Point,
@@ -50,13 +60,12 @@ impl LineIter {
     pub fn shared(
         src: &Point,
         dst: &Point,
-        full_width: f32,
+        r: f32,
         total: usize,
         width: f32,
         inital_scale: f32,
         scale: f32,
     ) -> Self {
-        let r = full_width * HALF;
         let rad = get_radians(src.x, src.y, dst.x, dst.y);
         let north = rad + NINTY_DEGREES;
         let left = get_xy_r(src.x, src.y, r, north);
@@ -82,7 +91,15 @@ impl LineIter {
     }
     pub fn new(src: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
         let (width, inital_scale, scale) = get_line_width(total, full_width);
-        Self::shared(src, dst, full_width, total, width, inital_scale, scale)
+        Self::shared(
+            src,
+            dst,
+            full_width * HALF,
+            total,
+            width,
+            inital_scale,
+            scale,
+        )
     }
 }
 
@@ -103,27 +120,36 @@ impl Iterator for LineIter {
 pub struct ArcIter {
     pub a: LineIter,
     pub b: LineIter,
-    pub init: Point,
 }
 
 impl ArcIter {
     pub fn new(begin: &Point, center: &Point, end: &Point, full_width: f32, total: usize) -> Self {
         let (width, inital_scale, scale) = get_line_width(total, full_width);
-        let (d1, rad_a) = offset_from_src(center, begin, full_width);
-        let a_end = center.add_distance(&center.sub_distance(&d1));
 
-        let (d2, _) = offset_from_src(center, end, full_width);
-        let b_start = center.add_distance(&center.sub_distance(&d2));
+        let r = full_width * HALF;
 
-        let a = LineIter::shared(begin, &a_end, full_width, total, width, inital_scale, scale);
+        let a = LineIter::shared(
+            begin,
+            &offset_from_dst(begin, center, r).0,
+            r,
+            total,
+            width,
+            inital_scale,
+            scale,
+        );
 
-        let b = LineIter::shared(&b_start, end, full_width, total, width, inital_scale, scale);
+        let b = LineIter::shared(
+            &offset_from_src(center, end, r).0,
+            //center,
+            end,
+            r,
+            total,
+            width,
+            inital_scale,
+            scale,
+        );
 
-        let center_start = get_xy_r(a_end.x, a_end.y, full_width, rad_a + NINTY_DEGREES);
-        let d = center_start.get_move_distance(center);
-        let init = d.scale(inital_scale);
-
-        Self { a, b, init }
+        Self { a, b }
     }
 }
 impl Iterator for ArcIter {
@@ -131,7 +157,11 @@ impl Iterator for ArcIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         match (self.a.next(), self.b.next()) {
-            (Some(a), Some(b)) => Some((a, b)),
+            (Some((a, b)), Some((c, d))) => {
+                //return Some(((a, e), (e, d)));
+                Some(((a, b), (c, d)))
+            }
+            //(Some((a, b)), Some((c, d))) => return Some(((a, b), (c, d))),
             _ => None,
         }
     }

@@ -7,7 +7,10 @@ pub mod node;
 pub mod render;
 pub mod square;
 pub mod utils;
-use std::ops::Add;
+use std::{
+    fmt::{Display, Formatter},
+    ops::Add,
+};
 
 use js_sys::Function;
 use serde::{Deserialize, Serialize};
@@ -21,7 +24,7 @@ use crate::{
         GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH, GRID_SIZE, GRID_SLOTS, HALF, MAX_K, MIN_K,
         ONE_THIRD,
     },
-    utils::to_map_xy,
+    utils::{get_distance, get_radians, get_xy_r, to_map_xy},
 };
 
 #[wasm_bindgen]
@@ -103,6 +106,18 @@ impl Point {
     }
 }
 impl Point {
+    pub fn abs(&self) -> Self {
+        Self {
+            x: self.x.abs(),
+            y: self.y.abs(),
+        }
+    }
+    pub fn get_radians(&self, a: &Self) -> f32 {
+        get_radians(self.x, self.y, a.x, a.y)
+    }
+    pub fn get_degree(&self, a: &Self) -> f32 {
+        self.get_radians(a).to_degrees()
+    }
     pub fn get_center(&self, other: &Self) -> Self {
         Self {
             x: (self.x + other.x) * HALF,
@@ -114,6 +129,9 @@ impl Point {
             x: (self.x + a.x + b.x) * ONE_THIRD,
             y: (self.y + a.y + b.y) * ONE_THIRD,
         }
+    }
+    pub fn distance(&self, b: &Self) -> f32 {
+        get_distance(self.x, self.y, b.x, b.y)
     }
     pub fn to_map_xy(&self, t: &Transform) -> Self {
         to_map_xy(&self, t)
@@ -137,6 +155,10 @@ impl Point {
             x: self.x * scale,
             y: self.y * scale,
         }
+    }
+
+    pub fn get_xy(&self, r: f32, rad: f32) -> Point {
+        get_xy_r(self.x, self.y, r, rad)
     }
 
     pub fn idx(&self, step: i64) -> (i64, i64) {
@@ -231,5 +253,11 @@ impl DiagramOpt {
             frame_rate: DEFAULT_FRAMERATE,
             animate: true,
         }
+    }
+}
+
+impl Display for Point {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "(X: {0:.2}, Y: {1:.2})", self.x, self.y)
     }
 }

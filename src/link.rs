@@ -129,15 +129,6 @@ pub enum LineAnimation {
 }
 pub type ComputedLink = (Point, Point, Option<LinePoint>);
 
-pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
-    let incremental_scale = 1.0 / total_links as f32;
-    let (virtual_count, inital_scale) = match total_links {
-        1 => (2.0, 0.5),
-        _ => (total_links as f32 * 2.0 - 1.0, incremental_scale * 0.5),
-    };
-    let link_width = full_width / virtual_count;
-    (link_width, inital_scale, incremental_scale)
-}
 impl LinkSet {
     pub fn compute_bunlde_points(&self, src: &Point, dst: &Point) -> Vec<Point> {
         let mut points = Vec::with_capacity(self.bundles.len());
@@ -350,7 +341,7 @@ impl LinkContainer {
                             return LookupPointResult::Arc(self.id);
                         }
                         for i in 0..self.ls.links.len() {
-                            for o in 0..3 {
+                            for o in 0..2 {
                                 let id = i * 2 + o;
                                 let link = &dd.links[id];
                                 if o == 0 {

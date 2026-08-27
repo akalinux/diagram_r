@@ -17,7 +17,7 @@ use crate::{
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{get_xy_r, normalize_rad},
+    utils::normalize_rad,
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -298,8 +298,8 @@ impl CanvasRender {
         let p = match o.label_position {
             // _ => center.scale(1.0 / scale),
             LabelPosition::Center => center,
-            LabelPosition::Bottom => get_xy_r(center.x, center.y, r, new_rad + R_90),
-            LabelPosition::Top => get_xy_r(center.x, center.y, r, new_rad + R_270),
+            LabelPosition::Bottom => center.get_xy(r, new_rad + R_90),
+            LabelPosition::Top => center.get_xy(r, new_rad + R_270),
         };
 
         Ok((p, scale * HALF))
@@ -326,7 +326,7 @@ impl CanvasRender {
         let (p, scale) =
             self.get_link_text_point_and_scale(src, dst, line_width, new_rad, o, font_height)?;
         if highlight {
-            let start = get_xy_r(p.x, p.y, fw as f32 * HALF * scale, new_rad);
+            let start = p.get_xy(fw as f32 * HALF * scale, new_rad);
             let end = p.add_distance(&start.get_move_distance(&p));
             self.draw_line(
                 &start,
@@ -343,9 +343,8 @@ impl CanvasRender {
         let y = p.y * t.k + t.y;
         let ctx = &self.ctx;
 
-        let angle = new_rad.to_radians();
-        let k = (full_scale * angle.cos()) as f64;
-        let r = (full_scale * angle.sin()) as f64;
+        let k = (full_scale * new_rad.cos()) as f64;
+        let r = (full_scale * new_rad.sin()) as f64;
         ctx.set_transform(k as f64, r, -r, k as f64, x as f64, y as f64)?;
 
         self.draw_text(0 as f64, 0 as f64, text, &opt.font_color)?;

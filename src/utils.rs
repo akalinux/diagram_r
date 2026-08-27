@@ -143,3 +143,28 @@ pub fn normalize_rad(rad: f32) -> (f32, bool) {
         false => (rad, false),
     }
 }
+
+pub fn get_abc_from_points(begin: &Point, end: &Point) -> (f32, f32, f32) {
+    let a = end.y - begin.y;
+    let b = begin.x - end.x;
+    let c = a * begin.x + b * begin.y;
+    (a, b, c)
+}
+
+pub fn get_intersection(
+    start1: &Point,
+    end1: &Point,
+    start2: &Point,
+    end2: &Point,
+) -> Option<Point> {
+    let (a1, b1, c1) = get_abc_from_points(start1, end1);
+    let (a2, b2, c2) = get_abc_from_points(start2, end2);
+
+    let d = a1 * b2 - a2 * b1;
+    if d.abs() < f32::EPSILON {
+        return None;
+    }
+    let x = (c1 * b2 - c2 * b1) / d;
+    let y = (a1 * c2 - a2 * c1) / d;
+    Some(Point { x, y })
+}

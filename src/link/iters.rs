@@ -56,6 +56,25 @@ impl FullBoxAccumulate {
         unsafe { self.0.unwrap_unchecked() }
     }
 }
+
+fn builder(
+    src: &Point,
+    dst: &Point,
+    r: f32,
+    inital_scale: f32,
+    scale: f32,
+    offset: f32,
+) -> (Point, Point, Point) {
+    let left = src.get_point(dst, r, offset);
+    let d = left.get_move_distance(src);
+
+    let distance = d.scale(2.0);
+
+    let init = distance.scale(inital_scale);
+    let chunk = distance.scale(scale);
+    let start = left.add_distance(&init);
+    (start, init, chunk)
+}
 impl LineIter {
     pub fn shared(
         src: &Point,
@@ -66,19 +85,8 @@ impl LineIter {
         inital_scale: f32,
         scale: f32,
     ) -> Self {
-        let rad = get_radians(src.x, src.y, dst.x, dst.y);
-        let north = rad + R_90;
-        let left = get_xy_r(src.x, src.y, r, north);
-
-        let d = left.get_move_distance(src);
-
-        let right = dst.sub_distance(&d);
-        let distance = d.scale(2.0);
-
-        let init = distance.scale(inital_scale);
-        let chunk = distance.scale(scale);
-        let start = left.add_distance(&init);
-        let end = right.add_distance(&init);
+        let (start, init, chunk) = builder(src, dst, r, inital_scale, scale, R_90);
+        let end = start.add_distance(&src.get_move_distance(dst));
         Self {
             start,
             end,
@@ -147,15 +155,11 @@ impl Display for NextPointSet {
 
 impl NextPointSet {
     pub fn new(src: &Point, dst: &Point, r: f32, init_scale: f32, scale: f32, offset: f32) -> Self {
-        let d = src.get_distance_vec(dst, r, offset).scale(2.0);
-        let init = d.scale(init_scale);
-        let chunk = d.scale(scale);
-        let distance = dst.get_move_distance(src);
-        let root = src.sub_distance(&init);
+        let (root, init, chunk) = builder(src, dst, r, init_scale, scale, offset);
         Self {
             root,
             chunk,
-            distance,
+            distance: src.get_move_distance(dst),
             init,
         }
     }
@@ -199,11 +203,15 @@ impl Iterator for ArcIter {
                 let b = self.b.point(i);
                 let m1 = self.slope_a;
                 let m2 = self.slope_b;
+                let mc = m1 - m2;
+                if mc == 0.0 {
+                    return Some((a, a.get_center(&b), b));
+                }
                 let x1 = a.x;
                 let x2 = b.x;
                 let y1 = a.y;
                 let y2 = b.y;
-                let x = (m1 * x1 - m2 * x2 - y1 + y2) / (m1 - m2);
+                let x = (m1 * x1 - m2 * x2 - y1 + y2) / (mc);
                 let y = m1 * (x - x1) + y1;
 
                 let c = Point::new(x, y);

@@ -154,6 +154,9 @@ impl CoreRender for CanvasRender {
 
             self.draw_sublink(lc, set.element, diagram, opt, &t, true)?;
         }
+        if let Some(id) = &highlights.arc {
+            self.draw_link_arc_highlight(*id, diagram, opt)?;
+        }
         for set in &highlights.bundles {
             let link = &link_vec[set.link];
             let bundle = &link.ls.bundles[set.element];
@@ -353,6 +356,17 @@ impl CanvasRender {
         Ok(())
     }
 
+    fn draw_link_arc_highlight(
+        &self,
+        link_id: usize,
+        diagram: &DiagramCore,
+        opt: &DiagramOpt,
+    ) -> Result<(), JsValue> {
+        let lc = &diagram.links.borrow()[link_id];
+        let r = lc.draw_data.line_width;
+        let p = unsafe { &lc.ls.point.unwrap_unchecked() };
+        self.draw_arc(&p.point, &opt.highlight_color, r)
+    }
     fn draw_arc(&self, p: &Point, color: &String, width: f32) -> Result<(), JsValue> {
         let ctx = &self.ctx;
         ctx.begin_path();

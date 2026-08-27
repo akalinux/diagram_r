@@ -181,8 +181,10 @@ impl Point {
         }
     }
     pub fn get_distance_vec(&self, dst: &Self, r: f32, offset_rad: f32) -> Point {
-        self.get_point(dst, r, offset_rad).get_move_distance(self)
+        let p = self.get_point(dst, r, offset_rad);
+        self.get_move_distance(&p)
     }
+
     pub fn idx(&self, step: i64) -> (i64, i64) {
         let mut x = self.x as i64;
         let mut y = self.y as i64;

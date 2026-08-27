@@ -161,6 +161,7 @@ pub enum CoreMouseEvent {
     MouseOverLink(LinkAndElement),
     MouseOverBundle(LinkAndElement),
     MoseOverNode(usize),
+    MouseOverArc(usize),
     MoseOverBox(usize),
     TransForm(Transform),
     Moved(MovedElements),
@@ -612,6 +613,7 @@ impl DiagramCore {
                     let np = this.borrow().to_map_xy(p);
                     let res = this.borrow().contains_point(&np);
                     let event = match &res {
+                        LookupPointResult::Arc(id) => CoreMouseEvent::MouseOverArc(*id),
                         LookupPointResult::Box(id) => CoreMouseEvent::MoseOverBox(*id),
                         LookupPointResult::Node(id) => CoreMouseEvent::MoseOverNode(*id),
                         LookupPointResult::Link(id) => {

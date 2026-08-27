@@ -4,7 +4,7 @@ mod common;
 use approx::assert_relative_eq;
 use diagram_r::{
     Point,
-    constants::{R_270, ZERO_POINT},
+    constants::{R_90, R_270, ZERO_POINT},
     utils::{full_box_from, inside_box},
 };
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -42,4 +42,11 @@ fn inside_box_tests() {
     assert!(inside_box(&pbox, &Point::new(5.0, 2.5)));
     // outside
     assert!(!inside_box(&pbox, &Point::new(15.0, 2.5)));
+}
+
+#[test]
+fn test_point_arc_move() {
+    let dst = Point::new(10.0, 0.0);
+    let p = dst.get_distance_vec(&ZERO_POINT, 5.0, 0.0);
+    assert_point!(p, Point::new(5.0, 0.0), 0.001);
 }

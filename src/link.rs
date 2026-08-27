@@ -256,6 +256,7 @@ impl Bundle {
 }
 
 pub type SubLink = (Point, Point, LineAnimation);
+
 #[derive(Debug, PartialEq)]
 pub struct DrawData {
     pub line_width: f32,

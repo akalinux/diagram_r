@@ -466,7 +466,7 @@ impl CanvasRender {
                 self.draw_line(a, b, *width, color);
                 self.ctx.set_line_dash(&Array::new())?;
             }
-            LineAnimation::None => (),
+            _ => (),
         }
 
         Ok(())

@@ -98,34 +98,13 @@ impl LinkSet {
     }
 }
 
-pub fn compute_animation(
-    link: &Link,
-    clink: &ComputedLink,
-    width: f32,
-    d: &Point,
-) -> LineAnimation {
-    match link.animation {
-        Animation::Both => {
-            let new_width = width * HALF;
-
-            LineAnimation::Both(
-                new_width,
-                clink.0.sub_distance(&d),
-                clink.1.sub_distance(&d),
-                clink.1.add_distance(&d),
-                clink.0.add_distance(&d),
-            )
-        }
-        Animation::ToSrc => LineAnimation::Side(width, clink.1, clink.0),
-        Animation::ToDst => LineAnimation::Side(width, clink.0, clink.1),
-        _ => LineAnimation::None,
-    }
-}
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LineAnimation {
     None,
     Both(f32, Point, Point, Point, Point),
     Side(f32, Point, Point),
+    BothArc(f32, Point, Point, Point),
+    SideArc(f32, Point, Point, Point),
 }
 pub type ComputedLink = (Point, Point, Option<LinePoint>);
 
@@ -158,6 +137,30 @@ impl LinkSet {
         points
     }
 
+    pub fn compute_animation(
+        &self,
+        link: &Link,
+        clink: &ComputedLink,
+        width: f32,
+        d: &Point,
+    ) -> LineAnimation {
+        match link.animation {
+            Animation::Both => {
+                let new_width = width * HALF;
+
+                LineAnimation::Both(
+                    new_width,
+                    clink.0.sub_distance(&d),
+                    clink.1.sub_distance(&d),
+                    clink.1.add_distance(&d),
+                    clink.0.add_distance(&d),
+                )
+            }
+            Animation::ToSrc => LineAnimation::Side(width, clink.1, clink.0),
+            Animation::ToDst => LineAnimation::Side(width, clink.0, clink.1),
+            _ => LineAnimation::None,
+        }
+    }
     pub fn build_draw_data(&self, src: &Node, dst: &Node, opt: &DiagramOpt) -> DrawData {
         let src_p = src.layout.get_center();
         let dst_p = dst.layout.get_center();
@@ -174,8 +177,12 @@ impl LinkSet {
                     let link = &self.links[i];
                     accumulate.step(&a);
                     accumulate.step(&b);
-                    let animation =
-                        compute_animation(link, &(a, b, None), width * HALF, &animation_distance);
+                    let animation = self.compute_animation(
+                        link,
+                        &(a, b, None),
+                        width * HALF,
+                        &animation_distance,
+                    );
                     links.push((a, b, animation));
                 }
                 (links, width)
@@ -197,7 +204,7 @@ impl LinkSet {
                         (a, b, animation_distance_start),
                         (b, c, animation_distance_end),
                     ] {
-                        let animation = compute_animation(
+                        let animation = self.compute_animation(
                             link,
                             &(a, b, None),
                             width * HALF,
@@ -291,6 +298,7 @@ impl DrawData {
                     *a = a.add_distance(distance);
                     *b = b.add_distance(distance);
                 }
+                _ => (),
             }
         }
         for bundle in &mut self.bundles {

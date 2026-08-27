@@ -171,12 +171,20 @@ pub enum CoreMouseEvent {
 pub struct MovedElements {
     pub nodes: Vec<NodeChanges>,
     pub boxes: Vec<NodeChanges>,
+    pub links: Vec<LinkChanges>,
 }
 #[wasm_bindgen(inspectable)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NodeChanges {
     pub id: usize,
     pub layout: Square,
+}
+
+#[wasm_bindgen(inspectable)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LinkChanges {
+    id: usize,
+    point: Point,
 }
 impl DiagramCore {
     pub fn contains_point(&self, p: &Point) -> LookupPointResult {
@@ -437,7 +445,7 @@ impl DiagramCore {
             let _ = self.render();
         }
     }
-    pub fn move_nodes(&self, distance: &Point, node_ids: &[MoveTarget]) {
+    pub fn move_targets(&self, distance: &Point, node_ids: &[MoveTarget]) {
         let mut links = FxHashSet::default();
         let mut upodated_nodes = FxHashSet::default();
         upodated_nodes.reserve(node_ids.len());
@@ -668,6 +676,7 @@ impl DiagramCore {
         if let CurrentTarget::Move(g, _) = res {
             let mut nodes = Vec::new();
             let mut boxes = Vec::new();
+            let mut links = Vec::new();
             for o in g {
                 match o {
                     MoveTarget::Box(b) => boxes.push(NodeChanges {
@@ -678,11 +687,22 @@ impl DiagramCore {
                         id: b,
                         layout: self.nodes.borrow()[b].0.layout,
                     }),
-                    // TODO
-                    MoveTarget::Link(_) => continue,
+                    MoveTarget::Link(id) => links.push(LinkChanges {
+                        id,
+                        point: unsafe {
+                            let links = self.links.borrow();
+                            let p = links[id].ls.point.as_ref().unwrap_unchecked();
+                            let res = *&p.point;
+                            res
+                        },
+                    }),
                 }
             }
-            let moved = MovedElements { nodes, boxes };
+            let moved = MovedElements {
+                nodes,
+                boxes,
+                links,
+            };
             self.run_callback(CoreMouseEvent::Moved(moved), p);
         }
     }
@@ -757,7 +777,7 @@ impl DiagramCore {
         let distance = &op
             .get_move_distance(p)
             .scale(1.0 / self.transform.borrow().k);
-        self.move_nodes(&distance, nodes);
+        self.move_targets(&distance, nodes);
         *op = *p;
         let _ = self.render();
         true

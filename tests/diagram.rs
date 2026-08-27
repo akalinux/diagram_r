@@ -205,7 +205,7 @@ fn test_move_box() {
     test_points(Rc::clone(&diagram), ZERO_POINT);
     let distance = &Point { x: 5.0, y: 5.0 };
 
-    diagram.borrow_mut().move_nodes(
+    diagram.borrow_mut().move_targets(
         distance,
         &[MoveTarget::Box(0), MoveTarget::Node(0), MoveTarget::Node(1)],
     );

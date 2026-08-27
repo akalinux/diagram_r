@@ -10,14 +10,14 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::{CANVAS_ERROR, HALF},
+    constants::{CANVAS_ERROR, HALF, R_90, R_270},
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::{ArcType, LineAnimation, LinkContainer},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{get_angle, get_xy, normalize_angle},
+    utils::{get_xy_r, normalize_rad},
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -287,7 +287,7 @@ impl CanvasRender {
         src: &Point,
         dst: &Point,
         height: f32,
-        new_angle: f32,
+        new_rad: f32,
         o: &ElementOpt,
         font_height: f32,
     ) -> Result<(Point, f32), JsValue> {
@@ -298,8 +298,8 @@ impl CanvasRender {
         let p = match o.label_position {
             // _ => center.scale(1.0 / scale),
             LabelPosition::Center => center,
-            LabelPosition::Bottom => get_xy(center.x, center.y, r, new_angle + 90.0),
-            LabelPosition::Top => get_xy(center.x, center.y, r, new_angle + 270.0),
+            LabelPosition::Bottom => get_xy_r(center.x, center.y, r, new_rad + R_90),
+            LabelPosition::Top => get_xy_r(center.x, center.y, r, new_rad + R_270),
         };
 
         Ok((p, scale * HALF))
@@ -312,7 +312,7 @@ impl CanvasRender {
         o: &ElementOpt,
         text: &String,
         line_width: f32,
-        new_angle: f32,
+        new_rad: f32,
         opt: &DiagramOpt,
         t: &Transform,
         highlight: bool,
@@ -324,9 +324,9 @@ impl CanvasRender {
         let (fw, fh) = self.get_text_size(text)?;
         let font_height = fh as f32;
         let (p, scale) =
-            self.get_link_text_point_and_scale(src, dst, line_width, new_angle, o, font_height)?;
+            self.get_link_text_point_and_scale(src, dst, line_width, new_rad, o, font_height)?;
         if highlight {
-            let start = get_xy(p.x, p.y, fw as f32 * HALF * scale, new_angle);
+            let start = get_xy_r(p.x, p.y, fw as f32 * HALF * scale, new_rad);
             let end = p.add_distance(&start.get_move_distance(&p));
             self.draw_line(
                 &start,
@@ -343,7 +343,7 @@ impl CanvasRender {
         let y = p.y * t.k + t.y;
         let ctx = &self.ctx;
 
-        let angle = new_angle.to_radians();
+        let angle = new_rad.to_radians();
         let k = (full_scale * angle.cos()) as f64;
         let r = (full_scale * angle.sin()) as f64;
         ctx.set_transform(k as f64, r, -r, k as f64, x as f64, y as f64)?;
@@ -429,8 +429,8 @@ impl CanvasRender {
             false => self.draw_link_animations(animations, &opt.animation_color)?,
             true => (),
         };
-        let angle = get_angle(a.x, a.y, b.x, b.y);
-        let (normalized_angle, _) = normalize_angle(angle);
+        let rad = a.get_radians(b);
+        let (normalized_angle, _) = normalize_rad(rad);
         self.draw_link_text(a, b, o, text, width, normalized_angle, opt, t, highlight)
     }
 

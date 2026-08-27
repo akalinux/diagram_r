@@ -2,7 +2,7 @@ use js_sys::Number;
 
 use crate::{
     Point, Transform,
-    constants::{AREA_SCALE_EPSILON, R_360},
+    constants::{AREA_SCALE_EPSILON, HALF, R_90, R_180, R_270, R_360},
     square::Corners,
 };
 
@@ -24,10 +24,6 @@ pub fn to_fixed_px(n: f32) -> String {
     str
 }
 
-pub fn get_xy(cx: f32, cy: f32, r: f32, degree: f32) -> Point {
-    let rad = degree.to_radians();
-    get_xy_r(cx, cy, r, rad)
-}
 pub fn get_xy_r(cx: f32, cy: f32, r: f32, rad: f32) -> Point {
     let x = cx + r * rad.cos();
     let y = cy + r * rad.sin();
@@ -44,16 +40,8 @@ pub fn get_radians(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     }
 }
 
-pub fn get_angle(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
-    let base = get_radians(x1, y1, x2, y2).to_degrees();
-    match base < 0.0 {
-        true => base + 360.0,
-        false => base,
-    }
-}
-
 pub fn triangle_area(x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) -> f32 {
-    return (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)).abs() * 0.5;
+    return (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)).abs() * HALF;
 }
 
 /// Provides the [Corners] from the given 4 [Point] instances.
@@ -80,13 +68,13 @@ pub fn compute_line_box(ne: &Point, points: &[&Point]) -> Corners {
 }
 
 pub fn north_box_from(a: &Point, b: &Point, r: f32) -> (Point, Point, Point, f32, f32) {
-    let angle = get_angle(a.x, a.y, b.x, b.y);
-    let north = angle + 90.0;
-    let nw = get_xy(a.x, a.y, r, north);
+    let rad = a.get_radians(b);
+    let north = rad + R_90;
+    let nw = get_xy_r(a.x, a.y, r, north);
     let distance = nw.get_move_distance(&a);
 
     let ne = b.sub_distance(&distance);
-    (nw, ne, distance, north, angle)
+    (nw, ne, distance, north, rad)
 }
 pub fn full_box_from(a: &Point, b: &Point, r: f32) -> (FullBox, (Point, f32, f32)) {
     let (nw, ne, distance, north, angle) = north_box_from(a, b, r);
@@ -124,9 +112,9 @@ pub fn get_distance_square(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
 }
 
 pub fn compute_r_for_even_space_on_circle(r: f32, points: f32) -> f32 {
-    let degree = 360.0 / points;
-    let a = get_xy(0.0, 0.0, r, 0.0);
-    let b = get_xy(0.0, 0.0, r, degree);
+    let rad = R_360 / points;
+    let a = get_xy_r(0.0, 0.0, r, 0.0);
+    let b = get_xy_r(0.0, 0.0, r, rad);
     let cmp = get_distance(a.x, a.y, b.x, b.y);
     let scale = r / cmp;
     return r * scale;
@@ -145,12 +133,13 @@ pub fn to_screen_xy(p: &Point, t: &Transform) -> Point {
     return Point { x, y };
 }
 
-pub fn angle_needs_normalization(angle: f32) -> bool {
-    angle >= 90.0 && angle <= 270.0
+pub fn rad_needs_normalization(angle: f32) -> bool {
+    angle >= R_90 && angle <= R_270
 }
-pub fn normalize_angle(angle: f32) -> (f32, bool) {
-    match angle_needs_normalization(angle) {
-        true => (angle + 180.0, true),
-        false => (angle, false),
+
+pub fn normalize_rad(rad: f32) -> (f32, bool) {
+    match rad_needs_normalization(rad) {
+        true => (rad + R_180, true),
+        false => (rad, false),
     }
 }

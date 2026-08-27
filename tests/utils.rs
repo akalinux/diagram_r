@@ -4,21 +4,12 @@ mod common;
 use approx::assert_relative_eq;
 use diagram_r::{
     Point,
-    constants::ZERO_POINT,
-    utils::{full_box_from, get_angle, inside_box},
+    constants::{R_270, ZERO_POINT},
+    utils::{full_box_from, inside_box},
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
 use crate::common::full_testbox2;
-
-#[wasm_bindgen_test]
-#[test]
-fn angle_test() {
-    let start = ZERO_POINT;
-    let end = Point::new(5.0, 0.0);
-    let angle = get_angle(start.x, start.y, end.x, end.y);
-    assert_relative_eq!(angle, 180.0, epsilon = 0.001);
-}
 
 #[test]
 #[wasm_bindgen_test]
@@ -26,8 +17,8 @@ fn full_box_from_testx() {
     let a = Point::new(0.0, 2.5);
     let b = Point::new(10.0, 2.5);
     let r = 2.5;
-    let ((nw, ne, sw, se), (distance, angle, _)) = full_box_from(&a, &b, r);
-    assert_relative_eq!(angle, 270.0, epsilon = 0.001);
+    let ((nw, ne, sw, se), (distance, rad, _)) = full_box_from(&a, &b, r);
+    assert_relative_eq!(rad, R_270, epsilon = 0.001);
     assert_relative_eq!(distance.y, 2.5, epsilon = 0.001);
     assert_relative_eq!(distance.x, 0.0, epsilon = 0.001);
     for (new, ctrl) in [

@@ -2,7 +2,7 @@ use js_sys::Number;
 
 use crate::{
     Point, Transform,
-    constants::{AREA_SCALE_EPSILON, ONE_HUNDRED_EIGHTY_DEGREES, THREE_SIXTY},
+    constants::{AREA_SCALE_EPSILON, R_360},
     square::Corners,
 };
 
@@ -39,7 +39,7 @@ pub fn get_radians(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     let dy = y1 - y2;
     let base = dy.atan2(dx);
     match base < 0.0 {
-        true => base + THREE_SIXTY,
+        true => base + R_360,
         false => base,
     }
 }
@@ -153,16 +153,4 @@ pub fn normalize_angle(angle: f32) -> (f32, bool) {
         true => (angle + 180.0, true),
         false => (angle, false),
     }
-}
-
-pub fn offset_from_src(src: &Point, dst: &Point, r: f32) -> (Point, f32) {
-    let base = get_radians(dst.x, dst.y, src.x, src.y);
-
-    (get_xy_r(src.x, src.y, r, base), base)
-}
-pub fn offset_from_dst(src: &Point, dst: &Point, r: f32) -> (Point, f32) {
-    //let base = get_radians(src.x, src.y, dst.x, dst.y) + ONE_HUNDRED_EIGHTY_DEGREES;
-    let base = get_radians(src.x, src.y, dst.x, dst.y);
-
-    (get_xy_r(dst.x, dst.y, r, base), base)
 }

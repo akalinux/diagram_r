@@ -180,22 +180,22 @@ impl LinkSet {
                 }
                 (links, width)
             }
+
             Some(lp) => {
                 // unlke the above block, this generates 3 lines for every one link provided!!!
                 let mut links = Vec::with_capacity(self.links.len() * 3);
                 let iter = ArcIter::new(&src_p, &lp.point, &dst_p, side, self.links.len());
-                let width = iter.a.width;
+                let width = iter.width;
                 let animation_distance_start = iter.a.init.scale(0.25);
                 let animation_distance_end = iter.b.init.scale(0.25);
-                for (i, ((a, b), (c, d))) in iter.enumerate() {
+                for (i, (a, b, c)) in iter.enumerate() {
                     let link = &self.links[i];
                     accumulate.step(&a);
                     accumulate.step(&b);
                     accumulate.step(&c);
-                    accumulate.step(&d);
                     for (a, b, animation_distance) in [
                         (a, b, animation_distance_start),
-                        (c, d, animation_distance_end),
+                        (b, c, animation_distance_end),
                     ] {
                         let animation = compute_animation(
                             link,

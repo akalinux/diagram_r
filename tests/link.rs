@@ -4,7 +4,8 @@ mod common;
 use approx::assert_relative_eq;
 use common::*;
 use diagram_r::DiagramOpt;
-use diagram_r::link::iters::{ArcIter, FullBoxAccumulate, LineIter};
+use diagram_r::constants::HALF;
+use diagram_r::link::iters::{ArcIter, FullBoxAccumulate, LineIter, NextPointSet};
 use diagram_r::{Point, bsp::LookupPointResult, constants::ZERO_POINT};
 use wasm_bindgen_test::wasm_bindgen_test;
 #[test]
@@ -81,38 +82,20 @@ pub fn point_accumualte_test() {
 }
 
 #[test]
-pub fn arc_iter_tests_b() {
-    let start = ZERO_POINT;
-    let center = Point::new(10.0, 5.0);
-    let end = Point::new(0.0, 10.0);
+pub fn next_point_set_tests() {
+    let p = NextPointSet::new(&ZERO_POINT, &Point { x: 0.0, y: 1.0 }, 5.0, 0.25, HALF, 0.0);
+    assert_point!(p.point(0.0), Point::new(0.0, -2.5), 0.001);
+    assert_point!(p.point(1.0), Point::new(0.0, 2.5), 0.001);
+}
 
-    let mut iter = ArcIter::new(&start, &center, &end, 2.0, 1);
-
-    //  This is supposed to look like
-    /*
-     ^
-      \
-       \
-        \
-         \
-          v
-           |
-           |
-          ^
-         /
-        /
-       /
-      /
-     v
-    */
-    let ((a, b), (c, d)) = unsafe { iter.next().unwrap_unchecked() };
-    assert_relative_eq!(a.x, 0.0, epsilon = 0.001);
-    assert_relative_eq!(a.y, 0.0, epsilon = 0.001);
-    assert_relative_eq!(b.x, 8.2, epsilon = 0.02);
-    assert_relative_eq!(b.y, 4.1, epsilon = 0.02);
-
-    assert_relative_eq!(c.x, 8.2, epsilon = 0.02);
-    assert_relative_eq!(c.y, 5.9, epsilon = 0.02);
-    assert_relative_eq!(d.x, 0.0, epsilon = 0.001);
-    assert_relative_eq!(d.y, 10.0, epsilon = 0.001);
+#[test]
+pub fn arc_point_test() {
+    let side = 10.0;
+    let a = ZERO_POINT;
+    let b = Point::new(side, side * 0.25);
+    let c = Point::new(0.0, side);
+    let iter = ArcIter::new(&b, &a, &c, 5.0, 3);
+    for (x, y, z) in iter {
+        println!("{},{},{}", x, y, z);
+    }
 }

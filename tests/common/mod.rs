@@ -87,3 +87,11 @@ pub fn test_lc_b1_l3(
     let ls = LinkSet::new(vec![a, b, d], vec![c], ids.0, ids.1, None);
     LinkContainer::new(ls, src, dst, opt, id)
 }
+
+#[macro_export]
+macro_rules! assert_point {
+    ($a:expr,$b:expr,$e:expr) => {
+        assert_relative_eq!($a.x, $b.x, epsilon = $e);
+        assert_relative_eq!($a.y, $b.y, epsilon = $e);
+    };
+}

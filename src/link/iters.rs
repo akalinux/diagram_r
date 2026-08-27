@@ -1,10 +1,10 @@
-use std::mem::offset_of;
+use std::fmt::Display;
 
 use crate::{
     Point,
-    constants::{HALF, NINTY_DEGREES},
+    constants::{HALF, R_90, R_270},
     square::Corners,
-    utils::{get_radians, get_xy_r, offset_from_dst, offset_from_src},
+    utils::{get_radians, get_xy_r},
 };
 
 pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
@@ -67,7 +67,7 @@ impl LineIter {
         scale: f32,
     ) -> Self {
         let rad = get_radians(src.x, src.y, dst.x, dst.y);
-        let north = rad + NINTY_DEGREES;
+        let north = rad + R_90;
         let left = get_xy_r(src.x, src.y, r, north);
 
         let d = left.get_move_distance(src);
@@ -118,51 +118,99 @@ impl Iterator for LineIter {
 }
 
 pub struct ArcIter {
-    pub a: LineIter,
-    pub b: LineIter,
+    pub a: NextPointSet,
+    pub b: NextPointSet,
+    pub width: f32,
+    pub pos: usize,
+    pub total: usize,
+    pub slope_a: f32,
+    pub slope_b: f32,
+}
+
+#[derive(Debug)]
+pub struct NextPointSet {
+    pub root: Point,
+    pub distance: Point,
+    pub init: Point,
+    pub chunk: Point,
+}
+
+impl Display for NextPointSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Root: {}, Init: {}, Chunk: {}, Distance: {}",
+            self.root, self.init, self.chunk, self.distance
+        )
+    }
+}
+
+impl NextPointSet {
+    pub fn new(src: &Point, dst: &Point, r: f32, init_scale: f32, scale: f32, offset: f32) -> Self {
+        let d = src.get_distance_vec(dst, r, offset).scale(2.0);
+        let init = d.scale(init_scale);
+        let chunk = d.scale(scale);
+        let distance = dst.get_move_distance(src);
+        let root = src.sub_distance(&init);
+        Self {
+            root,
+            chunk,
+            distance,
+            init,
+        }
+    }
+    pub fn point(&self, scale: f32) -> Point {
+        self.root.add_distance(&self.chunk.scale(scale))
+    }
+    pub fn line(&self, scale: f32) -> (Point, Point) {
+        let p = self.point(scale);
+        (p, p.add_distance(&self.distance))
+    }
 }
 
 impl ArcIter {
-    pub fn new(begin: &Point, center: &Point, end: &Point, full_width: f32, total: usize) -> Self {
+    pub fn new(src: &Point, center: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
         let (width, inital_scale, scale) = get_line_width(total, full_width);
-
         let r = full_width * HALF;
 
-        let a = LineIter::shared(
-            begin,
-            &offset_from_dst(begin, center, r).0,
-            r,
-            total,
-            width,
-            inital_scale,
-            scale,
-        );
+        let a = NextPointSet::new(src, center, r, inital_scale, scale, R_90);
+        let b = NextPointSet::new(dst, center, r, inital_scale, scale, R_270);
 
-        let b = LineIter::shared(
-            &offset_from_src(center, end, r).0,
-            //center,
-            end,
-            r,
-            total,
+        Self {
             width,
-            inital_scale,
-            scale,
-        );
-
-        Self { a, b }
+            pos: 0,
+            total,
+            a,
+            b,
+            slope_a: src.slope(center),
+            slope_b: dst.slope(center),
+        }
     }
 }
 impl Iterator for ArcIter {
-    type Item = ((Point, Point), (Point, Point));
+    type Item = (Point, Point, Point);
 
     fn next(&mut self) -> Option<Self::Item> {
-        match (self.a.next(), self.b.next()) {
-            (Some((a, b)), Some((c, d))) => {
-                //return Some(((a, e), (e, d)));
-                Some(((a, b), (c, d)))
+        match self.pos < self.total {
+            true => {
+                let i = self.pos as f32;
+                self.pos += 1;
+                let a = self.a.point(i);
+                let b = self.b.point(i);
+                let m1 = self.slope_a;
+                let m2 = self.slope_b;
+                let x1 = a.x;
+                let x2 = b.x;
+                let y1 = a.y;
+                let y2 = b.y;
+                let x = (m1 * x1 - m2 * x2 - y1 + y2) / (m1 - m2);
+                let y = m1 * (x - x1) + y1;
+
+                let c = Point::new(x, y);
+
+                return Some((a, c, b));
             }
-            //(Some((a, b)), Some((c, d))) => return Some(((a, b), (c, d))),
-            _ => None,
+            false => return None,
         }
     }
 }

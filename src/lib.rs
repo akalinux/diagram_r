@@ -161,6 +161,28 @@ impl Point {
         get_xy_r(self.x, self.y, r, rad)
     }
 
+    pub fn get_point(&self, dst: &Self, r: f32, offset_rad: f32) -> Point {
+        let rad = self.get_radians(dst) + offset_rad;
+        self.get_xy(r, rad)
+    }
+
+    pub fn get_center_x(&self, b: &Self) -> f32 {
+        (self.x + b.x) * HALF
+    }
+    pub fn get_center_y(&self, b: &Self) -> f32 {
+        (self.y + b.y) * HALF
+    }
+
+    pub fn slope(&self, b: &Self) -> f32 {
+        let x = self.x - b.x;
+        match x == 0.0 {
+            true => return 0.0,
+            false => (self.y - b.y) / x,
+        }
+    }
+    pub fn get_distance_vec(&self, dst: &Self, r: f32, offset_rad: f32) -> Point {
+        self.get_point(dst, r, offset_rad).get_move_distance(self)
+    }
     pub fn idx(&self, step: i64) -> (i64, i64) {
         let mut x = self.x as i64;
         let mut y = self.y as i64;

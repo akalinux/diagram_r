@@ -4,7 +4,6 @@ use crate::{
     Point,
     constants::{HALF, R_90, R_270},
     square::Corners,
-    utils::{get_radians, get_xy_r},
 };
 
 pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
@@ -15,15 +14,6 @@ pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
     };
     let link_width = full_width / virtual_count;
     (link_width, inital_scale, incremental_scale)
-}
-pub struct LineIter {
-    pub start: Point,
-    pub end: Point,
-    pub distance: Point,
-    pub width: f32,
-    pub total: usize,
-    pub pos: usize,
-    pub init: Point,
 }
 
 pub struct FullBoxAccumulate(Option<(f32, f32, f32, f32)>);
@@ -75,39 +65,25 @@ fn builder(
     let start = left.add_distance(&init);
     (start, init, chunk)
 }
+pub struct LineIter {
+    pub np: NextPointSet,
+    pub width: f32,
+    pub total: usize,
+    pub pos: usize,
+}
+
 impl LineIter {
-    pub fn shared(
-        src: &Point,
-        dst: &Point,
-        r: f32,
-        total: usize,
-        width: f32,
-        inital_scale: f32,
-        scale: f32,
-    ) -> Self {
-        let (start, init, chunk) = builder(src, dst, r, inital_scale, scale, R_90);
-        let end = start.add_distance(&src.get_move_distance(dst));
+    pub fn new(src: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
+        let (width, inital_scale, scale) = get_line_width(total, full_width);
+        let r = full_width * HALF;
+
+        let np = NextPointSet::new(src, dst, r, inital_scale, scale, R_90);
         Self {
-            start,
-            end,
-            distance: chunk,
-            init,
-            total: total - 1,
+            np,
+            total: total,
             pos: 0,
             width,
         }
-    }
-    pub fn new(src: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
-        let (width, inital_scale, scale) = get_line_width(total, full_width);
-        Self::shared(
-            src,
-            dst,
-            full_width * HALF,
-            total,
-            width,
-            inital_scale,
-            scale,
-        )
     }
 }
 
@@ -115,13 +91,12 @@ impl Iterator for LineIter {
     type Item = (Point, Point);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos > self.total {
-            return None;
+        if self.pos < self.total {
+            let i = self.pos as f32;
+            self.pos += 1;
+            return Some(self.np.line(i));
         }
-        let i = self.pos as f32;
-        self.pos += 1;
-        let d = self.distance.scale(i);
-        Some((self.start.add_distance(&d), self.end.add_distance(&d)))
+        None
     }
 }
 
@@ -204,7 +179,7 @@ impl Iterator for ArcIter {
                 let m1 = self.slope_a;
                 let m2 = self.slope_b;
                 let mc = m1 - m2;
-                if mc == 0.0 {
+                if mc == 0.0 || m1 == 0.0 || m2 == 0.0 {
                     return Some((a, a.get_center(&b), b));
                 }
                 let x1 = a.x;
@@ -214,9 +189,7 @@ impl Iterator for ArcIter {
                 let x = (m1 * x1 - m2 * x2 - y1 + y2) / (mc);
                 let y = m1 * (x - x1) + y1;
 
-                let c = Point::new(x, y);
-
-                return Some((a, c, b));
+                return Some((a, Point::new(x, y), b));
             }
             false => return None,
         }

@@ -4,7 +4,7 @@ mod common;
 use approx::assert_relative_eq;
 use diagram_r::{
     Point,
-    constants::{R_90, R_270, ZERO_POINT},
+    constants::{R_270, ZERO_POINT},
     utils::{full_box_from, inside_box},
 };
 use wasm_bindgen_test::wasm_bindgen_test;

@@ -167,7 +167,7 @@ impl LinkSet {
         let (links, width) = match self.point {
             None => {
                 let iter = LineIter::new(&src_p, &dst_p, side, self.links.len());
-                let animation_distance = iter.init.scale(0.25);
+                let animation_distance = iter.np.init.scale(0.25);
                 let width = iter.width;
                 let mut links = Vec::with_capacity(self.links.len());
                 for (i, (a, b)) in iter.enumerate() {

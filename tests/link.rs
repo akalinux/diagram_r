@@ -47,7 +47,6 @@ fn test_line_iter() {
     let mut left = Point::new(0.0, 1.5);
     let mut right = Point::new(10.0, 1.5);
     let mut res = iter.next().unwrap();
-    print!("{:?},{:?}", res.0, res.1);
     assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
     assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
     assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
@@ -97,7 +96,9 @@ pub fn arc_point_test() {
     let iter = ArcIter::new(&a, &b, &c, 5.0, 1);
     let mut count = 0;
     for (x, y, z) in iter {
-        println!("{x},{y},{z}");
+        assert_point!(x, a, 0.001);
+        assert_point!(y, b, 0.001);
+        assert_point!(z, c, 0.001);
         count += 1;
     }
     assert_eq!(count, 1)

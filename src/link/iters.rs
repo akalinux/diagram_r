@@ -70,6 +70,7 @@ pub struct LineIter {
     pub width: f32,
     pub total: usize,
     pub pos: usize,
+    pub distance: Point,
 }
 
 impl LineIter {
@@ -83,6 +84,7 @@ impl LineIter {
             total: total,
             pos: 0,
             width,
+            distance: src.get_move_distance(dst),
         }
     }
 }
@@ -94,7 +96,9 @@ impl Iterator for LineIter {
         if self.pos < self.total {
             let i = self.pos as f32;
             self.pos += 1;
-            return Some(self.np.line(i));
+            let start = self.np.point(i);
+            let end = start.add_distance(&self.distance);
+            return Some((start, end));
         }
         None
     }
@@ -113,7 +117,6 @@ pub struct ArcIter {
 #[derive(Debug)]
 pub struct NextPointSet {
     pub root: Point,
-    pub distance: Point,
     pub init: Point,
     pub chunk: Point,
 }
@@ -122,8 +125,8 @@ impl Display for NextPointSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Root: {}, Init: {}, Chunk: {}, Distance: {}",
-            self.root, self.init, self.chunk, self.distance
+            "Root: {}, Init: {}, Chunk: {}, ",
+            self.root, self.init, self.chunk,
         )
     }
 }
@@ -131,19 +134,10 @@ impl Display for NextPointSet {
 impl NextPointSet {
     pub fn new(src: &Point, dst: &Point, r: f32, init_scale: f32, scale: f32, offset: f32) -> Self {
         let (root, init, chunk) = builder(src, dst, r, init_scale, scale, offset);
-        Self {
-            root,
-            chunk,
-            distance: src.get_move_distance(dst),
-            init,
-        }
+        Self { root, chunk, init }
     }
     pub fn point(&self, scale: f32) -> Point {
         self.root.add_distance(&self.chunk.scale(scale))
-    }
-    pub fn line(&self, scale: f32) -> (Point, Point) {
-        let p = self.point(scale);
-        (p, p.add_distance(&self.distance))
     }
 }
 

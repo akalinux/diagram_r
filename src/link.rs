@@ -4,7 +4,7 @@ use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
     constants::{HALF, ZERO_POINT},
-    link::iters::{ArcIter, FullBoxAccumulate, LineIter},
+    link::iters::{ArcIter, FullBoxAccumulate, LineIter, LineIterSet},
     node::Node,
     square::Square,
     utils::{full_box_from, inside_box, inside_circle},
@@ -167,56 +167,39 @@ impl LinkSet {
         let mut accumulate = FullBoxAccumulate::new();
         let side = src.layout.smallest_side(&dst.layout) * opt.link_scale;
 
-        let (links, width) = match self.point {
+        let (width, iter, mut links) = match &self.point {
             None => {
                 let iter = LineIter::new(&src_p, &dst_p, side, self.links.len());
-                let animation_distance = iter.np.init.scale(0.25);
                 let width = iter.width;
-                let mut links = Vec::with_capacity(self.links.len());
-                for (i, (a, b)) in iter.enumerate() {
-                    let link = &self.links[i];
-                    accumulate.step(&a);
-                    accumulate.step(&b);
-                    let animation = self.compute_animation(
-                        link,
-                        &(a, b, None),
-                        width * HALF,
-                        &animation_distance,
-                    );
-                    links.push((a, b, animation));
-                }
-                (links, width)
+                let i: Box<dyn LineIterSet> = Box::new(iter);
+                (width, i, Vec::with_capacity(self.links.len()))
             }
-
-            Some(lp) => {
-                // unlke the above block, this generates 3 lines for every one link provided!!!
-                let mut links = Vec::with_capacity(self.links.len() * 3);
-                let iter = ArcIter::new(&src_p, &lp.point, &dst_p, side, self.links.len());
+            Some(p) => {
+                let iter = ArcIter::new(&src_p, &p.point, &dst_p, side, self.links.len());
                 let width = iter.width;
-                let animation_distance_start = iter.a.init.scale(0.25);
-                let animation_distance_end = iter.b.init.scale(0.25);
-                for (i, (a, b, c)) in iter.enumerate() {
-                    let link = &self.links[i];
-                    accumulate.step(&a);
-                    accumulate.step(&b);
-                    accumulate.step(&c);
-                    for (a, b, animation_distance) in [
-                        (a, b, animation_distance_start),
-                        (b, c, animation_distance_end),
-                    ] {
-                        let animation = self.compute_animation(
-                            link,
-                            &(a, b, None),
-                            width * HALF,
-                            &animation_distance,
-                        );
-                        links.push((a, b, animation));
-                    }
-                }
-
-                (links, width)
+                let i: Box<dyn LineIterSet> = Box::new(iter);
+                (width, i, Vec::with_capacity(self.links.len() * 2))
             }
         };
+        let aw = width * HALF;
+        for (link_id, (init_d, a, arc, b)) in iter.enumerate() {
+            accumulate.step(&a);
+            accumulate.step(&b);
+            let link = &self.links[link_id];
+            match arc {
+                Some((init_b, c)) => {
+                    let animation = self.compute_animation(link, &(a, c, None), aw, &init_d);
+                    links.push((a, c, animation));
+                    let animation = self.compute_animation(link, &(c, b, None), aw, &init_b);
+                    links.push((c, b, animation));
+                }
+                None => {
+                    let animation = self.compute_animation(link, &(a, b, None), aw, &init_d);
+                    links.push((a, b, animation));
+                }
+            };
+        }
+
         let bundles = self.compute_bunlde_points(&src_p, &dst_p);
         let index = Square::from(accumulate.full_box_from());
 

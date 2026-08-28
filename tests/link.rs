@@ -47,27 +47,27 @@ fn test_line_iter() {
     let mut left = Point::new(0.0, 1.5);
     let mut right = Point::new(10.0, 1.5);
     let mut res = iter.next().unwrap();
-    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
-    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
-    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
-    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
+    assert_relative_eq!(res.1.x, left.x, epsilon = 0.001);
+    assert_relative_eq!(res.3.x, right.x, epsilon = 0.001);
+    assert_relative_eq!(res.1.y, left.y, epsilon = 0.001);
+    assert_relative_eq!(res.3.y, right.y, epsilon = 0.001);
     left.y = 4.5;
     right.y = 4.5;
     res = iter.next().unwrap();
-    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
-    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
-    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
-    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
+    assert_relative_eq!(res.1.x, left.x, epsilon = 0.001);
+    assert_relative_eq!(res.3.x, right.x, epsilon = 0.001);
+    assert_relative_eq!(res.1.y, left.y, epsilon = 0.001);
+    assert_relative_eq!(res.3.y, right.y, epsilon = 0.001);
     assert!(iter.next().is_none());
 
     iter = LineIter::new(&Point::new(10.0, 3.0), &Point::new(0.0, 3.0), 6.0, 1);
     right = Point::new(0.0, 3.0);
     left = Point::new(10.0, 3.0);
     res = iter.next().unwrap();
-    assert_relative_eq!(res.0.x, left.x, epsilon = 0.001);
-    assert_relative_eq!(res.1.x, right.x, epsilon = 0.001);
-    assert_relative_eq!(res.0.y, left.y, epsilon = 0.001);
-    assert_relative_eq!(res.1.y, right.y, epsilon = 0.001);
+    assert_relative_eq!(res.1.x, left.x, epsilon = 0.001);
+    assert_relative_eq!(res.3.x, right.x, epsilon = 0.001);
+    assert_relative_eq!(res.1.y, left.y, epsilon = 0.001);
+    assert_relative_eq!(res.3.y, right.y, epsilon = 0.001);
     assert!(iter.next().is_none());
 }
 
@@ -93,13 +93,11 @@ pub fn arc_point_test() {
     let a = ZERO_POINT;
     let b = Point::new(5.0, 5.0);
     let c = Point::new(10.0, 0.0);
-    let iter = ArcIter::new(&a, &b, &c, 5.0, 1);
-    let mut count = 0;
-    for (x, y, z) in iter {
-        assert_point!(x, a, 0.001);
-        assert_point!(y, b, 0.001);
-        assert_point!(z, c, 0.001);
-        count += 1;
-    }
-    assert_eq!(count, 1)
+    let mut iter = ArcIter::new(&a, &b, &c, 5.0, 1);
+    let (_, w, set, y) = iter.next().unwrap();
+    let (_, x) = set.unwrap();
+    assert_point!(w, a, 0.001);
+    assert_point!(x, b, 0.001);
+    assert_point!(y, c, 0.001);
+    assert!(iter.next().is_none());
 }

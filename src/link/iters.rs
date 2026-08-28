@@ -64,50 +64,7 @@ fn builder(
     let init = distance.scale(inital_scale);
     let chunk = distance.scale(scale);
     let start = left.add_distance(&init);
-    (start, init, chunk)
-}
-pub struct LineIter {
-    pub np: NextPointSet,
-    pub width: f32,
-    pub total: usize,
-    pub pos: usize,
-}
-
-impl LineIter {
-    pub fn new(src: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
-        let (width, inital_scale, scale) = get_line_width(total, full_width);
-        let r = full_width * HALF;
-
-        let np = NextPointSet::new(src, dst, r, inital_scale, scale, R_90);
-        Self {
-            np,
-            total: total,
-            pos: 0,
-            width,
-        }
-    }
-}
-
-impl Iterator for LineIter {
-    type Item = (Point, Point);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.total {
-            let i = self.pos as f32;
-            self.pos += 1;
-
-            return Some(self.np.line(i));
-        }
-        None
-    }
-}
-
-pub struct ArcIter {
-    pub a: NextPointSet,
-    pub b: NextPointSet,
-    pub width: f32,
-    pub pos: usize,
-    pub total: usize,
+    (start, init.scale(0.25), chunk)
 }
 
 #[derive(Debug)]
@@ -148,6 +105,14 @@ impl NextPointSet {
     }
 }
 
+pub struct ArcIter {
+    pub a: NextPointSet,
+    pub b: NextPointSet,
+    pub width: f32,
+    pub pos: usize,
+    pub total: usize,
+}
+
 impl ArcIter {
     pub fn new(src: &Point, center: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
         let (width, inital_scale, scale) = get_line_width(total, full_width);
@@ -166,14 +131,17 @@ impl ArcIter {
     }
 }
 
+pub trait LineIterSet: Iterator<Item = (Point, Point, Option<(Point, Point)>, Point)> {}
+
 impl Iterator for ArcIter {
-    type Item = (Point, Point, Point);
+    type Item = (Point, Point, Option<(Point, Point)>, Point);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.pos < self.total {
             true => {
-                let i = self.pos as f32;
+                let pos = self.pos;
                 self.pos += 1;
+                let i = pos as f32;
                 let a = self.a.line(i);
 
                 let b = self.b.line(i);
@@ -181,9 +149,50 @@ impl Iterator for ArcIter {
                     Some(c) => c,
                     None => a.0.get_center(&b.0),
                 };
-                return Some((a.0, c, b.0));
+
+                return Some((self.a.init, a.0, Some((self.b.init, c)), b.0));
             }
             false => return None,
         }
     }
 }
+
+pub struct LineIter {
+    pub np: NextPointSet,
+    pub width: f32,
+    pub total: usize,
+    pub pos: usize,
+}
+
+impl LineIter {
+    pub fn new(src: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
+        let (width, inital_scale, scale) = get_line_width(total, full_width);
+        let r = full_width * HALF;
+
+        let np = NextPointSet::new(src, dst, r, inital_scale, scale, R_90);
+        Self {
+            np,
+            total: total,
+            pos: 0,
+            width,
+        }
+    }
+}
+
+impl Iterator for LineIter {
+    type Item = (Point, Point, Option<(Point, Point)>, Point);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos < self.total {
+            let pos = self.pos;
+            let scale = pos as f32;
+            self.pos += 1;
+
+            let (a, b) = self.np.line(scale);
+
+            return Some((self.np.init, a, None, b));
+        }
+        None
+    }
+}
+impl LineIterSet for LineIter {}
+impl LineIterSet for ArcIter {}

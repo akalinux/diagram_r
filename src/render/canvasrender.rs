@@ -456,12 +456,12 @@ impl CanvasRender {
             }
             LineAnimation::BothArc(_) => false, //TODO
             LineAnimation::SideArc(_) => false, //TODO
-            LineAnimation::JointBoth([a, b, c, d, e, f]) => {
+            LineAnimation::JointBoth(s) => {
                 let w = width * HALF;
-                self.draw_line(a, b, w, color);
-                self.draw_line(b, c, w, color);
-                self.draw_line(d, e, w, color);
-                self.draw_line(e, f, w, color);
+                for i in (0..8).step_by(2) {
+                    //for i in (4..8).step_by(2) {
+                    self.draw_line(&s[i], &s[i + 1], w, color);
+                }
                 true
             }
             LineAnimation::JointSide([a, b, c]) => {

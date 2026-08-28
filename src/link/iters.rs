@@ -4,7 +4,7 @@ use crate::{
     Point,
     constants::{HALF, R_90, R_270},
     square::Corners,
-    utils::get_intersection,
+    utils::{force_intersection, get_intersection},
 };
 
 pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
@@ -55,7 +55,7 @@ fn builder(
     inital_scale: f32,
     scale: f32,
     offset: f32,
-) -> (Point, Point, Point) {
+) -> (Point, Point) {
     let left = src.get_point(dst, r, offset);
     let d = left.get_move_distance(src);
 
@@ -64,13 +64,12 @@ fn builder(
     let init = distance.scale(inital_scale);
     let chunk = distance.scale(scale);
     let start = left.add_distance(&init);
-    (start, init.scale(0.25), chunk)
+    (start, chunk)
 }
 
 #[derive(Debug)]
 pub struct NextPointSet {
     pub root: Point,
-    pub init: Point,
     pub chunk: Point,
     pub distance: Point,
 }
@@ -79,19 +78,18 @@ impl Display for NextPointSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Root: {}, Init: {}, Chunk: {}, Distance: {}",
-            self.root, self.init, self.chunk, self.distance,
+            "Root: {}, , Chunk: {}, Distance: {}",
+            self.root, self.chunk, self.distance,
         )
     }
 }
 
 impl NextPointSet {
     pub fn new(src: &Point, dst: &Point, r: f32, init_scale: f32, scale: f32, offset: f32) -> Self {
-        let (root, init, chunk) = builder(src, dst, r, init_scale, scale, offset);
+        let (root, chunk) = builder(src, dst, r, init_scale, scale, offset);
         Self {
             root,
             chunk,
-            init,
             distance: src.get_move_distance(dst),
         }
     }
@@ -119,8 +117,13 @@ impl ArcIter {
         let r = full_width * HALF;
 
         let a = NextPointSet::new(src, center, r, inital_scale, scale, R_90);
+
         let b = NextPointSet::new(dst, center, r, inital_scale, scale, R_270);
 
+        /*b.init = dst.get_xy(
+            full_width * HALF * inital_scale,
+            src.get_radians(center) + R_90,
+        );*/
         Self {
             width,
             pos: 0,
@@ -131,10 +134,10 @@ impl ArcIter {
     }
 }
 
-pub trait LineIterSet: Iterator<Item = (Point, Point, Option<(Point, Point)>, Point)> {}
+pub trait LineIterSet: Iterator<Item = (Point, Option<Point>, Point)> {}
 
 impl Iterator for ArcIter {
-    type Item = (Point, Point, Option<(Point, Point)>, Point);
+    type Item = (Point, Option<Point>, Point);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.pos < self.total {
@@ -145,12 +148,9 @@ impl Iterator for ArcIter {
                 let a = self.a.line(i);
 
                 let b = self.b.line(i);
-                let c = match get_intersection(&a.0, &a.1, &b.0, &b.1) {
-                    Some(c) => c,
-                    None => a.0.get_center(&b.0),
-                };
+                let c = force_intersection(&a.0, &a.1, &b.0, &b.1);
 
-                return Some((self.a.init, a.0, Some((self.b.init, c)), b.0));
+                return Some((a.0, Some(c), b.0));
             }
             false => return None,
         }
@@ -180,7 +180,7 @@ impl LineIter {
 }
 
 impl Iterator for LineIter {
-    type Item = (Point, Point, Option<(Point, Point)>, Point);
+    type Item = (Point, Option<Point>, Point);
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos < self.total {
             let pos = self.pos;
@@ -189,7 +189,7 @@ impl Iterator for LineIter {
 
             let (a, b) = self.np.line(scale);
 
-            return Some((self.np.init, a, None, b));
+            return Some((a, None, b));
         }
         None
     }

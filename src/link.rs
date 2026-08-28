@@ -3,11 +3,11 @@ pub mod iters;
 use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
-    constants::{HALF, ZERO_POINT},
+    constants::{HALF, R_90, ZERO_POINT},
     link::iters::{ArcIter, FullBoxAccumulate, LineIter, LineIterSet},
     node::Node,
     square::Square,
-    utils::{full_box_from, inside_box, inside_circle},
+    utils::{force_intersection, full_box_from, inside_box, inside_circle},
 };
 pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
@@ -103,9 +103,9 @@ pub enum LineAnimation {
     None,
     Both([Point; 4]),
     Side([Point; 2]),
-    BothArc([Point; 6]),
+    BothArc([Point; 8]),
     SideArc([Point; 3]),
-    JointBoth([Point; 6]),
+    JointBoth([Point; 8]),
     JointSide([Point; 3]),
 }
 
@@ -160,37 +160,52 @@ impl LinkSet {
     pub fn compute_animation(
         &self,
         link: &Link,
-        clink: (&Point, &Point, Option<(ArcType, &Point, &Point)>),
-        d: &Point,
+        clink: (&Point, &Point, Option<(ArcType, &Point)>),
+        r: f32,
     ) -> LineAnimation {
         match clink.2 {
             None => match link.animation {
-                Animation::Both => LineAnimation::Both([
-                    clink.0.sub_distance(d),
-                    clink.1.sub_distance(d),
-                    clink.1.add_distance(d),
-                    clink.0.add_distance(d),
-                ]),
+                Animation::Both => {
+                    let d = clink
+                        .0
+                        .get_point(&clink.1, r * HALF, R_90)
+                        .get_move_distance(&clink.0);
+                    LineAnimation::Both([
+                        clink.0.sub_distance(&d),
+                        clink.1.sub_distance(&d),
+                        clink.1.add_distance(&d),
+                        clink.0.add_distance(&d),
+                    ])
+                }
                 Animation::ToSrc => LineAnimation::Side([*clink.1, *clink.0]),
                 Animation::ToDst => LineAnimation::Side([*clink.0, *clink.1]),
                 _ => LineAnimation::None,
             },
-            Some((t, c, d2)) => match t {
+            Some((t, c)) => match t {
                 ArcType::Joint => {
                     match link.animation {
                         Animation::None => LineAnimation::None,
                         Animation::ToDst => LineAnimation::JointSide([*clink.0, *c, *clink.1]),
                         Animation::ToSrc => LineAnimation::JointSide([*clink.1, *c, *clink.0]),
-                        Animation::Both => LineAnimation::JointBoth([
-                            // link1
-                            clink.0.sub_distance(d),
-                            c.sub_distance(d),
-                            clink.1.sub_distance(d),
-                            // link2
-                            clink.1.add_distance(d2),
-                            c.add_distance(d2),
-                            clink.0.add_distance(d2),
-                        ]),
+                        Animation::Both => {
+                            let r = r * HALF;
+
+                            let (src, dst, _) = clink;
+                            let d1 = src.get_distance_vec(c, r, R_90);
+                            let d2 = c.get_distance_vec(&dst, r, R_90);
+                            LineAnimation::JointBoth([
+                                // link1
+                                src.sub_distance(&d1),
+                                c.sub_distance(&d1),
+                                c.add_distance(&d1),
+                                src.add_distance(&d1),
+                                // Link 1
+                                c.sub_distance(&d2),
+                                dst.sub_distance(&d2),
+                                dst.add_distance(&d2),
+                                c.add_distance(&d2),
+                            ])
+                        }
                     }
                 }
                 ArcType::Arc => LineAnimation::None, // TODO
@@ -219,18 +234,18 @@ impl LinkSet {
                 (width, i, p.mode)
             }
         };
-        for (link_id, (init_d, a, arc, b)) in iter.enumerate() {
+        let aw = width * HALF;
+        for (link_id, (a, arc, b)) in iter.enumerate() {
             accumulate.step(&a);
             accumulate.step(&b);
             let link = &self.links[link_id];
             links.push(match arc {
                 None => {
-                    let animation = self.compute_animation(link, (&a, &b, None), &init_d);
+                    let animation = self.compute_animation(link, (&a, &b, None), aw);
                     SubLink::Line([a, b], animation)
                 }
-                Some((init_b, c)) => {
-                    let animation =
-                        self.compute_animation(link, (&a, &b, Some((mode, &c, &init_b))), &init_d);
+                Some(c) => {
+                    let animation = self.compute_animation(link, (&a, &b, Some((mode, &c))), aw);
                     match mode {
                         ArcType::Arc => SubLink::Arc([a, c, b], animation),
                         ArcType::Joint => SubLink::Joint([a, c, b], animation),

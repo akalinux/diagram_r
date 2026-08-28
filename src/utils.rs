@@ -168,3 +168,10 @@ pub fn get_intersection(
     let y = (a1 * c2 - a2 * c1) / d;
     Some(Point { x, y })
 }
+
+pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &Point) -> Point {
+    match get_intersection(start1, end1, start2, end2) {
+        Some(p) => p,
+        None => start1.get_center(start2),
+    }
+}

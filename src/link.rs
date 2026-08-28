@@ -188,20 +188,21 @@ impl LinkSet {
                         Animation::ToDst => LineAnimation::JointSide([*clink.0, *c, *clink.1]),
                         Animation::ToSrc => LineAnimation::JointSide([*clink.1, *c, *clink.0]),
                         Animation::Both => {
-                            let r = r * HALF;
+                            let r2 = r * HALF;
 
                             let (src, dst, _) = clink;
-                            let d1 = src.get_distance_vec(c, r, R_90);
-                            let d2 = c.get_distance_vec(&dst, r, R_90);
+                            let d1 = src.get_distance_vec(c, r2, R_90);
+                            let d2 = c.get_distance_vec(&dst, r2, R_90);
+
                             LineAnimation::JointBoth([
                                 // link1
                                 src.sub_distance(&d1),
                                 c.sub_distance(&d1),
-                                c.add_distance(&d1),
-                                src.add_distance(&d1),
-                                // Link 1
                                 c.sub_distance(&d2),
                                 dst.sub_distance(&d2),
+                                // Link 2
+                                c.add_distance(&d1),
+                                src.add_distance(&d1),
                                 dst.add_distance(&d2),
                                 c.add_distance(&d2),
                             ])

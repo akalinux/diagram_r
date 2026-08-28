@@ -5,6 +5,7 @@ use approx::assert_relative_eq;
 use common::*;
 use diagram_r::DiagramOpt;
 use diagram_r::constants::HALF;
+use diagram_r::link::SubLink;
 use diagram_r::link::iters::{ArcIter, FullBoxAccumulate, LineIter, NextPointSet};
 use diagram_r::{Point, bsp::LookupPointResult, constants::ZERO_POINT};
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -22,16 +23,23 @@ fn link_container_update_tests() {
     assert_relative_eq!(dd.bundles[0].y, center.y, epsilon = 0.001);
     let mut left = Point::new(0.5, 0.25);
     let mut right = Point::new(9.5, 0.25);
-    assert_relative_eq!(dd.links[0].0.x, left.x, epsilon = 0.001);
-    assert_relative_eq!(dd.links[0].1.x, right.x, epsilon = 0.001);
-    assert_relative_eq!(dd.links[0].0.y, left.y, epsilon = 0.001);
-    assert_relative_eq!(dd.links[0].1.y, right.y, epsilon = 0.001);
+    match *&dd.links[0] {
+        SubLink::Line([a, b], _) => {
+            assert_point!(a, left, 0.001);
+            assert_point!(b, right, 0.001);
+        }
+        _ => panic!("Unexpected SubLink type"),
+    }
     left.y = 0.75;
     right.y = 0.75;
-    assert_relative_eq!(dd.links[1].0.x, left.x, epsilon = 0.001);
-    assert_relative_eq!(dd.links[1].1.x, right.x, epsilon = 0.001);
-    assert_relative_eq!(dd.links[1].0.y, left.y, epsilon = 0.001);
-    assert_relative_eq!(dd.links[1].1.y, right.y, epsilon = 0.001);
+
+    match *&dd.links[1] {
+        SubLink::Line([a, b], _) => {
+            assert_point!(a, left, 0.001);
+            assert_point!(b, right, 0.001);
+        }
+        _ => panic!("Unexpected SubLink type"),
+    }
 
     let mut res = lc.contains_point(&center);
     assert_eq!(&res, &LookupPointResult::Bundle((0, 0)));

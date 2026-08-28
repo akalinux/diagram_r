@@ -13,7 +13,7 @@ use crate::{
     constants::{CANVAS_ERROR, HALF, R_90, R_270},
     diagram::DiagramCore,
     imgcache::ImgCache,
-    link::{ArcType, LineAnimation, LinkContainer},
+    link::{LineAnimation, LinkContainer, SubLink},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
@@ -363,7 +363,8 @@ impl CanvasRender {
         opt: &DiagramOpt,
     ) -> Result<(), JsValue> {
         let lc = &diagram.links.borrow()[link_id];
-        let r = lc.draw_data.line_width;
+        let width = lc.draw_data.line_width;
+        let r = HALF * width + width * lc.draw_data.links.len() as f32;
         let p = unsafe { &lc.ls.point.unwrap_unchecked() };
         self.draw_arc(&p.point, &opt.highlight_color, r)
     }
@@ -400,31 +401,26 @@ impl CanvasRender {
         let text = &link.label;
         let dd = &lc.draw_data;
         let width = dd.line_width;
+        let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
-        match &lc.ls.point {
-            Some(arc) => match &arc.mode {
-                ArcType::Arc => todo!("FIXME!"),
-                ArcType::Joint => {
-                    for el in 0..2 {
-                        let id = i * 2 + el;
-                        let (a, b, animations) = &dd.links[id];
-                        if el == 0 {
-                            self.draw_arc(b, color, width)?;
-                        }
-                        self.draw_link_line(
-                            a, b, width, text, opt, highlight, animations, color, t, o,
-                        )?;
-                    }
-                    Ok(())
-                }
-            },
-            None => {
-                let (a, b, animations) = &dd.links[i];
-                self.draw_link_line(a, b, width, text, opt, highlight, animations, color, t, o)
+        match &dd.links[i] {
+            SubLink::Arc(_, _) => Ok(()), // TODO
+            SubLink::Line([a, b], animations) => {
+                self.draw_line(a, b, width, color);
+                self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                self.compute_and_draw_link_text(a, b, width, text, opt, highlight, t, o)
+            }
+            SubLink::Joint([a, b, c], animations) => {
+                self.draw_line(a, b, width, color);
+                self.draw_line(b, c, width, color);
+                self.draw_arc(b, color, width)?;
+                self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                self.compute_and_draw_link_text(a, b, width, text, opt, highlight, t, o)?;
+                self.compute_and_draw_link_text(b, c, width, text, opt, highlight, t, o)
             }
         }
     }
-    fn draw_link_line(
+    fn compute_and_draw_link_text(
         &self,
         a: &Point,
         b: &Point,
@@ -432,16 +428,9 @@ impl CanvasRender {
         text: &String,
         opt: &DiagramOpt,
         highlight: bool,
-        animations: &LineAnimation,
-        color: &String,
         t: &Transform,
         o: &ElementOpt,
     ) -> Result<(), JsValue> {
-        self.draw_line(a, b, width, color);
-        match highlight {
-            false => self.draw_link_animations(animations, &opt.animation_color)?,
-            true => (),
-        };
         let rad = a.get_radians(b);
         let (normalized_angle, _) = normalize_rad(rad);
         self.draw_link_text(a, b, o, text, width, normalized_angle, opt, t, highlight)
@@ -451,24 +440,42 @@ impl CanvasRender {
         &self,
         animation: &LineAnimation,
         color: &String,
+        width: f32,
     ) -> Result<(), JsValue> {
-        match animation {
-            LineAnimation::Both(width, a, b, c, d) => {
-                self.animate.replace(true);
-                self.ctx.set_line_dash(&self.dashes)?;
-                self.draw_line(a, b, *width, color);
-                self.draw_line(c, d, *width, color);
-                self.ctx.set_line_dash(&Array::new())?;
+        self.ctx.set_line_dash(&self.dashes)?;
+        let replace = match animation {
+            LineAnimation::Both([a, b, c, d]) => {
+                let w = width * HALF;
+                self.draw_line(a, b, w, color);
+                self.draw_line(c, d, w, color);
+                true
             }
-            LineAnimation::Side(width, a, b) => {
-                self.animate.replace(true);
-                self.ctx.set_line_dash(&self.dashes)?;
-                self.draw_line(a, b, *width, color);
-                self.ctx.set_line_dash(&Array::new())?;
+            LineAnimation::Side([a, b]) => {
+                self.draw_line(a, b, width, color);
+                true
             }
-            _ => (),
+            LineAnimation::BothArc(_) => false, //TODO
+            LineAnimation::SideArc(_) => false, //TODO
+            LineAnimation::JointBoth([a, b, c, d, e, f]) => {
+                let w = width * HALF;
+                self.draw_line(a, b, w, color);
+                self.draw_line(b, c, w, color);
+                self.draw_line(d, e, w, color);
+                self.draw_line(e, f, w, color);
+                true
+            }
+            LineAnimation::JointSide([a, b, c]) => {
+                self.draw_line(a, b, width, color);
+                self.draw_line(b, c, width, color);
+                true
+            }
+            LineAnimation::None => false,
+        };
+        if replace {
+            self.animate.replace(replace);
         }
 
+        self.ctx.set_line_dash(&Array::new())?;
         Ok(())
     }
     pub fn draw_link(

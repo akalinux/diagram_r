@@ -195,42 +195,41 @@ impl LinkSet {
     pub fn compute_animation(
         &self,
         link: &Link,
-        clink: (&Point, &Point, Option<(ArcType, &Point)>),
+        src: &Point,
+        dst: &Point,
+        center: Option<(ArcType, &Point)>,
         r: f32,
     ) -> LineAnimation {
-        match clink.2 {
+        match center {
             None => match link.animation {
                 Animation::Both => {
-                    let d = clink
-                        .0
-                        .get_point(&clink.1, r * HALF, R_90)
-                        .get_move_distance(&clink.0);
+                    let d = src.get_point(dst, r * HALF, R_90).get_move_distance(&src);
                     LineAnimation::Both([
-                        clink.0.sub_distance(&d),
-                        clink.1.sub_distance(&d),
-                        clink.1.add_distance(&d),
-                        clink.0.add_distance(&d),
+                        src.sub_distance(&d),
+                        dst.sub_distance(&d),
+                        dst.add_distance(&d),
+                        src.add_distance(&d),
                     ])
                 }
-                Animation::ToSrc => LineAnimation::Side([*clink.1, *clink.0]),
-                Animation::ToDst => LineAnimation::Side([*clink.0, *clink.1]),
+                Animation::ToSrc => LineAnimation::Side([*dst, *src]),
+                Animation::ToDst => LineAnimation::Side([*src, *dst]),
                 _ => LineAnimation::None,
             },
             Some((t, c)) => match t {
                 ArcType::Joint => match link.animation {
                     Animation::None => LineAnimation::None,
-                    Animation::ToDst => LineAnimation::JointSide([*clink.0, *c, *clink.1]),
-                    Animation::ToSrc => LineAnimation::JointSide([*clink.1, *c, *clink.0]),
+                    Animation::ToSrc => LineAnimation::JointSide([*dst, *c, *src]),
+                    Animation::ToDst => LineAnimation::JointSide([*src, *c, *dst]),
                     Animation::Both => {
-                        LineAnimation::JointBoth(self.arc_joint_animation(r, &clink.0, c, &clink.1))
+                        LineAnimation::JointBoth(self.arc_joint_animation(r, src, c, dst))
                     }
                 },
                 ArcType::Arc => match link.animation {
                     Animation::Both => {
-                        LineAnimation::BothArc(compute_arc_line_boundries(&clink.0, c, &clink.1, r))
+                        LineAnimation::BothArc(compute_arc_line_boundries(src, c, dst, r * HALF))
                     }
-                    Animation::ToSrc => LineAnimation::SideArc([*clink.1, *c, *clink.0]),
-                    Animation::ToDst => LineAnimation::SideArc([*clink.0, *c, *clink.1]),
+                    Animation::ToSrc => LineAnimation::Side([*dst, *src]),
+                    Animation::ToDst => LineAnimation::Side([*src, *dst]),
                     _ => LineAnimation::None,
                 },
             },
@@ -265,11 +264,11 @@ impl LinkSet {
             let link = &self.links[link_id];
             links.push(match arc {
                 None => {
-                    let animation = self.compute_animation(link, (&a, &b, None), aw);
+                    let animation = self.compute_animation(link, &a, &b, None, aw);
                     SubLink::Line([a, b], animation)
                 }
                 Some(c) => {
-                    let animation = self.compute_animation(link, (&a, &b, Some((mode, &c))), aw);
+                    let animation = self.compute_animation(link, &a, &b, Some((mode, &c)), aw);
                     match mode {
                         ArcType::Arc => SubLink::Arc([a, c, b], animation),
                         ArcType::Joint => SubLink::Joint([a, c, b], animation),

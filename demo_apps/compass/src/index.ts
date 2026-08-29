@@ -9,7 +9,7 @@ async function run() {
   let opt = new DiagramOpt();
   opt.grid_opt = new GridOpt();
   opt.link_scale = 1;
-  //opt.animate = false;
+  opt.animate = false;
   const d = new Diagram(opt);
 
   const north = new Node(new Square(365, 20, 60, 60), "North", 0,);
@@ -41,11 +41,11 @@ async function run() {
   ], [bundle, bundle2], 2, 3);
   const nts = new LinkSet(
     [
-      new Link(0, "Both", Animation.Both),
+      //new Link(0, "Both", Animation.Both),
       new Link(0, "South To North", Animation.ToSrc),
     ], [new Bundle(4, "Both", Uint32Array.from([0, 1]), 0.25)],
     0, 1,
-    new LinePoint(new Point(700, 275), ArcType.Joint)
+    new LinePoint(new Point(700, 275), ArcType.Arc)
   );
 
 

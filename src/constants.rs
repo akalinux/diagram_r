@@ -79,3 +79,4 @@ pub const R_90: f32 = (90.0 as f32).to_radians();
 pub const R_180: f32 = (180.0 as f32).to_radians();
 pub const R_270: f32 = (270.0 as f32).to_radians();
 pub const R_360: f32 = (360.0 as f32).to_radians();
+pub const DOUBLE_PIE: f32 = std::f32::consts::PI * 2.0;

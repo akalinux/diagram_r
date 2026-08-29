@@ -10,7 +10,7 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::{CANVAS_ERROR, HALF, R_90, R_270},
+    constants::{CANVAS_ERROR, DOUBLE_PIE, HALF, R_90, R_270},
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::{LineAnimation, LinkContainer, SubLink},
@@ -368,6 +368,16 @@ impl CanvasRender {
         let p = unsafe { &lc.ls.point.unwrap_unchecked() };
         self.draw_arc(&p.point, &opt.highlight_color, r)
     }
+
+    fn draw_quad_arc(&self, a: &Point, c: &Point, e: &Point, color: &String, width: f32) {
+        let ctx = &self.ctx;
+        ctx.begin_path();
+        ctx.set_line_width(width as f64);
+        ctx.set_stroke_style_str(&color);
+        ctx.move_to(a.x as f64, a.y as f64);
+        ctx.quadratic_curve_to(c.x as f64, c.y as f64, e.x as f64, e.y as f64);
+        ctx.stroke();
+    }
     fn draw_arc(&self, p: &Point, color: &String, width: f32) -> Result<(), JsValue> {
         let ctx = &self.ctx;
         ctx.begin_path();
@@ -376,11 +386,10 @@ impl CanvasRender {
             p.y as f64,
             (width * HALF) as f64,
             0.0,
-            2.0 * std::f64::consts::PI,
+            DOUBLE_PIE as f64,
         )?;
         ctx.set_fill_style_str(color);
         ctx.fill();
-        //self.ctx.stroke();
         Ok(())
     }
     pub fn draw_sublink(
@@ -404,7 +413,10 @@ impl CanvasRender {
         let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
         match &dd.links[i] {
-            SubLink::Arc(_, _) => Ok(()), // TODO
+            SubLink::Arc([a, c, b], _) => {
+                self.draw_quad_arc(a, c, b, color, width);
+                Ok(())
+            } // TODO
             SubLink::Line([a, b], animations) => {
                 self.draw_line(a, b, width, color);
                 self.draw_link_animations(animations, &opt.animation_color, aw)?;

@@ -177,13 +177,11 @@ pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &P
 }
 
 pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
-    let t1 = 1.0 - t;
-    let t1s = t1.powi(2);
-    let ts = t.powi(2);
-    let x = t1s * s.x + 2.0 * t1 * t * c.x + ts * e.x;
-    let y = t1s * s.y + 2.0 * t1 * t * c.y + ts * e.y;
+    let a = s.add_distance(&s.get_move_distance(c).scale(t));
+    let b = c.add_distance(&c.get_move_distance(e).scale(t));
+    println!("{},{}", a, b);
 
-    Point { x, y }
+    a.get_center(&b)
 }
 
 pub fn inside_arc(s: &Point, c: &Point, e: &Point, check: &Point) -> bool {
@@ -251,8 +249,7 @@ pub fn inside_arc(s: &Point, c: &Point, e: &Point, check: &Point) -> bool {
 }
 
 pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [Point; 6] {
-    let r2 = r * HALF;
-    let d = a.get_point(b, r2, R_90).get_move_distance(a);
+    let d = a.get_point(b, r, R_90).get_move_distance(a);
 
     [
         a.sub_distance(&d),

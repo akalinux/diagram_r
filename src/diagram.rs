@@ -270,12 +270,12 @@ impl DiagramCore {
                 nodes.push(link.ls.dst);
                 links.reserve(bl.len());
                 let src = &link.ls.links;
-                for el in bl {
-                    match src.get(*el) {
+                for id in bl {
+                    match src.get(*id) {
                         Some(_) => {
                             links.push(LinkAndElement {
                                 link: *idx,
-                                element: *el,
+                                element: *id,
                             });
                         }
                         _ => (),

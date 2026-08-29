@@ -103,7 +103,7 @@ pub enum LineAnimation {
     None,
     Both([Point; 4]),
     Side([Point; 2]),
-    BothArc([Point; 8]),
+    BothArc([Point; 6]),
     SideArc([Point; 3]),
     JointBoth([Point; 8]),
     JointSide([Point; 3]),
@@ -198,13 +198,13 @@ impl LinkSet {
                             let vc = c.get_move_distance(dst);
                             let s1 = src.sub_distance(&d1);
                             let e1 = dst.sub_distance(&d2);
-                            let c2 = src.add_distance(&d1);
-                            let c3 = dst.add_distance(&d2);
                             let c1 = {
                                 let c1 = c.sub_distance(&d1).add_distance(&vs);
                                 let c2 = c.sub_distance(&d2);
                                 force_intersection(&s1, &c1, &c2, &e1.add_distance(&vc))
                             };
+                            let c2 = src.add_distance(&d1);
+                            let c3 = dst.add_distance(&d2);
                             let p = {
                                 let s = c.add_distance(&d1).add_distance(&vs);
                                 let e = c.add_distance(&d2).sub_distance(&vc);
@@ -213,16 +213,7 @@ impl LinkSet {
 
                             LineAnimation::JointBoth([
                                 // link1
-                                //src.sub_distance(&d1),
-                                //c.sub_distance(&d1),
-                                //c.sub_distance(&d2),
-                                //dst.sub_distance(&d2),
-                                s1, c1, c1, e1,
-                                // Link 2
-                                //c.add_distance(&d1),
-                                //src.add_distance(&d1),
-                                //dst.add_distance(&d2),
-                                //c.add_distance(&d2),
+                                s1, c1, c1, e1, // Link 2
                                 p, c2, c3, p,
                             ])
                         }

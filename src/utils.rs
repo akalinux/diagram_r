@@ -179,8 +179,6 @@ pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &P
 pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
     let a = s.add_distance(&s.get_move_distance(c).scale(t));
     let b = c.add_distance(&c.get_move_distance(e).scale(t));
-    println!("{},{}", a, b);
-
     a.get_center(&b)
 }
 

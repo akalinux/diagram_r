@@ -5,7 +5,7 @@ use approx::assert_relative_eq;
 use diagram_r::{
     Point,
     constants::{R_270, ZERO_POINT},
-    utils::{full_box_from, get_intersection, inside_box},
+    utils::{compute_arc_point, full_box_from, get_intersection, inside_arc, inside_box},
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -61,4 +61,26 @@ fn validate_intersect_test() {
     assert_point!(p, Point::new(2.5, 2.5), 0.001);
     let p = get_intersection(&a, &d, &c, &b);
     assert!(p.is_none())
+}
+
+#[test]
+fn arc_point_test() {
+    let s = ZERO_POINT;
+    let c = Point::new(5.0, 5.0);
+    let e = Point::new(0.0, 10.0);
+
+    let p = compute_arc_point(0.5, &s, &c, &e);
+    assert_point!(p, Point { y: 5.0, x: 2.5 }, 0.001);
+}
+
+#[test]
+fn inside_arc_test() {
+    let s = ZERO_POINT;
+    let c = Point::new(5.0, 5.0);
+    let e = Point::new(0.0, 10.0);
+    assert!(inside_arc(&s, &c, &e, &Point { x: 1.0, y: 5.5 }));
+    assert!(!inside_arc(&s, &c, &e, &Point { x: 10.0, y: 10.0 }));
+    let c = Point::new(0.0, 5.0);
+    assert!(inside_arc(&s, &c, &e, &Point { x: 0.0, y: 5.0 }));
+    assert!(!inside_arc(&s, &c, &e, &Point { x: 0.0, y: 50.0 }));
 }

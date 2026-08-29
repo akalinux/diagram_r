@@ -175,3 +175,91 @@ pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &P
         None => start1.get_center(start2),
     }
 }
+
+pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
+    let t1 = 1.0 - t;
+    let t1s = t1.powi(2);
+    let ts = t.powi(2);
+    let x = t1s * s.x + 2.0 * t1 * t * c.x + ts * e.x;
+    let y = t1s * s.y + 2.0 * t1 * t * c.y + ts * e.y;
+
+    Point { x, y }
+}
+
+pub fn inside_arc(s: &Point, c: &Point, e: &Point, check: &Point) -> bool {
+    // 1. Shift relative to start point (p0)
+    let cx = c.x - s.x;
+    let cy = c.y - s.y;
+    let ex = e.x - s.x;
+    let ey = e.y - s.y;
+    let px = check.x - s.x;
+    let py = check.y - s.y;
+
+    // 2. Compute a, b, c, d
+    let a = 2.0 * cx;
+    let b = 2.0 * cy;
+    let c = ex - (2.0 * cx);
+    let d = ey - (2.0 * cy);
+
+    // 3. Compute the determinant
+    let det = a * d - b * c;
+
+    // 4. Calculate dynamic tolerance
+    let max_term = a.abs().max(b.abs()).max(c.abs()).max(d.abs());
+    let scale = (max_term * max_term).max(1.0);
+    let dynamic_tolerance = 1e-6 * scale;
+
+    // 5. STRAIGHT LINE FALLBACK
+    if det.abs() < dynamic_tolerance {
+        // Compute the squared length of the baseline segment (p0 to p2)
+        let segment_len_sq = ex * ex + ey * ey;
+
+        // If start and end points are the exact same point
+        if segment_len_sq < 1e-6 {
+            let dist_sq = px * px + py * py;
+            return dist_sq < 1e-6; // Inside if it matches the single point
+        }
+
+        // Project the test point onto the baseline to find the parameter 't'
+        // t = (vector_p0_to_test DOT vector_p0_to_p2) / length_squared
+        let t = (px * ex + py * ey) / segment_len_sq;
+
+        // Ensure the projection falls within the segment bounds [0.0, 1.0]
+        if t >= 0.0 && t <= 1.0 {
+            // Find the closest point on the line segment
+            let closest_x = t * ex;
+            let closest_y = t * ey;
+
+            // Calculate distance from test point to the closest point
+            let dx = px - closest_x;
+            let dy = py - closest_y;
+            let distance_sq = dx * dx + dy * dy;
+
+            // Scale line tolerance based on segment length
+            let line_tolerance = 1e-6 * segment_len_sq.max(1.0);
+            return distance_sq < line_tolerance;
+        }
+        return false;
+    }
+
+    // 6. Standard curve tracking if not a straight line
+    let u = (d * px - c * py) / det;
+    let v = (-b * px + a * py) / det;
+    let f = u * u - v;
+
+    f < 0.0 && u >= 0.0 && u <= 1.0
+}
+
+pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [Point; 6] {
+    let r2 = r * HALF;
+    let d = a.get_point(b, r2, R_90).get_move_distance(a);
+
+    [
+        a.sub_distance(&d),
+        c.sub_distance(&d),
+        b.sub_distance(&d),
+        b.add_distance(&d),
+        c.sub_distance(&d),
+        a.add_distance(&d),
+    ]
+}

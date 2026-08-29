@@ -7,7 +7,10 @@ use crate::{
     link::iters::{ArcIter, FullBoxAccumulate, LineIter, LineIterSet},
     node::Node,
     square::Square,
-    utils::{force_intersection, full_box_from, inside_box, inside_circle},
+    utils::{
+        compute_arc_line_boundries, compute_arc_point, force_intersection, full_box_from,
+        inside_arc, inside_box, inside_circle,
+    },
 };
 pub type AnimationLink = (Point, Point, f32);
 #[wasm_bindgen]
@@ -134,7 +137,11 @@ impl LinkSet {
 
         match &self.point {
             Some(arc) => match &arc.mode {
-                ArcType::Arc => todo!("Not there yet!"),
+                ArcType::Arc => {
+                    for bundle in &self.bundles {
+                        points.push(compute_arc_point(bundle.pos, src, &arc.point, dst));
+                    }
+                }
                 ArcType::Joint => {
                     for bundle in &self.bundles {
                         let (start, end) = match bundle.pos > HALF {
@@ -155,6 +162,34 @@ impl LinkSet {
             }
         }
         points
+    }
+
+    pub fn arc_joint_animation(&self, r: f32, src: &Point, c: &Point, dst: &Point) -> [Point; 8] {
+        let r2 = r * HALF;
+        let d1 = src.get_distance_vec(c, r2, R_90);
+        let d2 = c.get_distance_vec(&dst, r2, R_90);
+
+        let vs = src.get_move_distance(c);
+        let vc = c.get_move_distance(dst);
+        let s1 = src.sub_distance(&d1);
+        let e1 = dst.sub_distance(&d2);
+        let c1 = {
+            let c1 = c.sub_distance(&d1).add_distance(&vs);
+            let c2 = c.sub_distance(&d2);
+            force_intersection(&s1, &c1, &c2, &e1.add_distance(&vc))
+        };
+        let c2 = src.add_distance(&d1);
+        let c3 = dst.add_distance(&d2);
+        let p = {
+            let s = c.add_distance(&d1).add_distance(&vs);
+            let e = c.add_distance(&d2).sub_distance(&vc);
+            force_intersection(&s, &c2, &c3, &e)
+        };
+        [
+            // link1
+            s1, c1, c1, e1, // Link 2
+            p, c2, c3, p,
+        ]
     }
 
     pub fn compute_animation(
@@ -182,44 +217,22 @@ impl LinkSet {
                 _ => LineAnimation::None,
             },
             Some((t, c)) => match t {
-                ArcType::Joint => {
-                    match link.animation {
-                        Animation::None => LineAnimation::None,
-                        Animation::ToDst => LineAnimation::JointSide([*clink.0, *c, *clink.1]),
-                        Animation::ToSrc => LineAnimation::JointSide([*clink.1, *c, *clink.0]),
-                        Animation::Both => {
-                            let r2 = r * HALF;
-
-                            let (src, dst, _) = clink;
-                            let d1 = src.get_distance_vec(c, r2, R_90);
-                            let d2 = c.get_distance_vec(&dst, r2, R_90);
-
-                            let vs = src.get_move_distance(c);
-                            let vc = c.get_move_distance(dst);
-                            let s1 = src.sub_distance(&d1);
-                            let e1 = dst.sub_distance(&d2);
-                            let c1 = {
-                                let c1 = c.sub_distance(&d1).add_distance(&vs);
-                                let c2 = c.sub_distance(&d2);
-                                force_intersection(&s1, &c1, &c2, &e1.add_distance(&vc))
-                            };
-                            let c2 = src.add_distance(&d1);
-                            let c3 = dst.add_distance(&d2);
-                            let p = {
-                                let s = c.add_distance(&d1).add_distance(&vs);
-                                let e = c.add_distance(&d2).sub_distance(&vc);
-                                force_intersection(&s, &c2, &c3, &e)
-                            };
-
-                            LineAnimation::JointBoth([
-                                // link1
-                                s1, c1, c1, e1, // Link 2
-                                p, c2, c3, p,
-                            ])
-                        }
+                ArcType::Joint => match link.animation {
+                    Animation::None => LineAnimation::None,
+                    Animation::ToDst => LineAnimation::JointSide([*clink.0, *c, *clink.1]),
+                    Animation::ToSrc => LineAnimation::JointSide([*clink.1, *c, *clink.0]),
+                    Animation::Both => {
+                        LineAnimation::JointBoth(self.arc_joint_animation(r, &clink.0, c, &clink.1))
                     }
-                }
-                ArcType::Arc => LineAnimation::None, // TODO
+                },
+                ArcType::Arc => match link.animation {
+                    Animation::Both => {
+                        LineAnimation::BothArc(compute_arc_line_boundries(&clink.0, c, &clink.1, r))
+                    }
+                    Animation::ToSrc => LineAnimation::SideArc([*clink.1, *c, *clink.0]),
+                    Animation::ToDst => LineAnimation::SideArc([*clink.0, *c, *clink.1]),
+                    _ => LineAnimation::None,
+                },
             },
         }
     }
@@ -331,7 +344,10 @@ impl SubLink {
                     || inside_box(&full_box_from(&a, &b, width).0, p)
                     || inside_box(&full_box_from(&b, &c, width).0, p)
             }
-            Self::Arc([_, _, _], _) => false, // TODO!
+            Self::Arc([a, b, c], _) => {
+                let [a, b, c, d, e, f] = compute_arc_line_boundries(a, c, b, width * 2.0);
+                inside_arc(&a, &b, &c, p) && !inside_arc(&d, &e, &f, p)
+            }
             Self::Line([a, b], _) => inside_box(&full_box_from(a, b, width).0, p),
         }
     }
@@ -405,13 +421,6 @@ impl LinkContainer {
     }
     pub fn contains_point(&self, p: &Point) -> LookupPointResult {
         let dd = &self.draw_data;
-        // first check bundles
-        for (i, _) in self.ls.bundles.iter().enumerate() {
-            let square = dd.bundle_draw_box(i);
-            if square.contains_point(p) {
-                return LookupPointResult::Bundle((self.id, i));
-            }
-        }
         let width = dd.line_width;
         let w = width * HALF;
         if let Some(arc) = &self.ls.point {
@@ -420,6 +429,14 @@ impl LinkContainer {
                 return LookupPointResult::Arc(self.id);
             }
         }
+        // first check bundles
+        for (i, _) in self.ls.bundles.iter().enumerate() {
+            let square = dd.bundle_draw_box(i);
+            if square.contains_point(p) {
+                return LookupPointResult::Bundle((self.id, i));
+            }
+        }
+
         for (i, line) in dd.links.iter().enumerate() {
             if line.contains_point(p, w) {
                 return LookupPointResult::Link((self.id, i));

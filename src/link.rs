@@ -194,17 +194,36 @@ impl LinkSet {
                             let d1 = src.get_distance_vec(c, r2, R_90);
                             let d2 = c.get_distance_vec(&dst, r2, R_90);
 
+                            let vs = src.get_move_distance(c);
+                            let vc = c.get_move_distance(dst);
+                            let s1 = src.sub_distance(&d1);
+                            let e1 = dst.sub_distance(&d2);
+                            let c2 = src.add_distance(&d1);
+                            let c3 = dst.add_distance(&d2);
+                            let c1 = {
+                                let c1 = c.sub_distance(&d1).add_distance(&vs);
+                                let c2 = c.sub_distance(&d2);
+                                force_intersection(&s1, &c1, &c2, &e1.add_distance(&vc))
+                            };
+                            let p = {
+                                let s = c.add_distance(&d1).add_distance(&vs);
+                                let e = c.add_distance(&d2).sub_distance(&vc);
+                                force_intersection(&s, &c2, &c3, &e)
+                            };
+
                             LineAnimation::JointBoth([
                                 // link1
-                                src.sub_distance(&d1),
-                                c.sub_distance(&d1),
-                                c.sub_distance(&d2),
-                                dst.sub_distance(&d2),
+                                //src.sub_distance(&d1),
+                                //c.sub_distance(&d1),
+                                //c.sub_distance(&d2),
+                                //dst.sub_distance(&d2),
+                                s1, c1, c1, e1,
                                 // Link 2
-                                c.add_distance(&d1),
-                                src.add_distance(&d1),
-                                dst.add_distance(&d2),
-                                c.add_distance(&d2),
+                                //c.add_distance(&d1),
+                                //src.add_distance(&d1),
+                                //dst.add_distance(&d2),
+                                //c.add_distance(&d2),
+                                p, c2, c3, p,
                             ])
                         }
                     }

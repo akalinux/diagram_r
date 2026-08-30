@@ -5,7 +5,10 @@ use approx::assert_relative_eq;
 use diagram_r::{
     Point,
     constants::{R_270, ZERO_POINT},
-    utils::{compute_arc_point, full_box_from, get_intersection, inside_arc, inside_box},
+    utils::{
+        arc_contains_point, closest_t_on_arc, compute_arc_point, full_box_from, get_intersection,
+        inside_box,
+    },
 };
 use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -68,19 +71,30 @@ fn arc_point_test() {
     let s = ZERO_POINT;
     let c = Point::new(5.0, 5.0);
     let e = Point::new(0.0, 10.0);
-
     let p = compute_arc_point(0.5, &s, &c, &e);
     assert_point!(p, Point { y: 5.0, x: 2.5 }, 0.001);
 }
 
 #[test]
-fn inside_arc_test() {
+fn arc_contains_point_test() {
     let s = ZERO_POINT;
     let c = Point::new(5.0, 5.0);
     let e = Point::new(0.0, 10.0);
-    assert!(inside_arc(&s, &c, &e, &Point { x: 1.0, y: 5.5 }));
-    assert!(!inside_arc(&s, &c, &e, &Point { x: 10.0, y: 10.0 }));
-    let c = Point::new(0.0, 5.0);
-    assert!(inside_arc(&s, &c, &e, &Point { x: 0.0, y: 5.0 }));
-    assert!(!inside_arc(&s, &c, &e, &Point { x: 0.0, y: 50.0 }));
+
+    for i in [0.25, 0.5, 0.75] {
+        let p = compute_arc_point(i, &s, &c, &e);
+        assert!(arc_contains_point(0.5, &p, &s, &c, &e))
+    }
+}
+
+#[test]
+fn get_t_from_p_test() {
+    let s = ZERO_POINT;
+    let c = Point::new(5.0, 5.0);
+    let e = Point::new(0.0, 10.0);
+
+    for i in [0.25, 0.5, 0.75] {
+        let p = compute_arc_point(i, &s, &c, &e);
+        assert_relative_eq!(closest_t_on_arc(&s, &c, &e, &p), i, epsilon = 0.001);
+    }
 }

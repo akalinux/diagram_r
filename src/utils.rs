@@ -179,71 +179,29 @@ pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &P
 pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
     let a = s.add_distance(&s.get_move_distance(c).scale(t));
     let b = c.add_distance(&c.get_move_distance(e).scale(t));
-    a.get_center(&b)
+
+    a.add_distance(&a.get_move_distance(&b).scale(t))
+    /*
+    let mt = 1.0 - t; // (1 - t)
+
+    let x = mt * mt * s.x + 2.0 * mt * t * c.x + t * t * e.x;
+    let y = mt * mt * s.y + 2.0 * mt * t * c.y + t * t * e.y;
+
+    Point { x, y }
+    */
 }
 
-pub fn inside_arc(s: &Point, c: &Point, e: &Point, check: &Point) -> bool {
-    // 1. Shift relative to start point (p0)
-    let cx = c.x - s.x;
-    let cy = c.y - s.y;
-    let ex = e.x - s.x;
-    let ey = e.y - s.y;
-    let px = check.x - s.x;
-    let py = check.y - s.y;
-
-    // 2. Compute a, b, c, d
-    let a = 2.0 * cx;
-    let b = 2.0 * cy;
-    let c = ex - (2.0 * cx);
-    let d = ey - (2.0 * cy);
-
-    // 3. Compute the determinant
-    let det = a * d - b * c;
-
-    // 4. Calculate dynamic tolerance
-    let max_term = a.abs().max(b.abs()).max(c.abs()).max(d.abs());
-    let scale = (max_term * max_term).max(1.0);
-    let dynamic_tolerance = 1e-6 * scale;
-
-    // 5. STRAIGHT LINE FALLBACK
-    if det.abs() < dynamic_tolerance {
-        // Compute the squared length of the baseline segment (p0 to p2)
-        let segment_len_sq = ex * ex + ey * ey;
-
-        // If start and end points are the exact same point
-        if segment_len_sq < 1e-6 {
-            let dist_sq = px * px + py * py;
-            return dist_sq < 1e-6; // Inside if it matches the single point
-        }
-
-        // Project the test point onto the baseline to find the parameter 't'
-        // t = (vector_p0_to_test DOT vector_p0_to_p2) / length_squared
-        let t = (px * ex + py * ey) / segment_len_sq;
-
-        // Ensure the projection falls within the segment bounds [0.0, 1.0]
-        if t >= 0.0 && t <= 1.0 {
-            // Find the closest point on the line segment
-            let closest_x = t * ex;
-            let closest_y = t * ey;
-
-            // Calculate distance from test point to the closest point
-            let dx = px - closest_x;
-            let dy = py - closest_y;
-            let distance_sq = dx * dx + dy * dy;
-
-            // Scale line tolerance based on segment length
-            let line_tolerance = 1e-6 * segment_len_sq.max(1.0);
-            return distance_sq < line_tolerance;
-        }
-        return false;
-    }
-
-    // 6. Standard curve tracking if not a straight line
-    let u = (d * px - c * py) / det;
-    let v = (-b * px + a * py) / det;
-    let f = u * u - v;
-
-    f < 0.0 && u >= 0.0 && u <= 1.0
+pub fn arc_contains_point(r: f32, p: &Point, begin: &Point, control: &Point, end: &Point) -> bool {
+    /*
+    let t = match find_t_for_arc(begin, control, end, p) {
+        Some(t) => t,
+        None => return false,
+    };
+    */
+    let t = closest_t_on_arc(begin, control, end, p);
+    let check = compute_arc_point(t, begin, control, end);
+    //log(&format!("{check},{p},{r}"));
+    inside_circle(p, &check, r)
 }
 
 pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [Point; 6] {
@@ -257,4 +215,84 @@ pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [P
         c.sub_distance(&d),
         a.add_distance(&d),
     ]
+}
+
+#[inline]
+pub fn get_point_on_arc(p0: &Point, p1: &Point, p2: &Point, t: f32) -> Point {
+    let mt = 1.0 - t;
+    Point {
+        x: mt * mt * p0.x + 2.0 * mt * t * p1.x + t * t * p2.x,
+        y: mt * mt * p0.y + 2.0 * mt * t * p1.y + t * t * p2.y,
+    }
+}
+
+/// Calculates the exact parameter `t` [0.0, 1.0] on a 2D quadratic Bezier curve
+/// that minimizes the distance to a target point `m`.
+pub fn closest_t_on_arc(p0: &Point, p1: &Point, p2: &Point, m: &Point) -> f32 {
+    // 1. Convert Bezier curve into polynomial form: P(t) = A*t^2 + B*t + C
+    let ax = p0.x - 2.0 * p1.x + p2.x;
+    let ay = p0.y - 2.0 * p1.y + p2.y;
+    let bx = 2.0 * (p1.x - p0.x);
+    let by = 2.0 * (p1.y - p0.y);
+    let cx = p0.x;
+    let cy = p0.y;
+
+    let cm_x = cx - m.x;
+    let cm_y = cy - m.y;
+
+    // 2. Compute the derivative coefficients of the squared distance function
+    // f(t) = a*t^3 + b*t^2 + c*t + d = 0 (Divided by 2 for optimization)
+    let a = 2.0 * (ax * ax + ay * ay);
+    let b = 3.0 * (ax * bx + ay * by);
+    let c = (bx * bx + by * by) + 2.0 * (ax * cm_x + ay * cm_y);
+    let d = bx * cm_x + by * cm_y;
+
+    // 3. Robust Initializer: Sample the curve at 5 uniform intervals to find a
+    // baseline minimum. This guarantees we seed the root finder near the global minimum.
+    let mut best_t = 0.0_f32;
+    let mut min_d_sq = f32::INFINITY;
+
+    for i in 0..=4 {
+        let t_sample = i as f32 * 0.25;
+        let pt = get_point_on_arc(p0, p1, p2, t_sample);
+        let dx = pt.x - m.x;
+        let dy = pt.y - m.y;
+        let d_sq = dx * dx + dy * dy;
+        if d_sq < min_d_sq {
+            min_d_sq = d_sq;
+            best_t = t_sample;
+        }
+    }
+
+    // 4. Newton-Raphson Iterative Refinement Loop
+    // t_next = t - f(t) / f'(t)
+    // where f'(t) = 3*a*t^2 + 2*b*t + c
+    for _ in 0..5 {
+        let f_t = ((a * best_t + b) * best_t + c) * best_t + d;
+        let f_prime_t = (3.0 * a * best_t + 2.0 * b) * best_t + c;
+
+        // Prevent division-by-zero errors on perfectly flat curves
+        if f_prime_t.abs() < 1e-6 {
+            break;
+        }
+
+        let next_t = best_t - f_t / f_prime_t;
+
+        // Clamp to valid parametric boundaries
+        best_t = next_t.clamp(0.0, 1.0);
+    }
+
+    // 5. Final safety verification against the absolute boundaries t=0 and t=1
+    for &boundary_t in &[0.0_f32, 1.0_f32] {
+        let pt = get_point_on_arc(p0, p1, p2, boundary_t);
+        let dx = pt.x - m.x;
+        let dy = pt.y - m.y;
+        let d_sq = dx * dx + dy * dy;
+        if d_sq < min_d_sq {
+            min_d_sq = d_sq;
+            best_t = boundary_t;
+        }
+    }
+
+    best_t
 }

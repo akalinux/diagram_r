@@ -8,8 +8,8 @@ use crate::{
     node::Node,
     square::Square,
     utils::{
-        compute_arc_line_boundries, compute_arc_point, force_intersection, full_box_from,
-        inside_arc, inside_box, inside_circle,
+        arc_contains_point, compute_arc_line_boundries, compute_arc_point, force_intersection,
+        full_box_from, inside_box, inside_circle,
     },
 };
 pub type AnimationLink = (Point, Point, f32);
@@ -343,10 +343,7 @@ impl SubLink {
                     || inside_box(&full_box_from(&a, &b, width).0, p)
                     || inside_box(&full_box_from(&b, &c, width).0, p)
             }
-            Self::Arc([a, b, c], _) => {
-                let [a, b, c, d, e, f] = compute_arc_line_boundries(a, c, b, width * 2.0);
-                inside_arc(&a, &b, &c, p) && !inside_arc(&d, &e, &f, p)
-            }
+            Self::Arc([a, b, c], _) => arc_contains_point(width, p, a, b, c),
             Self::Line([a, b], _) => inside_box(&full_box_from(a, b, width).0, p),
         }
     }

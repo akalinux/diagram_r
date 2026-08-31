@@ -149,10 +149,7 @@ impl ArcIter {
         counter.step(&p);
         let pe = center.add_distance(&p.get_move_distance(center));
         counter.step(&pe);
-        /*b.init = dst.get_xy(
-            full_width * HALF * inital_scale,
-            src.get_radians(center) + R_90,
-        );*/
+
         Self {
             width,
             pos: 0,

@@ -413,8 +413,9 @@ impl CanvasRender {
         let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
         match &dd.links[i] {
-            SubLink::Arc([a, c, b], _) => {
+            SubLink::Arc([a, c, b], animations) => {
                 self.draw_quad_arc(a, c, b, color, width);
+                self.draw_link_animations(animations, &opt.animation_color, aw)?;
                 Ok(())
             } // TODO
             SubLink::Line([a, b], animations) => {
@@ -466,8 +467,18 @@ impl CanvasRender {
                 self.draw_line(a, b, width, color);
                 true
             }
-            LineAnimation::BothArc(_) => false, //TODO
-            LineAnimation::SideArc(_) => false, //TODO
+            LineAnimation::BothArc([a, b, c, d, e, f]) => {
+                let width = width * HALF;
+
+                // WORKS! COMMENTED OUT TO DEBUG THE OTHER LINE!
+                self.draw_quad_arc(a, b, c, color, width);
+                self.draw_quad_arc(d, e, f, color, width);
+                true
+            }
+            LineAnimation::SideArc([a, b, c]) => {
+                self.draw_quad_arc(a, b, c, color, width);
+                true
+            }
             LineAnimation::JointBoth(s) => {
                 let w = width * HALF;
                 for i in (0..8).step_by(2) {

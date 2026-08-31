@@ -8,8 +8,8 @@ use crate::{
     node::Node,
     square::Square,
     utils::{
-        arc_contains_point, compute_arc_line_boundries, compute_arc_point, force_intersection,
-        full_box_from, inside_box, inside_circle,
+        arc_contains_point, compute_arc_point, force_intersection, full_box_from, inside_box,
+        inside_circle,
     },
 };
 pub type AnimationLink = (Point, Point, f32);
@@ -226,10 +226,12 @@ impl LinkSet {
                 },
                 ArcType::Arc => match link.animation {
                     Animation::Both => {
-                        LineAnimation::BothArc(compute_arc_line_boundries(src, c, dst, r * HALF))
+                        //LineAnimation::BothArc(compute_arc_line_boundries(src, c, dst, r * HALF))
+                        let [a, b, _, c, e, f, d, _] = self.arc_joint_animation(r, src, c, dst);
+                        LineAnimation::BothArc([a, b, c, d, e, f])
                     }
-                    Animation::ToSrc => LineAnimation::Side([*dst, *src]),
-                    Animation::ToDst => LineAnimation::Side([*src, *dst]),
+                    Animation::ToSrc => LineAnimation::SideArc([*dst, *c, *src]),
+                    Animation::ToDst => LineAnimation::SideArc([*src, *c, *dst]),
                     _ => LineAnimation::None,
                 },
             },

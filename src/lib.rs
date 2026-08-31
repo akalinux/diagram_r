@@ -138,10 +138,7 @@ impl Point {
     }
     /// Using self as the starting point, how far did we move to get to: p?
     pub fn get_move_distance(&self, p: &Self) -> Self {
-        Self {
-            x: p.x - self.x,
-            y: p.y - self.y,
-        }
+        p.sub_distance(self)
     }
     pub fn add_distance(&self, distance: &Point) -> Point {
         Self::new(self.x + distance.x, self.y + distance.y)

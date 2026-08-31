@@ -177,6 +177,7 @@ pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &P
 }
 
 pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
+    // this is 16 steps can be reduced to 8 with simd
     let a = s.add_distance(&s.get_move_distance(c).scale(t));
     let b = c.add_distance(&c.get_move_distance(e).scale(t));
 
@@ -189,6 +190,45 @@ pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
 
     Point { x, y }
     */
+}
+
+pub fn quadratic_arc_length(p0: Point, p1: Point, p2: Point) -> f32 {
+    let ax = p0.x - 2.0 * p1.x + p2.x;
+    let ay = p0.y - 2.0 * p1.y + p2.y;
+    let bx = 2.0 * p1.x - 2.0 * p0.x;
+    let by = 2.0 * p1.y - 2.0 * p0.y;
+
+    let a = 4.0 * (ax * ax + ay * ay);
+    let b = 4.0 * (ax * bx + ay * by);
+    let c = bx * bx + by * by;
+
+    // Handle degenerate linear or point cases safely
+    if a.abs() < 1e-12 {
+        return ((p2.x - p0.x).powi(2) + (p2.y - p0.y).powi(2)).sqrt();
+    }
+
+    let sab = b / (2.0 * a);
+    let c_val = c / a;
+    let u = 1.0 + sab;
+    let k = c_val - sab * sab;
+
+    return (quad_arc_distance_support(a, u, sab, k) - quad_arc_distance_support(a, sab, sab, k))
+        .abs();
+    /*/
+    let func = |t: f32| -> f32 {
+        let term = t + sab;
+        let inner = (term * term + k).max(0.0).sqrt();
+        0.5 * a.sqrt() * (term * inner + k * (term + inner).abs().ln())
+    };
+
+    (func(u) - func(sab)).abs()
+    */
+}
+
+fn quad_arc_distance_support(a: f32, t: f32, sab: f32, k: f32) -> f32 {
+    let term = t + sab;
+    let inner = (term * term + k).max(0.0).sqrt();
+    HALF * a.sqrt() * (term * inner + k * (term + inner).abs().ln())
 }
 
 pub fn arc_contains_point(r: f32, p: &Point, begin: &Point, control: &Point, end: &Point) -> bool {
@@ -217,25 +257,16 @@ pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [P
     ]
 }
 
-#[inline]
-pub fn get_point_on_arc(p0: &Point, p1: &Point, p2: &Point, t: f32) -> Point {
-    let mt = 1.0 - t;
-    Point {
-        x: mt * mt * p0.x + 2.0 * mt * t * p1.x + t * t * p2.x,
-        y: mt * mt * p0.y + 2.0 * mt * t * p1.y + t * t * p2.y,
-    }
-}
-
 /// Calculates the exact parameter `t` [0.0, 1.0] on a 2D quadratic Bezier curve
 /// that minimizes the distance to a target point `m`.
-pub fn closest_t_on_arc(p0: &Point, p1: &Point, p2: &Point, m: &Point) -> f32 {
+pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, m: &Point) -> f32 {
     // 1. Convert Bezier curve into polynomial form: P(t) = A*t^2 + B*t + C
-    let ax = p0.x - 2.0 * p1.x + p2.x;
-    let ay = p0.y - 2.0 * p1.y + p2.y;
-    let bx = 2.0 * (p1.x - p0.x);
-    let by = 2.0 * (p1.y - p0.y);
-    let cx = p0.x;
-    let cy = p0.y;
+    let ax = begin.x - 2.0 * control.x + end.x;
+    let ay = begin.y - 2.0 * control.y + end.y;
+    let bx = 2.0 * (control.x - begin.x);
+    let by = 2.0 * (control.y - begin.y);
+    let cx = begin.x;
+    let cy = begin.y;
 
     let cm_x = cx - m.x;
     let cm_y = cy - m.y;
@@ -249,12 +280,12 @@ pub fn closest_t_on_arc(p0: &Point, p1: &Point, p2: &Point, m: &Point) -> f32 {
 
     // 3. Robust Initializer: Sample the curve at 5 uniform intervals to find a
     // baseline minimum. This guarantees we seed the root finder near the global minimum.
-    let mut best_t = 0.0_f32;
+    let mut best_t = 0.0;
     let mut min_d_sq = f32::INFINITY;
 
-    for i in 0..=4 {
-        let t_sample = i as f32 * 0.25;
-        let pt = get_point_on_arc(p0, p1, p2, t_sample);
+    for t_sample in [0.0, 0.5, 0.75, 1.0] {
+        //let pt = get_point_on_arc(begin, control, end, t_sample);
+        let pt = compute_arc_point(t_sample, begin, control, end);
         let dx = pt.x - m.x;
         let dy = pt.y - m.y;
         let d_sq = dx * dx + dy * dy;
@@ -268,11 +299,15 @@ pub fn closest_t_on_arc(p0: &Point, p1: &Point, p2: &Point, m: &Point) -> f32 {
     // t_next = t - f(t) / f'(t)
     // where f'(t) = 3*a*t^2 + 2*b*t + c
     for _ in 0..5 {
-        let f_t = ((a * best_t + b) * best_t + c) * best_t + d;
-        let f_prime_t = (3.0 * a * best_t + 2.0 * b) * best_t + c;
+        let a_best_t = a * best_t;
+        //let f_t = ((a * best_t + b) * best_t + c) * best_t + d;
+        let f_t = ((a_best_t + b) * best_t + c) * best_t + d;
+        //let f_prime_t = (3.0 * a * best_t + 2.0 * b) * best_t + c;
+        let f_prime_t = (3.0 * a_best_t + 2.0 * b) * best_t + c;
 
         // Prevent division-by-zero errors on perfectly flat curves
-        if f_prime_t.abs() < 1e-6 {
+        //if f_prime_t.abs() < 1e-6 {
+        if f_prime_t.abs() < f32::EPSILON {
             break;
         }
 
@@ -283,8 +318,8 @@ pub fn closest_t_on_arc(p0: &Point, p1: &Point, p2: &Point, m: &Point) -> f32 {
     }
 
     // 5. Final safety verification against the absolute boundaries t=0 and t=1
-    for &boundary_t in &[0.0_f32, 1.0_f32] {
-        let pt = get_point_on_arc(p0, p1, p2, boundary_t);
+    for boundary_t in [0.0, 1.0] {
+        let pt = compute_arc_point(boundary_t, begin, control, end);
         let dx = pt.x - m.x;
         let dy = pt.y - m.y;
         let d_sq = dx * dx + dy * dy;

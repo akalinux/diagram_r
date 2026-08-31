@@ -1,6 +1,6 @@
 
 
-import init, { LinePoint, ArcType, Square, Node, Link, Bundle, DiagramOpt, ElementOpt, Diagram, Point, LabelPosition, Animation, LinkSet, GridOpt } from '../../../pkg/diagram_r';
+import init, { Transform, LinePoint, ArcType, Square, Node, Link, Bundle, DiagramOpt, ElementOpt, Diagram, Point, LabelPosition, Animation, LinkSet, GridOpt } from '../../../pkg/diagram_r';
 async function run() {
 
 
@@ -30,6 +30,8 @@ async function run() {
   ],
   )
 
+  const t = new Transform(0, 0, 0.5);
+
 
   const bundle = new Bundle(4, "First two", Uint32Array.from([0, 1]), 0.25)
   const bundle2 = new Bundle(4, "Outside Pairs", Uint32Array.from([0, 2]), 0.75)
@@ -49,6 +51,7 @@ async function run() {
   );
 
 
+
   //               0      1      2     3
   d.set_data([box], [north, south, west, east], [
     etw,
@@ -57,6 +60,7 @@ async function run() {
 
   const el = document.getElementById("app") as HTMLCanvasElement;
   d.mount(el);
+  d.set_transform(t);
   d.render();
 
 }

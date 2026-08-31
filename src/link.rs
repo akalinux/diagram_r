@@ -246,13 +246,20 @@ impl LinkSet {
         let mut links = Vec::with_capacity(self.links.len());
         let (width, iter, mode) = match &self.point {
             None => {
-                let iter = LineIter::new(&src_p, &dst_p, side, self.links.len());
+                let iter = LineIter::new(&src_p, &dst_p, side, self.links.len(), &mut accumulate);
                 let width = iter.width;
                 let i: Box<dyn LineIterSet> = Box::new(iter);
                 (width, i, ArcType::Arc)
             }
             Some(p) => {
-                let iter = ArcIter::new(&src_p, &p.point, &dst_p, side, self.links.len());
+                let iter = ArcIter::new(
+                    &src_p,
+                    &p.point,
+                    &dst_p,
+                    side,
+                    self.links.len(),
+                    &mut accumulate,
+                );
                 let width = iter.width;
                 let i: Box<dyn LineIterSet> = Box::new(iter);
 
@@ -261,8 +268,6 @@ impl LinkSet {
         };
         let aw = width * HALF;
         for (link_id, (a, arc, b)) in iter.enumerate() {
-            accumulate.step(&a);
-            accumulate.step(&b);
             let link = &self.links[link_id];
             links.push(match arc {
                 None => {

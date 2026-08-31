@@ -51,7 +51,14 @@ fn link_container_update_tests() {
 
 #[test]
 fn test_line_iter() {
-    let mut iter = LineIter::new(&Point::new(0.0, 3.0), &Point::new(10.0, 3.0), 6.0, 2);
+    let mut counter = FullBoxAccumulate::new();
+    let mut iter = LineIter::new(
+        &Point::new(0.0, 3.0),
+        &Point::new(10.0, 3.0),
+        6.0,
+        2,
+        &mut counter,
+    );
     let mut left = Point::new(0.0, 1.5);
     let mut right = Point::new(10.0, 1.5);
     let mut res = iter.next().unwrap();
@@ -68,7 +75,14 @@ fn test_line_iter() {
     assert_relative_eq!(res.2.y, right.y, epsilon = 0.001);
     assert!(iter.next().is_none());
 
-    iter = LineIter::new(&Point::new(10.0, 3.0), &Point::new(0.0, 3.0), 6.0, 1);
+    counter = FullBoxAccumulate::new();
+    iter = LineIter::new(
+        &Point::new(10.0, 3.0),
+        &Point::new(0.0, 3.0),
+        6.0,
+        1,
+        &mut counter,
+    );
     right = Point::new(0.0, 3.0);
     left = Point::new(10.0, 3.0);
     res = iter.next().unwrap();
@@ -91,17 +105,28 @@ pub fn point_accumualte_test() {
 
 #[test]
 pub fn next_point_set_tests() {
-    let p = NextPointSet::new(&ZERO_POINT, &Point { x: 0.0, y: 1.0 }, 5.0, 0.25, HALF, 0.0);
+    let mut counter = FullBoxAccumulate::new();
+    let p = NextPointSet::new(
+        &ZERO_POINT,
+        &Point { x: 0.0, y: 1.0 },
+        5.0,
+        0.25,
+        HALF,
+        0.0,
+        &mut counter,
+    );
     assert_point!(p.point(0.0), Point::new(0.0, -2.5), 0.001);
     assert_point!(p.point(1.0), Point::new(0.0, 2.5), 0.001);
 }
 
 #[test]
 pub fn arc_point_test() {
+    let mut counter = FullBoxAccumulate::new();
+
     let a = ZERO_POINT;
     let b = Point::new(5.0, 5.0);
     let c = Point::new(10.0, 0.0);
-    let mut iter = ArcIter::new(&a, &b, &c, 5.0, 1);
+    let mut iter = ArcIter::new(&a, &b, &c, 5.0, 1, &mut counter);
     let (w, set, y) = iter.next().unwrap();
     let x = set.unwrap();
     assert_point!(w, a, 0.001);

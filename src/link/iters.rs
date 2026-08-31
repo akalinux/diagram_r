@@ -55,7 +55,7 @@ fn builder(
     inital_scale: f32,
     scale: f32,
     offset: f32,
-) -> (Point, Point) {
+) -> (Point, Point, Point, Point) {
     let left = src.get_point(dst, r, offset);
     let d = left.get_move_distance(src);
 
@@ -64,7 +64,7 @@ fn builder(
     let init = distance.scale(inital_scale);
     let chunk = distance.scale(scale);
     let start = left.add_distance(&init);
-    (start, chunk)
+    (start, chunk, left, distance)
 }
 
 #[derive(Debug)]
@@ -85,12 +85,27 @@ impl Display for NextPointSet {
 }
 
 impl NextPointSet {
-    pub fn new(src: &Point, dst: &Point, r: f32, init_scale: f32, scale: f32, offset: f32) -> Self {
-        let (root, chunk) = builder(src, dst, r, init_scale, scale, offset);
+    pub fn new(
+        src: &Point,
+        dst: &Point,
+        r: f32,
+        init_scale: f32,
+        scale: f32,
+        offset: f32,
+        counter: &mut FullBoxAccumulate,
+    ) -> Self {
+        let (root, chunk, left, offset) = builder(src, dst, r, init_scale, scale, offset);
+
+        let distance = src.get_move_distance(dst);
+        counter.step(&left);
+        counter.step(&left.add_distance(&offset));
+        let end = left.add_distance(&distance);
+        counter.step(&end);
+        counter.step(&end.add_distance(&offset));
         Self {
             root,
             chunk,
-            distance: src.get_move_distance(dst),
+            distance,
         }
     }
     pub fn point(&self, scale: f32) -> Point {
@@ -112,14 +127,28 @@ pub struct ArcIter {
 }
 
 impl ArcIter {
-    pub fn new(src: &Point, center: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
+    pub fn new(
+        src: &Point,
+        center: &Point,
+        dst: &Point,
+        full_width: f32,
+        total: usize,
+        counter: &mut FullBoxAccumulate,
+    ) -> Self {
         let (width, inital_scale, scale) = get_line_width(total, full_width);
         let r = full_width * HALF;
 
-        let a = NextPointSet::new(src, center, r, inital_scale, scale, R_90);
+        let a = NextPointSet::new(src, center, r, inital_scale, scale, R_90, counter);
 
-        let b = NextPointSet::new(dst, center, r, inital_scale, scale, R_270);
+        let b = NextPointSet::new(dst, center, r, inital_scale, scale, R_270, counter);
+        let mid = src.get_center(dst);
+        // going left
+        let rad = center.get_radians(&mid);
 
+        let p = center.get_xy(r, rad);
+        counter.step(&p);
+        let pe = center.add_distance(&p.get_move_distance(center));
+        counter.step(&pe);
         /*b.init = dst.get_xy(
             full_width * HALF * inital_scale,
             src.get_radians(center) + R_90,
@@ -165,11 +194,17 @@ pub struct LineIter {
 }
 
 impl LineIter {
-    pub fn new(src: &Point, dst: &Point, full_width: f32, total: usize) -> Self {
+    pub fn new(
+        src: &Point,
+        dst: &Point,
+        full_width: f32,
+        total: usize,
+        counter: &mut FullBoxAccumulate,
+    ) -> Self {
         let (width, inital_scale, scale) = get_line_width(total, full_width);
         let r = full_width * HALF;
 
-        let np = NextPointSet::new(src, dst, r, inital_scale, scale, R_90);
+        let np = NextPointSet::new(src, dst, r, inital_scale, scale, R_90, counter);
         Self {
             np,
             total: total,

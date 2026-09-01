@@ -144,41 +144,6 @@ pub fn normalize_rad(rad: f32) -> (f32, bool) {
     }
 }
 
-pub fn get_arc_t2(begin: &Point, control: &Point, end: &Point, check: &Point) -> Option<f32> {
-    let base = begin.get_distance_square(end);
-    let half = base * HALF;
-    let dp = begin.get_distance_square(check);
-    let rad_p = begin.get_radians(check);
-    let start1 = ZERO_POINT.get_xy(dp, rad_p);
-    if (start1.x - half).abs() < f32::EPSILON {
-        // if we are almost half we are done
-        return Some(HALF);
-    }
-
-    let end1 = Point::new(start1.y, start1.x);
-    let (start2, side, rad) = if start1.x < half {
-        (
-            Point::new(base, 0.0),
-            begin.get_distance_square(control) * 2.0,
-            begin.get_radians(control),
-        )
-    } else {
-        (
-            ZERO_POINT,
-            end.get_distance_square(control) * 2.0,
-            end.get_radians(control),
-        )
-    };
-    if side < f32::EPSILON {
-        return None;
-    }
-    let end2 = start2.get_xy(side, rad);
-    match get_intersection(&start1, &end1, &start2, &end2) {
-        Some(np) => Some((start2.get_distance_square(&np) / side) * HALF * 0.01),
-        None => None,
-    }
-}
-
 pub fn get_abc_from_points(begin: &Point, end: &Point) -> (f32, f32, f32) {
     let a = end.y - begin.y;
     let b = begin.x - end.x;

@@ -24,7 +24,7 @@ use crate::{
         GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH, GRID_SIZE, GRID_SLOTS, HALF, MAX_K, MIN_K,
         ONE_THIRD,
     },
-    utils::{get_distance, get_radians, get_xy_r, to_map_xy},
+    utils::{get_distance, get_radians, get_xy_r, normalize_rad, to_map_xy},
 };
 
 #[wasm_bindgen]
@@ -163,6 +163,11 @@ impl Point {
 
     pub fn get_point(&self, dst: &Self, r: f32, offset_rad: f32) -> Point {
         let rad = self.get_radians(dst) + offset_rad;
+        self.get_xy(r, rad)
+    }
+    pub fn get_normalized_point(&self, dst: &Self, r: f32, offset_rad: f32) -> Point {
+        let (rad, _) = normalize_rad(self.get_radians(dst) + offset_rad);
+
         self.get_xy(r, rad)
     }
 

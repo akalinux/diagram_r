@@ -1,8 +1,8 @@
 use js_sys::Number;
 
 use crate::{
-    Point, Transform,
-    constants::{AREA_SCALE_EPSILON, HALF, R_90, R_180, R_270, R_360, ZERO_POINT},
+    LabelPosition, Point, Transform,
+    constants::{AREA_SCALE_EPSILON, HALF, R_90, R_180, R_270, R_360},
     square::Corners,
 };
 
@@ -212,8 +212,7 @@ pub fn quadratic_arc_length(p0: Point, p1: Point, p2: Point) -> f32 {
     let u = 1.0 + sab;
     let k = c_val - sab * sab;
 
-    return (quad_arc_distance_support(a, u, sab, k) - quad_arc_distance_support(a, sab, sab, k))
-        .abs();
+    return (qd_arc_sup(a, u, sab, k) - qd_arc_sup(a, sab, sab, k)).abs();
     /*/
     let func = |t: f32| -> f32 {
         let term = t + sab;
@@ -225,7 +224,7 @@ pub fn quadratic_arc_length(p0: Point, p1: Point, p2: Point) -> f32 {
     */
 }
 
-fn quad_arc_distance_support(a: f32, t: f32, sab: f32, k: f32) -> f32 {
+fn qd_arc_sup(a: f32, t: f32, sab: f32, k: f32) -> f32 {
     let term = t + sab;
     let inner = (term * term + k).max(0.0).sqrt();
     HALF * a.sqrt() * (term * inner + k * (term + inner).abs().ln())
@@ -242,6 +241,35 @@ pub fn arc_contains_point(r: f32, p: &Point, begin: &Point, control: &Point, end
     let check = compute_arc_point(t, begin, control, end);
     //log(&format!("{check},{p},{r}"));
     inside_circle(p, &check, r)
+}
+
+pub fn shift_arc_position(
+    a: &Point,
+    c: &Point,
+    b: &Point,
+    r: f32,
+    position: &LabelPosition,
+) -> [Point; 3] {
+    let offset = match position {
+        LabelPosition::Center => return [*a, *c, *b],
+        LabelPosition::Bottom => R_270,
+        LabelPosition::Top => R_90,
+    };
+
+    let d1 = a.get_distance_vec(c, r, offset);
+    let d2 = c.get_distance_vec(&b, r, offset);
+
+    let vs = a.get_move_distance(c);
+    let vc = c.get_move_distance(b);
+    let s1 = a.sub_distance(&d1);
+    let e1 = b.sub_distance(&d2);
+    let c1 = {
+        let c1 = c.sub_distance(&d1).add_distance(&vs);
+        let c2 = c.sub_distance(&d2);
+        force_intersection(&s1, &c1, &c2, &e1.add_distance(&vc))
+    };
+
+    [s1, c1, e1]
 }
 
 pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [Point; 6] {

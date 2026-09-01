@@ -17,7 +17,7 @@ use crate::{
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::normalize_rad,
+    utils::{normalize_rad, shift_arc_position},
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -369,6 +369,44 @@ impl CanvasRender {
         self.draw_arc(&p.point, &opt.highlight_color, r)
     }
 
+    fn draw_quad_arc_text(
+        &self,
+        a: &Point,
+        b: &Point,
+        c: &Point,
+        color: &String,
+        r: f32,
+        position: &LabelPosition,
+        text: &String,
+        highlight: bool,
+    ) -> Result<(), JsValue> {
+        let [a, b, c] = shift_arc_position(a, c, b, r * 0.75, position);
+        // Need to compute the text scale and position before either highlight or non highlight
+        let mut width = 0.0;
+        let mut hight = 0.0;
+        let r2 = r * HALF;
+        for l in text.chars() {
+            let s = l.to_string();
+            let (h, w) = self.get_text_size(&s)?;
+            let w = w as f32;
+            let h = h as f32;
+            hight = match hight < h {
+                true => h,
+                false => hight,
+            };
+            width += match h > w {
+                true => h,
+                false => w,
+            };
+        }
+        let chars = text.chars();
+        if highlight {
+            self.draw_quad_arc(&a, &b, &c, color, r2);
+        } else {
+        }
+        //shift_arc_position(a, c, b, r, position)
+        Ok(())
+    }
     fn draw_quad_arc(&self, a: &Point, c: &Point, e: &Point, color: &String, width: f32) {
         let ctx = &self.ctx;
         ctx.begin_path();
@@ -414,20 +452,41 @@ impl CanvasRender {
         let o = diagram.get_opt(link.opt);
         match &dd.links[i] {
             SubLink::Arc([a, c, b], animations) => {
-                self.draw_quad_arc(a, c, b, color, width);
-                self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                if highlight {
+                    self.draw_quad_arc(a, c, b, color, width);
+                    self.draw_quad_arc_text(
+                        a,
+                        b,
+                        c,
+                        color,
+                        width,
+                        &o.label_position,
+                        text,
+                        highlight,
+                    )?;
+                } else {
+                    self.draw_quad_arc(a, c, b, color, width);
+                    self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                }
                 Ok(())
-            } // TODO
+            }
             SubLink::Line([a, b], animations) => {
-                self.draw_line(a, b, width, color);
-                self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                if highlight {
+                    self.draw_line(a, b, width, color);
+                } else {
+                    self.draw_line(a, b, width, color);
+                    self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                }
+
                 self.compute_and_draw_link_text(a, b, width, text, opt, highlight, t, o)
             }
             SubLink::Joint([a, b, c], animations) => {
                 self.draw_line(a, b, width, color);
                 self.draw_line(b, c, width, color);
                 self.draw_arc(b, color, width)?;
-                self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                if !highlight {
+                    self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                }
                 self.compute_and_draw_link_text(a, b, width, text, opt, highlight, t, o)?;
                 self.compute_and_draw_link_text(b, c, width, text, opt, highlight, t, o)
             }

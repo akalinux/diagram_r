@@ -6,8 +6,8 @@ use diagram_r::{
     Point,
     constants::{R_270, ZERO_POINT},
     utils::{
-        arc_contains_point, closest_t_on_arc, compute_arc_point, full_box_from, get_arc_t2,
-        get_intersection, inside_box,
+        arc_contains_point, closest_t_on_arc, compute_arc_point, full_box_from, get_intersection,
+        inside_box,
     },
 };
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -95,8 +95,7 @@ fn get_t_from_p_test() {
 
     for i in [0.15, 0.25, 0.33, 0.45, 0.5, 0.55, 0.66, 0.75, 0.85, 0.90] {
         let p = compute_arc_point(i, &s, &c, &e);
-        //assert_relative_eq!(closest_t_on_arc(&s, &c, &e, &p), i, epsilon = 0.001);
-        //println!("Angle was: {}", s.get_degree(&p));
-        println!("{i},{:?}", get_arc_t2(&s, &c, &e, &p))
+        let cmp = closest_t_on_arc(&s, &c, &e, &p);
+        assert_relative_eq!(cmp, i, epsilon = 0.001);
     }
 }

@@ -2,7 +2,7 @@ use js_sys::Number;
 
 use crate::{
     Point, Transform,
-    constants::{AREA_SCALE_EPSILON, HALF, R_90, R_180, R_270, R_360},
+    constants::{AREA_SCALE_EPSILON, HALF, R_90, R_180, R_270, R_360, ZERO_POINT},
     square::Corners,
 };
 
@@ -144,6 +144,41 @@ pub fn normalize_rad(rad: f32) -> (f32, bool) {
     }
 }
 
+pub fn get_arc_t2(begin: &Point, control: &Point, end: &Point, check: &Point) -> Option<f32> {
+    let base = begin.get_distance_square(end);
+    let half = base * HALF;
+    let dp = begin.get_distance_square(check);
+    let rad_p = begin.get_radians(check);
+    let start1 = ZERO_POINT.get_xy(dp, rad_p);
+    if (start1.x - half).abs() < f32::EPSILON {
+        // if we are almost half we are done
+        return Some(HALF);
+    }
+
+    let end1 = Point::new(start1.y, start1.x);
+    let (start2, side, rad) = if start1.x < half {
+        (
+            Point::new(base, 0.0),
+            begin.get_distance_square(control) * 2.0,
+            begin.get_radians(control),
+        )
+    } else {
+        (
+            ZERO_POINT,
+            end.get_distance_square(control) * 2.0,
+            end.get_radians(control),
+        )
+    };
+    if side < f32::EPSILON {
+        return None;
+    }
+    let end2 = start2.get_xy(side, rad);
+    match get_intersection(&start1, &end1, &start2, &end2) {
+        Some(np) => Some((start2.get_distance_square(&np) / side) * HALF * 0.01),
+        None => None,
+    }
+}
+
 pub fn get_abc_from_points(begin: &Point, end: &Point) -> (f32, f32, f32) {
     let a = end.y - begin.y;
     let b = begin.x - end.x;
@@ -260,16 +295,17 @@ pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [P
 /// Calculates the exact parameter `t` [0.0, 1.0] on a 2D quadratic Bezier curve
 /// that minimizes the distance to a target point `m`.
 pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, m: &Point) -> f32 {
-    // 1. Convert Bezier curve into polynomial form: P(t) = A*t^2 + B*t + C
+    // this provides the control point as an inveted vector
     let ax = begin.x - 2.0 * control.x + end.x;
     let ay = begin.y - 2.0 * control.y + end.y;
+
+    // this provides an inveted vector of begin to control
     let bx = 2.0 * (control.x - begin.x);
     let by = 2.0 * (control.y - begin.y);
-    let cx = begin.x;
-    let cy = begin.y;
 
-    let cm_x = cx - m.x;
-    let cm_y = cy - m.y;
+    // this provides a vector from begin to or test point of m
+    let cm_x = begin.x - m.x;
+    let cm_y = begin.y - m.y;
 
     // 2. Compute the derivative coefficients of the squared distance function
     // f(t) = a*t^3 + b*t^2 + c*t + d = 0 (Divided by 2 for optimization)
@@ -278,35 +314,34 @@ pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, m: &Point) 
     let c = (bx * bx + by * by) + 2.0 * (ax * cm_x + ay * cm_y);
     let d = bx * cm_x + by * cm_y;
 
-    // 3. Robust Initializer: Sample the curve at 5 uniform intervals to find a
-    // baseline minimum. This guarantees we seed the root finder near the global minimum.
+    // start with a t value of 0
     let mut best_t = 0.0;
+    // start wtih the largest f32
     let mut min_d_sq = f32::INFINITY;
 
     for t_sample in [0.0, 0.5, 0.75, 1.0] {
-        //let pt = get_point_on_arc(begin, control, end, t_sample);
         let pt = compute_arc_point(t_sample, begin, control, end);
         let dx = pt.x - m.x;
         let dy = pt.y - m.y;
         let d_sq = dx * dx + dy * dy;
+        // we are looking for the smallest distance squard from our seed point
+        // to our check point.
         if d_sq < min_d_sq {
             min_d_sq = d_sq;
             best_t = t_sample;
         }
     }
 
-    // 4. Newton-Raphson Iterative Refinement Loop
-    // t_next = t - f(t) / f'(t)
-    // where f'(t) = 3*a*t^2 + 2*b*t + c
+    // look for our approximte distance  based on best_t
     for _ in 0..5 {
         let a_best_t = a * best_t;
-        //let f_t = ((a * best_t + b) * best_t + c) * best_t + d;
-        let f_t = ((a_best_t + b) * best_t + c) * best_t + d;
-        //let f_prime_t = (3.0 * a * best_t + 2.0 * b) * best_t + c;
+
+        // Quazi Area of triangle squared and multiply by best_t
         let f_prime_t = (3.0 * a_best_t + 2.0 * b) * best_t + c;
+        // Quazi Area of the triangle squared with the c replaced by d and multiplied by best_t
+        let f_t = ((a_best_t + b) * best_t + c) * best_t + d;
 
         // Prevent division-by-zero errors on perfectly flat curves
-        //if f_prime_t.abs() < 1e-6 {
         if f_prime_t.abs() < f32::EPSILON {
             break;
         }
@@ -317,17 +352,5 @@ pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, m: &Point) 
         best_t = next_t.clamp(0.0, 1.0);
     }
 
-    // 5. Final safety verification against the absolute boundaries t=0 and t=1
-    for boundary_t in [0.0, 1.0] {
-        let pt = compute_arc_point(boundary_t, begin, control, end);
-        let dx = pt.x - m.x;
-        let dy = pt.y - m.y;
-        let d_sq = dx * dx + dy * dy;
-        if d_sq < min_d_sq {
-            min_d_sq = d_sq;
-            best_t = boundary_t;
-        }
-    }
-
-    best_t
+    best_t.abs().clamp(0.0, 1.0)
 }

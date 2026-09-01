@@ -154,6 +154,9 @@ impl Point {
         }
     }
 
+    pub fn get_distance_square(&self, p: &Self) -> f32 {
+        (self.x - p.x).powi(2) + (self.y - p.y).powi(2)
+    }
     pub fn get_xy(&self, r: f32, rad: f32) -> Point {
         get_xy_r(self.x, self.y, r, rad)
     }

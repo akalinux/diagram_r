@@ -9,7 +9,7 @@ async function run() {
   let opt = new DiagramOpt();
   opt.grid_opt = new GridOpt();
   opt.link_scale = 1;
-  //opt.animate = false;
+  opt.animate = false;
   const d = new Diagram(opt);
 
   const north = new Node(new Square(365, 20, 60, 60), "North", 0,);

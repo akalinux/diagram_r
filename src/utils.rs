@@ -192,42 +192,51 @@ pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
     */
 }
 
-pub fn quadratic_arc_length(p0: Point, p1: Point, p2: Point) -> f32 {
-    let ax = p0.x - 2.0 * p1.x + p2.x;
-    let ay = p0.y - 2.0 * p1.y + p2.y;
-    let bx = 2.0 * p1.x - 2.0 * p0.x;
-    let by = 2.0 * p1.y - 2.0 * p0.y;
+pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {
+    // Vector components
+    // v = P1 - P0
+    let vx = control.x - begin.x;
+    let vy = control.y - begin.y;
 
-    let a = 4.0 * (ax * ax + ay * ay);
-    let b = 4.0 * (ax * bx + ay * by);
-    let c = bx * bx + by * by;
+    // w = P2 - P1
+    let wx = end.x - control.x;
+    let wy = end.y - control.y;
 
-    // Handle degenerate linear or point cases safely
-    if a.abs() < 1e-12 {
-        return ((p2.x - p0.x).powi(2) + (p2.y - p0.y).powi(2)).sqrt();
+    // u = w - v = P2 - 2*P1 + P0
+    let ux = wx - vx;
+    let uy = wy - vy;
+
+    // Coefficients of the polynomial inside the radical: f(t) = c*t^2 + b*t + a
+    let c = ux * ux + uy * uy;
+    let b = 2.0 * (ux * vx + uy * vy);
+    let a = vx * vx + vy * vy;
+
+    // Handle collinear or degenerate curves (straight line or overlapping points)
+    if c.abs() < f32::EPSILON {
+        // If c is zero, the path speed is constant: 2 * sqrt(a)
+        return 2.0 * a.sqrt();
     }
 
-    let sab = b / (2.0 * a);
-    let c_val = c / a;
-    let u = 1.0 + sab;
-    let k = c_val - sab * sab;
-
-    return (qd_arc_sup(a, u, sab, k) - qd_arc_sup(a, sab, sab, k)).abs();
-    /*/
-    let func = |t: f32| -> f32 {
-        let term = t + sab;
-        let inner = (term * term + k).max(0.0).sqrt();
-        0.5 * a.sqrt() * (term * inner + k * (term + inner).abs().ln())
-    };
-
-    (func(u) - func(sab)).abs()
-    */
+    // The velocity magnitude is multiplied by 2.0 because P'(t) = 2 * (1-t)(P1-P0) + 2t(P2-P1)
+    2.0 * (qd_arc_sup(a, b, c, 1.0) - qd_arc_sup(a, b, c, 0.0))
 }
 
-fn qd_arc_sup(a: f32, t: f32, sab: f32, k: f32) -> f32 {
-    let term = t + sab;
-    let inner = (term * term + k).max(0.0).sqrt();
-    HALF * a.sqrt() * (term * inner + k * (term + inner).abs().ln())
+fn qd_arc_sup(a: f32, b: f32, c: f32, t: f32) -> f32 {
+    let temp = 2.0 * c * t + b;
+    let radical = (c * t * t + b * t + a).sqrt();
+
+    let term1 = (temp * radical) / (4.0 * c);
+
+    let k = 4.0 * a * c - b * b;
+    let log_arg = temp + 2.0 * c.sqrt() * radical;
+
+    let term2 = if log_arg > 0.0 {
+        (k * log_arg.ln()) / (8.0 * c * c.sqrt())
+    } else {
+        0.0
+    };
+
+    term1 + term2
 }
 
 pub fn arc_contains_point(r: f32, p: &Point, begin: &Point, control: &Point, end: &Point) -> bool {

@@ -10,14 +10,17 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::{CANVAS_ERROR, DOUBLE_PIE, HALF, R_90, R_270},
+    constants::{
+        CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_45, R_90, R_135, R_225, R_270, R_315,
+    },
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::{LineAnimation, LinkContainer, SubLink},
+    log,
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{normalize_rad, shift_arc_position},
+    utils::{compute_arc_point, normalize_rad, quadratic_arc_length, shift_arc_position},
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -372,37 +375,103 @@ impl CanvasRender {
     fn draw_quad_arc_text(
         &self,
         a: &Point,
-        b: &Point,
         c: &Point,
+        b: &Point,
         color: &String,
         r: f32,
         position: &LabelPosition,
         text: &String,
         highlight: bool,
+        text_color: &String,
+        t: &Transform,
     ) -> Result<(), JsValue> {
-        let [a, b, c] = shift_arc_position(a, c, b, r * 0.75, position);
+        if text.is_empty() {
+            return Ok(());
+        }
+        let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, position);
         // Need to compute the text scale and position before either highlight or non highlight
         let mut width = 0.0;
-        let mut hight = 0.0;
-        let r2 = r * HALF;
+        let mut height = 0.0;
+        let mut chars = Vec::new();
         for l in text.chars() {
             let s = l.to_string();
             let (h, w) = self.get_text_size(&s)?;
             let w = w as f32;
             let h = h as f32;
-            hight = match hight < h {
+            height = match height < h {
                 true => h,
-                false => hight,
+                false => height,
             };
             width += match h > w {
                 true => h,
                 false => w,
             };
+            chars.push(l);
         }
-        let chars = text.chars();
+        if height < f32::EPSILON {
+            return Ok(());
+        }
+        let scale = (height / r) * HALF;
+        let rw = width * scale;
+        let ql = quadratic_arc_length(&a, &c, &b);
+        let s = (ql - rw) * HALF;
+        let ctx = &self.ctx;
+
+        let ab_center = a.get_center(&b);
+        let start = s / ql;
+        let step = {
+            let scale_step = 1.0 / chars.len() as f32;
+            let scale = rw / ql;
+            scale_step * scale
+        };
+        let rad = ab_center.get_radians(&a);
         if highlight {
-            self.draw_quad_arc(&a, &b, &c, color, r2);
+            ctx.set_fill_style_str(color);
+            ctx.begin_path();
+            let r = height * 0.25 * CORNER_DISTANCE;
+            {
+                let p = compute_arc_point(start + step * chars.len() as f32, &a, &c, &b);
+                let rad = ab_center.get_radians(&p);
+                let p1 = p.get_xy(r, rad);
+                ctx.move_to(p1.x as f64, p1.y as f64);
+            }
+
+            for i in (0..chars.len() - 1).rev() {
+                let pos = start + (step * i as f32);
+                let p = compute_arc_point(pos, &a, &c, &b);
+                let rad = ab_center.get_radians(&p);
+                let p1 = p.get_xy(r, rad);
+                ctx.line_to(p1.x as f64, p1.y as f64);
+            }
+
+            let start = start - step * HALF;
+            for i in 0..chars.len() {
+                let pos = start + (step * i as f32);
+                let p = compute_arc_point(pos, &a, &c, &b);
+                let rad = p.get_radians(&ab_center);
+                let p1 = p.get_xy(r, rad);
+                ctx.line_to(p1.x as f64, p1.y as f64);
+            }
+            ctx.close_path();
+            ctx.fill();
         } else {
+            ctx.set_fill_style_str(text_color);
+            for i in 0..chars.len() {
+                let v = &chars[i];
+                let pos = start + (step * i as f32);
+                let p = compute_arc_point(pos, &a, &c, &b);
+                let full_scale = scale * t.k;
+                let x = p.x * t.k + t.x;
+                let y = p.y * t.k + t.y;
+
+                let k = (full_scale * rad.cos()) as f64;
+                let r = (full_scale * rad.sin()) as f64;
+                ctx.set_transform(k as f64, r, -r, k as f64, x as f64, y as f64)?;
+                //log(&format!("{pos:.3},{step:.3},{v}"));
+                ctx.fill_text(&v.to_string(), 0.0, 0.0)?;
+            }
+            // reset our transform
+            ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
         }
         //shift_arc_position(a, c, b, r, position)
         Ok(())
@@ -454,20 +523,22 @@ impl CanvasRender {
             SubLink::Arc([a, c, b], animations) => {
                 if highlight {
                     self.draw_quad_arc(a, c, b, color, width);
-                    self.draw_quad_arc_text(
-                        a,
-                        b,
-                        c,
-                        color,
-                        width,
-                        &o.label_position,
-                        text,
-                        highlight,
-                    )?;
                 } else {
                     self.draw_quad_arc(a, c, b, color, width);
                     self.draw_link_animations(animations, &opt.animation_color, aw)?;
                 }
+                self.draw_quad_arc_text(
+                    a,
+                    c,
+                    b,
+                    color,
+                    width,
+                    &o.label_position,
+                    text,
+                    highlight,
+                    &opt.font_color,
+                    t,
+                )?;
                 Ok(())
             }
             SubLink::Line([a, b], animations) => {

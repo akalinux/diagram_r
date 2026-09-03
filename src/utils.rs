@@ -192,6 +192,55 @@ pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
     */
 }
 
+pub fn closest_t_on_arc2(begin: &Point, control: &Point, end: &Point, p: &Point) -> f32 {
+    let da = begin.get_distance_square(p);
+    let db = end.get_distance_square(p);
+    // Hyper optimization for the median point!
+    if da.abs() > f32::EPSILON && ((db / da).abs() - 1.0).abs() <= f32::EPSILON {
+        return 0.5;
+    }
+    // level and square are points
+    let base = begin.get_distance_square(end);
+    let center = begin.get_center(end);
+
+    let rad = center.get_radians(p) * HALF;
+
+    let d1 = begin.get_manhattan_distance(control);
+    let d2 = control.get_manhattan_distance(end);
+    let cmp_point = p.get_xy(base, rad);
+    match (
+        get_intersection(begin, control, p, &cmp_point),
+        get_intersection(control, end, p, &cmp_point),
+    ) {
+        (Some(p1), Some(p2)) => {
+            let mut d = 0.0;
+            let mut total = 0.0;
+            if d1 > f32::EPSILON {
+                let cmp = p1.get_manhattan_distance(begin);
+                let c = cmp / d1;
+                d += c;
+                total += 1.0;
+            }
+            if d2 > f32::EPSILON {
+                let cmp = p2.get_manhattan_distance(control);
+                let c = cmp / d2;
+                d += c;
+                total += 1.0;
+            }
+            if total > 0.0 {
+                let res = d / total;
+                return res;
+            }
+
+            return 0.0;
+        }
+        _ => match da < db {
+            true => 0.0,
+            false => 1.0,
+        },
+    }
+}
+
 pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {
     // Vector components
     // v = P1 - P0
@@ -248,7 +297,6 @@ pub fn arc_contains_point(r: f32, p: &Point, begin: &Point, control: &Point, end
     */
     let t = closest_t_on_arc(begin, control, end, p);
     let check = compute_arc_point(t, begin, control, end);
-    //log(&format!("{check},{p},{r}"));
     inside_circle(p, &check, r)
 }
 

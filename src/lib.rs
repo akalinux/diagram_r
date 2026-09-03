@@ -24,7 +24,7 @@ use crate::{
         GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH, GRID_SIZE, GRID_SLOTS, HALF, MAX_K, MIN_K,
         ONE_THIRD,
     },
-    utils::{get_distance, get_radians, get_xy_r, normalize_rad, to_map_xy},
+    utils::{get_distance, get_distance_square, get_radians, get_xy_r, normalize_rad, to_map_xy},
 };
 
 #[wasm_bindgen]
@@ -155,8 +155,13 @@ impl Point {
     }
 
     pub fn get_distance_square(&self, p: &Self) -> f32 {
-        (self.x - p.x).powi(2) + (self.y - p.y).powi(2)
+        get_distance_square(self.x, self.y, p.x, p.y)
     }
+
+    pub fn get_manhattan_distance(&self, p: &Self) -> f32 {
+        (self.x - p.x).abs() + (self.y - p.y).abs()
+    }
+
     pub fn get_xy(&self, r: f32, rad: f32) -> Point {
         get_xy_r(self.x, self.y, r, rad)
     }

@@ -106,6 +106,9 @@ impl Point {
     }
 }
 impl Point {
+    pub fn center_radian_to(self, a: &Self, b: &Self) -> f32 {
+        (self.get_radians(a) + self.get_radians(b)) * HALF
+    }
     pub fn abs(&self) -> Self {
         Self {
             x: self.x.abs(),

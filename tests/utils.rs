@@ -7,7 +7,7 @@ use diagram_r::{
     constants::{R_270, ZERO_POINT},
     utils::{
         arc_contains_point, closest_t_on_arc, closest_t_on_arc2, compute_arc_point, full_box_from,
-        get_intersection, inside_box, shift_arc_position,
+        get_intersection, inside_box, side_of_line,
     },
 };
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -96,17 +96,57 @@ fn get_t_from_p_test() {
     for i in [0.15, 0.25, 0.33, 0.45, 0.5, 0.55, 0.66, 0.75, 0.85, 0.90] {
         //for i in [0.15, 0.25, 0.33, 0.45, 0.5] {
         let p = compute_arc_point(i, &s, &c, &e);
+        //println!("Real Point: {p}, Raw: {i}");
         let cmp = closest_t_on_arc(&s, &c, &e, &p);
+        assert_relative_eq!(cmp, i, epsilon = 0.001);
         let cmp2 = closest_t_on_arc2(&s, &c, &e, &p);
+        println!("  Slow: {cmp} Fast: {cmp2}");
 
-        println!("Slow: {cmp} Fast: {cmp2} Raw: {i}");
-        let [s, c, e] = shift_arc_position(&s, &c, &e, 1.25, &diagram_r::LabelPosition::Top);
-        let cmp = closest_t_on_arc(&s, &c, &e, &p);
-        let cmp2 = closest_t_on_arc2(&s, &c, &e, &p);
-        println!("     Slow: {cmp} Fast: {cmp2} Raw: {i}")
+        //let [x, y, z] = shift_arc_position(&s, &c, &e, 1.25, &diagram_r::LabelPosition::Top);
+        //let p = compute_arc_point(i, &x, &y, &z);
+        //let cmp = closest_t_on_arc(&s, &c, &e, &p);
+        //let cmp2 = closest_t_on_arc2(&s, &c, &e, &p);
+        //let p2 = compute_arc_point(cmp, &x, &y, &z);
+        //let center = s.get_center(&e);
 
+        //println!(
+        //            "     Slow: {cmp} Fast: {cmp2}, Expected Angle: {}\n",
+        //          p.get_degree(&center) * HALF
+        //    );
         //println!("{i},{cmp2}");
         //break;
-        //assert_relative_eq!(cmp2, i, epsilon = 0.001);
     }
+}
+
+#[test]
+fn line_side_test() {
+    assert_eq!(side_of_line(&ZERO_POINT, &ZERO_POINT, &ZERO_POINT), 0.0);
+
+    // above the line
+    assert!(
+        side_of_line(
+            &ZERO_POINT,
+            &Point { x: 10.0, y: 0.0 },
+            &Point { x: 5.0, y: 5.0 }
+        ) < 0.0,
+    );
+    // below the line
+    assert!(
+        side_of_line(
+            &ZERO_POINT,
+            &Point { x: 10.0, y: 0.0 },
+            &Point { x: 5.0, y: -5.0 }
+        ) > 0.0,
+    );
+}
+
+#[test]
+fn center_angle_from() {
+    assert_relative_eq!(
+        Point::new(5.0, 5.0)
+            .center_radian_to(&ZERO_POINT, &Point::new(10.0, 0.0))
+            .to_degrees(),
+        90.0,
+        epsilon = 0.001,
+    );
 }

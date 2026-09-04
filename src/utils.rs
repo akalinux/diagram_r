@@ -177,12 +177,13 @@ pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &P
 }
 
 pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
-    // this is 16 steps can be reduced to 8 with simd
+    // this is 16 steps
     let a = s.add_distance(&s.get_move_distance(c).scale(t));
     let b = c.add_distance(&c.get_move_distance(e).scale(t));
 
     a.add_distance(&a.get_move_distance(&b).scale(t))
     /*
+    // this is 20 steps
     let mt = 1.0 - t; // (1 - t)
 
     let x = mt * mt * s.x + 2.0 * mt * t * c.x + t * t * e.x;
@@ -192,53 +193,58 @@ pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
     */
 }
 
-pub fn closest_t_on_arc2(begin: &Point, control: &Point, end: &Point, p: &Point) -> f32 {
-    let da = begin.get_distance_square(p);
-    let db = end.get_distance_square(p);
-    // Hyper optimization for the median point!
-    if da.abs() > f32::EPSILON && ((db / da).abs() - 1.0).abs() <= f32::EPSILON {
-        return 0.5;
-    }
-    // level and square are points
+pub fn find_arc_t_np(begin: &Point, control: &Point, end: &Point, p: &Point) -> Option<f32> {
     let base = begin.get_distance_square(end);
     let center = begin.get_center(end);
 
     let rad = center.get_radians(p) * HALF;
-
-    let d1 = begin.get_manhattan_distance(control);
-    let d2 = control.get_manhattan_distance(end);
     let cmp_point = p.get_xy(base, rad);
-    match (
-        get_intersection(begin, control, p, &cmp_point),
-        get_intersection(control, end, p, &cmp_point),
-    ) {
-        (Some(p1), Some(p2)) => {
-            let mut d = 0.0;
-            let mut total = 0.0;
-            if d1 > f32::EPSILON {
-                let cmp = p1.get_manhattan_distance(begin);
-                let c = cmp / d1;
-                d += c;
-                total += 1.0;
-            }
-            if d2 > f32::EPSILON {
-                let cmp = p2.get_manhattan_distance(control);
-                let c = cmp / d2;
-                d += c;
-                total += 1.0;
-            }
-            if total > 0.0 {
-                let res = d / total;
-                return res;
-            }
-
-            return 0.0;
+    match get_intersection(begin, control, p, &cmp_point) {
+        Some(p1) => {
+            // need to pick our closest side
+            let d = begin.get_manhattan_distance(control);
+            let cmp = p1.get_manhattan_distance(begin);
+            let t = cmp / d;
+            Some(t)
         }
+        _ => None,
+    }
+}
+pub fn closest_t_on_arc2(begin: &Point, control: &Point, end: &Point, p: &Point) -> f32 {
+    let da = begin.get_distance_square(p);
+    let db = end.get_distance_square(p);
+    // Hyper optimization for the median point!
+    if da > f32::EPSILON && ((db / da) - 1.0).abs() <= f32::EPSILON {
+        return 0.5;
+    } else if da < f32::EPSILON {
+        return 0.0;
+    } else if db < f32::EPSILON {
+        return 1.0;
+    }
+    // level and square are points
+
+    match find_arc_t_np(begin, control, end, p) {
+        Some(t) => t,
         _ => match da < db {
             true => 0.0,
             false => 1.0,
         },
     }
+}
+/// Returns 0.0 if p is on the line of a->b.
+/// The number is negative p is above a and b.
+/// The number is positive if p is below a and b.
+///
+/// Note: This assumes p is between a and b on some axis.
+pub fn side_of_line(a: &Point, b: &Point, p: &Point) -> f32 {
+    let res = a.get_radians(b) - a.get_radians(p);
+    return if res.abs() < f32::EPSILON {
+        0.0
+    } else if res < 0.0 {
+        -1.0
+    } else {
+        1.0
+    };
 }
 
 pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {
@@ -289,12 +295,6 @@ fn qd_arc_sup(a: f32, b: f32, c: f32, t: f32) -> f32 {
 }
 
 pub fn arc_contains_point(r: f32, p: &Point, begin: &Point, control: &Point, end: &Point) -> bool {
-    /*
-    let t = match find_t_for_arc(begin, control, end, p) {
-        Some(t) => t,
-        None => return false,
-    };
-    */
     let t = closest_t_on_arc(begin, control, end, p);
     let check = compute_arc_point(t, begin, control, end);
     inside_circle(p, &check, r)
@@ -386,9 +386,9 @@ pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, m: &Point) 
     for _ in 0..5 {
         let a_best_t = a * best_t;
 
-        // Quazi Area of triangle squared and multiply by best_t
+        // get the base distance
         let f_prime_t = (3.0 * a_best_t + 2.0 * b) * best_t + c;
-        // Quazi Area of the triangle squared with the c replaced by d and multiplied by best_t
+        // get our new t distance
         let f_t = ((a_best_t + b) * best_t + c) * best_t + d;
 
         // Prevent division-by-zero errors on perfectly flat curves

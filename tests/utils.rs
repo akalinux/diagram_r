@@ -4,10 +4,10 @@ mod common;
 use approx::assert_relative_eq;
 use diagram_r::{
     Point,
-    constants::{R_270, ZERO_POINT},
+    constants::{R_90, R_180, R_270, R_360, ZERO_POINT},
     utils::{
         arc_contains_point, closest_t_on_arc, closest_t_on_arc2, compute_arc_point, full_box_from,
-        get_intersection, inside_box, shift_arc_position, side_of_line,
+        get_intersection, inside_box, normalize_to_right_angle, shift_arc_position, side_of_line,
     },
 };
 use wasm_bindgen_test::wasm_bindgen_test;
@@ -136,12 +136,26 @@ fn line_side_test() {
             &Point { x: 5.0, y: 5.0 }
         ) < 0.0,
     );
+    assert!(
+        side_of_line(
+            &ZERO_POINT,
+            &Point { x: 10.0, y: 0.0 },
+            &Point { x: 100.0, y: 5.0 }
+        ) < 0.0,
+    );
     // below the line
     assert!(
         side_of_line(
             &ZERO_POINT,
             &Point { x: 10.0, y: 0.0 },
             &Point { x: 5.0, y: -5.0 }
+        ) > 0.0,
+    );
+    assert!(
+        side_of_line(
+            &ZERO_POINT,
+            &Point { x: 10.0, y: 0.0 },
+            &Point { x: 5.0, y: -20.0 }
         ) > 0.0,
     );
 }
@@ -155,4 +169,21 @@ fn center_angle_from() {
         90.0,
         epsilon = 0.001,
     );
+}
+
+#[test]
+fn test_normalize_to_right_angle() {
+    let mut res = normalize_to_right_angle(
+        &ZERO_POINT,
+        &Point { x: 10.0, y: 0.0 },
+        &Point { x: 5.0, y: -20.0 },
+    );
+    assert_relative_eq!(res.0.to_degrees(), 270.0, epsilon = 0.001);
+
+    res = normalize_to_right_angle(
+        &ZERO_POINT,
+        &Point { x: 10.0, y: 0.0 },
+        &Point { x: 5.0, y: 20.0 },
+    );
+    assert_relative_eq!(res.0.to_degrees() % 360.0, 90.0, epsilon = 0.001);
 }

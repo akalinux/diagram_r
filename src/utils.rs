@@ -3,8 +3,8 @@ use js_sys::Number;
 use crate::{
     LabelPosition, Point, Transform,
     constants::{
-        AREA_SCALE_EPSILON, HALF, ONE_QUARTER, QUAD_ARC_FIND_REFINE_THRESHOLD, R_90, R_180, R_270,
-        R_360,
+        AREA_SCALE_EPSILON, HALF, ONE_QUARTER, QUAD_ARC_FIND_REFINE_THRESHOLD, R_1, R_90, R_180,
+        R_270, R_360,
     },
     square::Corners,
 };
@@ -279,10 +279,32 @@ pub fn closest_t_on_arc2(begin: &Point, control: &Point, end: &Point, p: &Point)
 /// Returns 0.0 if p is on the line of a->b.
 /// The number is negative p is above a and b.
 /// The number is positive if p is below a and b.
-///
-/// Note: This assumes p is between a and b on some axis.
 pub fn side_of_line(a: &Point, b: &Point, p: &Point) -> f32 {
-    a.get_radians(b) - a.get_radians(p)
+    if a.point_on_line(b, p) {
+        return 0.0;
+    }
+
+    let rad = p.center_radian_to(a, b);
+    if rad > R_180 {
+        // below
+        return 1.0;
+    } else {
+        // above
+        -1.0
+    }
+}
+/// Produces a normalized right angle from a<->b relative to wihch side p is on.
+/// If p is on the line of a and b, then 270 degrees is added.
+/// So if p is above a<->b then 270 degrees added, else 90 degrees is added.
+/// True means above or +270 and false means below or +90.
+pub fn normalize_to_right_angle(a: &Point, b: &Point, p: &Point) -> (f32, bool) {
+    let base = a.get_radians(b);
+    let rad = p.center_radian_to(a, b);
+    return if rad > R_180 {
+        (base + R_90, false)
+    } else {
+        (base + R_270, true)
+    };
 }
 
 pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {

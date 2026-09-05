@@ -24,7 +24,10 @@ use crate::{
         GRID_COLOR, GRID_DIVIDER_WIDTH, GRID_LINE_WIDTH, GRID_SIZE, GRID_SLOTS, HALF, MAX_K, MIN_K,
         ONE_THIRD,
     },
-    utils::{get_distance, get_distance_square, get_radians, get_xy_r, normalize_rad, to_map_xy},
+    utils::{
+        get_distance, get_distance_square, get_radians, get_xy_r, normalize_rad,
+        normalize_to_right_angle, to_map_xy,
+    },
 };
 
 #[wasm_bindgen]
@@ -184,6 +187,17 @@ impl Point {
     }
     pub fn get_center_y(&self, b: &Self) -> f32 {
         (self.y + b.y) * HALF
+    }
+
+    pub fn point_on_line(&self, a: &Self, p: &Self) -> bool {
+        let diff_a = (a.get_radians(self) - a.get_radians(p)).abs();
+        let diff_b = (self.get_radians(a) - self.get_radians(p)).abs();
+        diff_a < f32::EPSILON && diff_b < f32::EPSILON
+    }
+
+    /// Returns value in radians that is normalizeed to a right angle, based on which side self is to a and b.
+    pub fn normalize_to_right_angle(&self, a: &Point, b: &Point) -> (f32, bool) {
+        normalize_to_right_angle(a, b, self)
     }
 
     pub fn slope(&self, b: &Self) -> f32 {

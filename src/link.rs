@@ -3,8 +3,9 @@ pub mod iters;
 use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
-    constants::{HALF, R_90, R_270, ZERO_POINT},
+    constants::{HALF, R_90, R_180, R_270, ZERO_POINT},
     link::iters::{ArcIter, FullBoxAccumulate, LineIter, LineIterSet},
+    log,
     node::Node,
     square::Square,
     utils::{
@@ -280,9 +281,10 @@ impl LinkSet {
                     let animation = self.compute_animation(link, &a, &b, Some((mode, &c)), aw);
                     match mode {
                         ArcType::Arc => {
-                            let rad = a.get_center(&b).get_radians(&c);
-                            let (normalized_rad, norm) = normalize_rad(rad + R_270);
-                            SubLink::Arc([a, c, b], animation, rad, normalized_rad, norm)
+                            let (rad_base, side) = c.normalize_to_right_angle(&a, &b);
+                            let rad = rad_base + R_270;
+
+                            SubLink::Arc([a, c, b], animation, rad, side)
                         }
                         ArcType::Joint => SubLink::Joint(
                             [a, c, b],
@@ -346,19 +348,19 @@ impl Bundle {
 pub enum SubLink {
     Line([Point; 2], LineAnimation, f32, bool),
     Joint([Point; 3], LineAnimation, [(f32, bool); 2]),
-    Arc([Point; 3], LineAnimation, f32, f32, bool),
+    Arc([Point; 3], LineAnimation, f32, bool),
 }
 impl SubLink {
     pub fn get_src_dst(&self) -> (Point, Point) {
         match self {
-            Self::Arc([a, _, b], _, _, _, _) => (*a, *b),
+            Self::Arc([a, _, b], _, _, _) => (*a, *b),
             Self::Joint([a, _, b], _, _) => (*a, *b),
             Self::Line([a, b], _, _, _) => (*a, *b),
         }
     }
     pub fn sum_distance(&self) -> (usize, Point) {
         match &self {
-            Self::Arc([a, b, c], _, _, _, _) => (3, a.add_distance(b).add_distance(c)),
+            Self::Arc([a, b, c], _, _, _) => (3, a.add_distance(b).add_distance(c)),
             Self::Joint([a, b, c], _, _) => (3, a.add_distance(b).add_distance(c)),
             Self::Line([a, b], _, _, _) => (2, a.add_distance(b)),
         }
@@ -370,13 +372,13 @@ impl SubLink {
                     || inside_box(&full_box_from(&a, &b, width).0, p)
                     || inside_box(&full_box_from(&b, &c, width).0, p)
             }
-            Self::Arc([a, b, c], _, _, _, _) => arc_contains_point(width, p, a, b, c),
+            Self::Arc([a, b, c], _, _, _) => arc_contains_point(width, p, a, b, c),
             Self::Line([a, b], _, _, _) => inside_box(&full_box_from(a, b, width).0, p),
         }
     }
     pub fn move_distance(&mut self, d: &Point) {
         match self {
-            Self::Arc(a, b, _, _, _) => {
+            Self::Arc(a, b, _, _) => {
                 move_points(a, d);
                 b.move_distance(d);
             }

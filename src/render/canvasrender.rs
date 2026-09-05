@@ -10,14 +10,16 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_270},
+    constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_180, R_270},
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::{LineAnimation, LinkContainer, SubLink},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{compute_arc_point, quadratic_arc_length, shift_arc_position, side_of_line},
+    utils::{
+        compute_arc_point, normalize_rad, quadratic_arc_length, shift_arc_position, side_of_line,
+    },
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -384,36 +386,29 @@ impl CanvasRender {
         text_color: &String,
         t: &Transform,
         rad: f32,
-        norm_rad: f32,
-        normalized: bool,
+        side: bool,
     ) -> Result<(), JsValue> {
         if text.is_empty() {
             return Ok(());
         }
 
+        /*
+                let lp = match position {
+                    LabelPosition::Center => LabelPosition::Center,
+                    LabelPosition::Top => match side {
+                        true => LabelPosition::Top,
+                        false => LabelPosition::Bottom,
+                    },
+                    LabelPosition::Bottom => match side {
+                        false => LabelPosition::Top,
+                        true => LabelPosition::Bottom,
+                    },
+                };
+                let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, &lp);
+        */
         // arc point visual center is half the height of the triangle.
 
-        let lp = {
-            match position {
-                LabelPosition::Bottom => {
-                    if side_of_line(a, b, &a.get_center(b).get_center(c)) > 0.0 {
-                        LabelPosition::Top
-                    } else {
-                        LabelPosition::Bottom
-                    }
-                }
-                LabelPosition::Center => LabelPosition::Center,
-                LabelPosition::Top => {
-                    if side_of_line(a, b, &a.get_center(b).get_center(c)) < 0.0 {
-                        LabelPosition::Top
-                    } else {
-                        LabelPosition::Bottom
-                    }
-                }
-            }
-        };
-
-        let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, &lp);
+        let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, position);
         // Need to compute the text scale and position before either highlight or non highlight
         let mut width = 0.0;
         let mut height = 0.0;
@@ -498,15 +493,15 @@ impl CanvasRender {
                 let x = p.x * t.k + t.x;
                 let y = p.y * t.k + t.y;
 
-                let k = (full_scale * norm_rad.cos()) as f64;
-                let r = (full_scale * norm_rad.sin()) as f64;
+                let k = (full_scale * rad.cos()) as f64;
+                let r = (full_scale * rad.sin()) as f64;
                 points.push((x, y, k, r));
             }
 
             // prevent text from being renderd backwards.
             let iter: Box<dyn Iterator<Item = usize>> = {
                 // match (a.y < b.y && start.1 > end.1 && start.0 < end.0) || (a.y > b.y && a.x < b.x)
-                match normalized {
+                match side {
                     //match normalized {
                     false => Box::new((0..chars.len()).into_iter()),
                     true => Box::new((0..chars.len()).rev()),
@@ -570,7 +565,7 @@ impl CanvasRender {
         let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
         match &dd.links[i] {
-            SubLink::Arc([a, c, b], animations, rad, norm_rad, norm) => {
+            SubLink::Arc([a, c, b], animations, rad, side) => {
                 if highlight {
                     self.draw_quad_arc(a, c, b, color, width);
                 } else {
@@ -589,8 +584,7 @@ impl CanvasRender {
                     &opt.font_color,
                     t,
                     *rad,
-                    *norm_rad,
-                    *norm,
+                    *side,
                 )?;
                 Ok(())
             }

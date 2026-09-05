@@ -74,6 +74,8 @@ pub const GRID_LINE_WIDTH: f32 = 2.2;
 pub const GRID_DIVIDER_WIDTH: f32 = 0.4;
 pub const ONE_THIRD: f32 = 1.0 / 3.0;
 pub const HALF: f32 = 0.5;
+pub const ONE_QUARTER: f32 = 0.25;
+
 pub const DEFAULT_FRAMERATE: u32 = 15;
 pub const R_45: f32 = (45.0 as f32).to_radians();
 pub const R_90: f32 = (90.0 as f32).to_radians();
@@ -83,5 +85,7 @@ pub const R_225: f32 = (225.0 as f32).to_radians();
 pub const R_270: f32 = (270.0 as f32).to_radians();
 pub const R_315: f32 = (315.0 as f32).to_radians();
 pub const R_360: f32 = (360.0 as f32).to_radians();
+pub const R_1: f32 = (1.0 as f32).to_radians();
+pub const QUAD_ARC_FIND_REFINE_THRESHOLD: f32 = (5.0 as f32).to_radians();
 pub const DOUBLE_PIE: f32 = std::f32::consts::PI * 2.0;
 pub const CORNER_DISTANCE: f32 = 1.414;

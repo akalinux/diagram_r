@@ -2,7 +2,10 @@ use js_sys::Number;
 
 use crate::{
     LabelPosition, Point, Transform,
-    constants::{AREA_SCALE_EPSILON, HALF, R_90, R_180, R_270, R_360},
+    constants::{
+        AREA_SCALE_EPSILON, HALF, ONE_QUARTER, QUAD_ARC_FIND_REFINE_THRESHOLD, R_90, R_180, R_270,
+        R_360,
+    },
     square::Corners,
 };
 
@@ -176,12 +179,12 @@ pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &P
     }
 }
 
-pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
+pub fn compute_arc_point_acb(t: f32, s: &Point, c: &Point, e: &Point) -> [Point; 3] {
     // this is 16 steps
     let a = s.add_distance(&s.get_move_distance(c).scale(t));
     let b = c.add_distance(&c.get_move_distance(e).scale(t));
 
-    a.add_distance(&a.get_move_distance(&b).scale(t))
+    [a, a.add_distance(&a.get_move_distance(&b).scale(t)), b]
     /*
     // this is 20 steps
     let mt = 1.0 - t; // (1 - t)
@@ -192,20 +195,62 @@ pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
     Point { x, y }
     */
 }
+pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
+    compute_arc_point_acb(t, s, c, e)[1]
+}
 
 pub fn find_arc_t_np(begin: &Point, control: &Point, end: &Point, p: &Point) -> Option<f32> {
     let base = begin.get_distance_square(end);
     let center = begin.get_center(end);
 
-    let rad = center.get_radians(p) * HALF;
+    // recover what the direction of an on the line point would be
+    let rad_base = center.get_radians(p);
+    let rad = rad_base * HALF;
     let cmp_point = p.get_xy(base, rad);
-    match get_intersection(begin, control, p, &cmp_point) {
+
+    // swap to the most acccurate side side_of_line(&center, control, p) < 0.
+    let (start, finish) = if side_of_line(&center, control, p) < 0.0 {
+        (begin, control)
+    } else {
+        (control, end)
+    };
+    match get_intersection(start, finish, p, &cmp_point) {
         Some(p1) => {
             // need to pick our closest side
-            let d = begin.get_manhattan_distance(control);
-            let cmp = p1.get_manhattan_distance(begin);
-            let t = cmp / d;
-            Some(t)
+            let d = start.get_manhattan_distance(finish);
+            if d < f32::EPSILON {
+                return None;
+            }
+            let cmp = p1.get_manhattan_distance(start);
+            let t1 = cmp / d;
+            let p2 = compute_arc_point(t1, begin, control, end);
+            let rad2_base = center.get_radians(&p2);
+            let diff = rad2_base - rad_base;
+            if diff.abs() <= QUAD_ARC_FIND_REFINE_THRESHOLD {
+                println!("  Base {}", rad.to_degrees());
+                return Some(t1);
+            }
+            let diff_rad = diff * ONE_QUARTER;
+            let new_rad = rad + diff_rad;
+
+            let cmp_point2 = p1.get_xy(base, new_rad);
+
+            let (start2, finish2) = if side_of_line(&center, control, &p2) < 0.0 {
+                (begin, control)
+            } else {
+                (control, end)
+            };
+            match get_intersection(start2, finish2, &p2, &cmp_point2) {
+                None => return Some(t1),
+                Some(p2) => {
+                    let cmp = p2.get_manhattan_distance(start2);
+                    let d = start2.get_manhattan_distance(finish2);
+                    if d < f32::EPSILON {
+                        return Some(t1);
+                    }
+                    Some(cmp / d)
+                }
+            }
         }
         _ => None,
     }
@@ -224,7 +269,7 @@ pub fn closest_t_on_arc2(begin: &Point, control: &Point, end: &Point, p: &Point)
     // level and square are points
 
     match find_arc_t_np(begin, control, end, p) {
-        Some(t) => t,
+        Some(t1) => t1,
         _ => match da < db {
             true => 0.0,
             false => 1.0,
@@ -237,14 +282,7 @@ pub fn closest_t_on_arc2(begin: &Point, control: &Point, end: &Point, p: &Point)
 ///
 /// Note: This assumes p is between a and b on some axis.
 pub fn side_of_line(a: &Point, b: &Point, p: &Point) -> f32 {
-    let res = a.get_radians(b) - a.get_radians(p);
-    return if res.abs() < f32::EPSILON {
-        0.0
-    } else if res < 0.0 {
-        -1.0
-    } else {
-        1.0
-    };
+    a.get_radians(b) - a.get_radians(p)
 }
 
 pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {

@@ -10,16 +10,14 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_180, R_270},
+    constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_270},
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::{LineAnimation, LinkContainer, SubLink},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{
-        compute_arc_point, normalize_rad, quadratic_arc_length, shift_arc_position, side_of_line,
-    },
+    utils::{compute_arc_point, quadratic_arc_length, shift_arc_position, side_of_line},
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -385,6 +383,9 @@ impl CanvasRender {
         highlight: bool,
         text_color: &String,
         t: &Transform,
+        rad: f32,
+        norm_rad: f32,
+        normalized: bool,
     ) -> Result<(), JsValue> {
         if text.is_empty() {
             return Ok(());
@@ -441,14 +442,12 @@ impl CanvasRender {
         let s = (ql - rw) * HALF;
         let ctx = &self.ctx;
 
-        let ab_center = a.get_center(&b);
         let start = s / ql;
         let step = {
             let scale_step = 1.0 / chars.len() as f32;
             let scale = rw / ql;
             scale_step * scale
         };
-        let rad = ab_center.get_radians(&c) + R_270;
         if highlight {
             ctx.set_fill_style_str(color);
             ctx.begin_path();
@@ -490,7 +489,6 @@ impl CanvasRender {
         } else {
             ctx.set_fill_style_str(text_color);
             // normalize the rotation of the text!
-            let (rad, normalized) = normalize_rad(rad);
 
             let mut points = Vec::with_capacity(chars.len());
             for i in 0..chars.len() {
@@ -500,8 +498,8 @@ impl CanvasRender {
                 let x = p.x * t.k + t.x;
                 let y = p.y * t.k + t.y;
 
-                let k = (full_scale * rad.cos()) as f64;
-                let r = (full_scale * rad.sin()) as f64;
+                let k = (full_scale * norm_rad.cos()) as f64;
+                let r = (full_scale * norm_rad.sin()) as f64;
                 points.push((x, y, k, r));
             }
 
@@ -572,7 +570,7 @@ impl CanvasRender {
         let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
         match &dd.links[i] {
-            SubLink::Arc([a, c, b], animations, rad, norm) => {
+            SubLink::Arc([a, c, b], animations, rad, norm_rad, norm) => {
                 if highlight {
                     self.draw_quad_arc(a, c, b, color, width);
                 } else {
@@ -590,10 +588,13 @@ impl CanvasRender {
                     highlight,
                     &opt.font_color,
                     t,
+                    *rad,
+                    *norm_rad,
+                    *norm,
                 )?;
                 Ok(())
             }
-            SubLink::Line([a, b], animations, rad, norm) => {
+            SubLink::Line([a, b], animations, rad, _) => {
                 if highlight {
                     self.draw_line(a, b, width, color);
                 } else {
@@ -601,34 +602,19 @@ impl CanvasRender {
                     self.draw_link_animations(animations, &opt.animation_color, aw)?;
                 }
 
-                self.compute_and_draw_link_text(a, b, width, text, opt, highlight, t, o)
+                self.draw_link_text(a, b, o, text, width, *rad, opt, t, highlight)
             }
-            SubLink::Joint([a, b, c], animations, [(ra, na), (rb, nb)]) => {
+            SubLink::Joint([a, b, c], animations, [(ra, _), (rb, _)]) => {
                 self.draw_line(a, b, width, color);
                 self.draw_line(b, c, width, color);
                 self.draw_arc(b, color, width)?;
                 if !highlight {
                     self.draw_link_animations(animations, &opt.animation_color, aw)?;
                 }
-                self.compute_and_draw_link_text(a, b, width, text, opt, highlight, t, o)?;
-                self.compute_and_draw_link_text(b, c, width, text, opt, highlight, t, o)
+                self.draw_link_text(a, b, o, text, width, *ra, opt, t, highlight)?;
+                self.draw_link_text(b, c, o, text, width, *rb, opt, t, highlight)
             }
         }
-    }
-    fn compute_and_draw_link_text(
-        &self,
-        a: &Point,
-        b: &Point,
-        width: f32,
-        text: &String,
-        opt: &DiagramOpt,
-        highlight: bool,
-        t: &Transform,
-        o: &ElementOpt,
-    ) -> Result<(), JsValue> {
-        let rad = a.get_radians(b);
-        let (normalized_angle, _) = normalize_rad(rad);
-        self.draw_link_text(a, b, o, text, width, normalized_angle, opt, t, highlight)
     }
 
     pub fn draw_link_animations(

@@ -3,13 +3,13 @@ pub mod iters;
 use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
-    constants::{HALF, R_90, ZERO_POINT},
+    constants::{HALF, R_90, R_270, ZERO_POINT},
     link::iters::{ArcIter, FullBoxAccumulate, LineIter, LineIterSet},
     node::Node,
     square::Square,
     utils::{
         arc_contains_point, compute_arc_point, force_intersection, full_box_from, inside_box,
-        inside_circle,
+        inside_circle, normalize_rad,
     },
 };
 pub type AnimationLink = (Point, Point, f32);
@@ -132,6 +132,7 @@ impl LineAnimation {
 }
 
 impl LinkSet {
+    pub fn get_link_render_center(&self) {}
     pub fn compute_bunlde_points(&self, src: &Point, dst: &Point) -> Vec<Point> {
         let mut points = Vec::with_capacity(self.bundles.len());
 
@@ -272,13 +273,25 @@ impl LinkSet {
             links.push(match arc {
                 None => {
                     let animation = self.compute_animation(link, &a, &b, None, aw);
-                    SubLink::Line([a, b], animation)
+                    let (rad, norm) = normalize_rad(a.get_radians(&b));
+                    SubLink::Line([a, b], animation, rad, norm)
                 }
                 Some(c) => {
                     let animation = self.compute_animation(link, &a, &b, Some((mode, &c)), aw);
                     match mode {
-                        ArcType::Arc => SubLink::Arc([a, c, b], animation),
-                        ArcType::Joint => SubLink::Joint([a, c, b], animation),
+                        ArcType::Arc => {
+                            let (rad, norm) =
+                                normalize_rad(a.get_center(&b).get_radians(&c) + R_270);
+                            SubLink::Arc([a, c, b], animation, rad, norm)
+                        }
+                        ArcType::Joint => SubLink::Joint(
+                            [a, c, b],
+                            animation,
+                            [
+                                normalize_rad(a.get_radians(&c)),
+                                normalize_rad(c.get_radians(&b)),
+                            ],
+                        ),
                     }
                 }
             });
@@ -331,40 +344,47 @@ impl Bundle {
 
 #[derive(Debug, PartialEq)]
 pub enum SubLink {
-    Line([Point; 2], LineAnimation),
-    Joint([Point; 3], LineAnimation),
-    Arc([Point; 3], LineAnimation),
+    Line([Point; 2], LineAnimation, f32, bool),
+    Joint([Point; 3], LineAnimation, [(f32, bool); 2]),
+    Arc([Point; 3], LineAnimation, f32, bool),
 }
 impl SubLink {
+    pub fn get_src_dst(&self) -> (Point, Point) {
+        match self {
+            Self::Arc([a, _, b], _, _, _) => (*a, *b),
+            Self::Joint([a, _, b], _, _) => (*a, *b),
+            Self::Line([a, b], _, _, _) => (*a, *b),
+        }
+    }
     pub fn sum_distance(&self) -> (usize, Point) {
         match &self {
-            Self::Arc([a, b, c], _) => (3, a.add_distance(b).add_distance(c)),
-            Self::Joint([a, b, c], _) => (3, a.add_distance(b).add_distance(c)),
-            Self::Line([a, b], _) => (2, a.add_distance(b)),
+            Self::Arc([a, b, c], _, _, _) => (3, a.add_distance(b).add_distance(c)),
+            Self::Joint([a, b, c], _, _) => (3, a.add_distance(b).add_distance(c)),
+            Self::Line([a, b], _, _, _) => (2, a.add_distance(b)),
         }
     }
     pub fn contains_point(&self, p: &Point, width: f32) -> bool {
         match self {
-            Self::Joint([a, b, c], _) => {
+            Self::Joint([a, b, c], _, _) => {
                 inside_circle(p, b, width)
                     || inside_box(&full_box_from(&a, &b, width).0, p)
                     || inside_box(&full_box_from(&b, &c, width).0, p)
             }
-            Self::Arc([a, b, c], _) => arc_contains_point(width, p, a, b, c),
-            Self::Line([a, b], _) => inside_box(&full_box_from(a, b, width).0, p),
+            Self::Arc([a, b, c], _, _, _) => arc_contains_point(width, p, a, b, c),
+            Self::Line([a, b], _, _, _) => inside_box(&full_box_from(a, b, width).0, p),
         }
     }
     pub fn move_distance(&mut self, d: &Point) {
         match self {
-            Self::Arc(a, b) => {
+            Self::Arc(a, b, _, _) => {
                 move_points(a, d);
                 b.move_distance(d);
             }
-            Self::Joint(a, b) => {
+            Self::Joint(a, b, _) => {
                 move_points(a, d);
                 b.move_distance(d);
             }
-            Self::Line(a, b) => {
+            Self::Line(a, b, _, _) => {
                 move_points(a, d);
                 b.move_distance(d);
             }
@@ -382,6 +402,16 @@ pub struct DrawData {
 }
 
 impl DrawData {
+    pub fn get_src_dst(&self) -> (Point, Point) {
+        let (mut src, mut dst) = self.links[0].get_src_dst();
+        for i in 1..self.links.len() {
+            let (a, b) = self.links[i].get_src_dst();
+            src = src.add_distance(&a);
+            dst = dst.add_distance(&b);
+        }
+        let scale = 1.0 / self.links.len() as f32;
+        (src.scale(scale), dst.scale(scale))
+    }
     pub fn bundle_draw_box(&self, i: usize) -> Square {
         let side = self.bundle_side;
         let offset = side * 0.5;
@@ -422,14 +452,40 @@ impl LinkContainer {
         }
         self.draw_data = self.ls.build_draw_data(src, dst, opt);
     }
+
+    pub fn get_render_center(&self) -> Point {
+        let (src, dst) = self.draw_data.get_src_dst();
+        match &self.ls.point {
+            Some(arc) => {
+                match arc.mode {
+                    ArcType::Arc => {
+                        // this is not the arc center.. this is the apex center that the user sees
+                        src.get_center(&dst).get_center(&arc.point)
+                    }
+                    ArcType::Joint => arc.point,
+                }
+            }
+            None => src.get_center(&dst),
+        }
+    }
     pub fn contains_point(&self, p: &Point) -> LookupPointResult {
         let dd = &self.draw_data;
         let width = dd.line_width;
         let w = width * HALF;
         if let Some(arc) = &self.ls.point {
             let r = w + w * (dd.links.len() as f32) - w * HALF;
-            if inside_circle(p, &arc.point, r) {
-                return LookupPointResult::Arc(self.id);
+            match arc.mode {
+                ArcType::Arc => {
+                    let center = self.get_render_center();
+                    if inside_circle(p, &center, r) {
+                        return LookupPointResult::Arc(self.id);
+                    }
+                }
+                ArcType::Joint => {
+                    if inside_circle(p, &arc.point, r) {
+                        return LookupPointResult::Arc(self.id);
+                    }
+                }
             }
         }
         // first check bundles

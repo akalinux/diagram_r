@@ -24,7 +24,7 @@ fn link_container_update_tests() {
     let mut left = Point::new(0.5, 0.25);
     let mut right = Point::new(9.5, 0.25);
     match *&dd.links[0] {
-        SubLink::Line([a, b], _) => {
+        SubLink::Line([a, b], _, _, _) => {
             assert_point!(a, left, 0.001);
             assert_point!(b, right, 0.001);
         }
@@ -34,7 +34,7 @@ fn link_container_update_tests() {
     right.y = 0.75;
 
     match *&dd.links[1] {
-        SubLink::Line([a, b], _) => {
+        SubLink::Line([a, b], _, _, _) => {
             assert_point!(a, left, 0.001);
             assert_point!(b, right, 0.001);
         }

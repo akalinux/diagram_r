@@ -15,8 +15,7 @@ async function run() {
   const north = new Node(new Square(365, 20, 60, 60), "North", 0,);
   const south = new Node(new Square(365, 520, 60, 60), "South", 1);
   const west = new Node(new Square(10, 265, 60, 60), "West", 2,);
-  //const west = new Node(new Square(0, 0, 60, 60), "West", 2,);
-  const east = new Node(new Square(430, 265, 60, 60), "East", 3);
+  const east = new Node(new Square(130, 265, 60, 60), "East", 3);
   const box = new Node(new Square(5, 5, 790, 590), "Container", 5, Uint32Array.of(0, 1, 2, 3));
 
   d.set_element_options([
@@ -48,6 +47,7 @@ async function run() {
     ], [new Bundle(4, "Both", Uint32Array.from([0, 1]), 0.25)],
     0, 1,
     new LinePoint(new Point(700, 275), ArcType.Arc)
+    //new LinePoint(new Point(365, 285), ArcType.Arc)
   );
 
 
@@ -60,7 +60,7 @@ async function run() {
 
   const el = document.getElementById("app") as HTMLCanvasElement;
   d.mount(el);
-  d.set_transform(t);
+  // d.set_transform(t);
   d.render();
 
 }

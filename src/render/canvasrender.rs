@@ -10,17 +10,16 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::{
-        CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_45, R_90, R_135, R_225, R_270, R_315,
-    },
+    constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_180, R_270},
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::{LineAnimation, LinkContainer, SubLink},
-    log,
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{compute_arc_point, normalize_rad, quadratic_arc_length, shift_arc_position},
+    utils::{
+        compute_arc_point, normalize_rad, quadratic_arc_length, shift_arc_position, side_of_line,
+    },
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -368,8 +367,10 @@ impl CanvasRender {
         let lc = &diagram.links.borrow()[link_id];
         let width = lc.draw_data.line_width;
         let r = HALF * width + width * lc.draw_data.links.len() as f32;
-        let p = unsafe { &lc.ls.point.unwrap_unchecked() };
-        self.draw_arc(&p.point, &opt.highlight_color, r)
+        let p = lc.get_render_center();
+        self.draw_arc(&p, &opt.highlight_color, r)?;
+        let p = unsafe { lc.ls.point.unwrap_unchecked().point };
+        self.draw_arc(&p, &opt.highlight_color, width)
     }
 
     fn draw_quad_arc_text(
@@ -388,7 +389,30 @@ impl CanvasRender {
         if text.is_empty() {
             return Ok(());
         }
-        let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, position);
+
+        // arc point visual center is half the height of the triangle.
+
+        let lp = {
+            match position {
+                LabelPosition::Bottom => {
+                    if side_of_line(a, b, &a.get_center(b).get_center(c)) > 0.0 {
+                        LabelPosition::Top
+                    } else {
+                        LabelPosition::Bottom
+                    }
+                }
+                LabelPosition::Center => LabelPosition::Center,
+                LabelPosition::Top => {
+                    if side_of_line(a, b, &a.get_center(b).get_center(c)) < 0.0 {
+                        LabelPosition::Top
+                    } else {
+                        LabelPosition::Bottom
+                    }
+                }
+            }
+        };
+
+        let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, &lp);
         // Need to compute the text scale and position before either highlight or non highlight
         let mut width = 0.0;
         let mut height = 0.0;
@@ -424,31 +448,40 @@ impl CanvasRender {
             let scale = rw / ql;
             scale_step * scale
         };
-        let rad = ab_center.get_radians(&a);
+        let rad = ab_center.get_radians(&c) + R_270;
         if highlight {
             ctx.set_fill_style_str(color);
             ctx.begin_path();
             let r = height * 0.25 * CORNER_DISTANCE;
             {
-                let p = compute_arc_point(start + step * (chars.len()) as f32, &a, &c, &b);
-                //let rad = ab_center.get_radians(&p);
+                let p = compute_arc_point(start + step * ((chars.len()) as f32 + 0.75), &a, &c, &b);
                 let p1 = p.get_xy(r, rad + R_90);
                 ctx.move_to(p1.x as f64, p1.y as f64);
             }
 
-            for i in (1..=chars.len() + 20).rev() {
-                let pos = start + (step * (i - 1) as f32);
+            for i in (0..=chars.len()).rev() {
+                let pos = start + step * (i as f32);
                 let p = compute_arc_point(pos, &a, &c, &b);
-                //let rad = ab_center.get_radians(&p);
+                let p1 = p.get_xy(r, rad + R_90);
+                ctx.line_to(p1.x as f64, p1.y as f64);
+            }
+            {
+                let pos = start + step * -1.5;
+                let p = compute_arc_point(pos, &a, &c, &b);
                 let p1 = p.get_xy(r, rad + R_90);
                 ctx.line_to(p1.x as f64, p1.y as f64);
             }
 
             let start = start - step * HALF;
-            for i in 0..(chars.len() + 1) {
-                let pos = start + (step * i as f32);
+            for i in 0..=chars.len() {
+                let pos = start + (step * (i as f32 - 1.0));
                 let p = compute_arc_point(pos, &a, &c, &b);
-                //let rad = p.get_radians(&ab_center);
+                let p1 = p.get_xy(r, rad + R_270);
+                ctx.line_to(p1.x as f64, p1.y as f64);
+            }
+            {
+                let pos = start + (step) * (1.5 + chars.len() as f32);
+                let p = compute_arc_point(pos, &a, &c, &b);
                 let p1 = p.get_xy(r, rad + R_270);
                 ctx.line_to(p1.x as f64, p1.y as f64);
             }
@@ -456,8 +489,11 @@ impl CanvasRender {
             ctx.fill();
         } else {
             ctx.set_fill_style_str(text_color);
+            // normalize the rotation of the text!
+            let (rad, normalized) = normalize_rad(rad);
+
+            let mut points = Vec::with_capacity(chars.len());
             for i in 0..chars.len() {
-                let v = &chars[i];
                 let pos = start + (step * i as f32);
                 let p = compute_arc_point(pos, &a, &c, &b);
                 let full_scale = scale * t.k;
@@ -466,10 +502,26 @@ impl CanvasRender {
 
                 let k = (full_scale * rad.cos()) as f64;
                 let r = (full_scale * rad.sin()) as f64;
-                ctx.set_transform(k as f64, r, -r, k as f64, x as f64, y as f64)?;
-                //log(&format!("{pos:.3},{step:.3},{v}"));
+                points.push((x, y, k, r));
+            }
+
+            // prevent text from being renderd backwards.
+            let iter: Box<dyn Iterator<Item = usize>> = {
+                // match (a.y < b.y && start.1 > end.1 && start.0 < end.0) || (a.y > b.y && a.x < b.x)
+                match normalized {
+                    //match normalized {
+                    false => Box::new((0..chars.len()).into_iter()),
+                    true => Box::new((0..chars.len()).rev()),
+                }
+            };
+            let mut piter = points.into_iter();
+            for i in iter {
+                let v = &chars[i];
+                let (x, y, k, r) = unsafe { piter.next().unwrap_unchecked() };
+                ctx.set_transform(k, r, -r, k, x as f64, y as f64)?;
                 ctx.fill_text(&v.to_string(), 0.0, 0.0)?;
             }
+
             // reset our transform
             ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
         }
@@ -520,7 +572,7 @@ impl CanvasRender {
         let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
         match &dd.links[i] {
-            SubLink::Arc([a, c, b], animations) => {
+            SubLink::Arc([a, c, b], animations, rad, norm) => {
                 if highlight {
                     self.draw_quad_arc(a, c, b, color, width);
                 } else {
@@ -531,7 +583,7 @@ impl CanvasRender {
                     a,
                     c,
                     b,
-                    color,
+                    &opt.highlight_color,
                     width,
                     &o.label_position,
                     text,
@@ -541,7 +593,7 @@ impl CanvasRender {
                 )?;
                 Ok(())
             }
-            SubLink::Line([a, b], animations) => {
+            SubLink::Line([a, b], animations, rad, norm) => {
                 if highlight {
                     self.draw_line(a, b, width, color);
                 } else {
@@ -551,7 +603,7 @@ impl CanvasRender {
 
                 self.compute_and_draw_link_text(a, b, width, text, opt, highlight, t, o)
             }
-            SubLink::Joint([a, b, c], animations) => {
+            SubLink::Joint([a, b, c], animations, [(ra, na), (rb, nb)]) => {
                 self.draw_line(a, b, width, color);
                 self.draw_line(b, c, width, color);
                 self.draw_arc(b, color, width)?;

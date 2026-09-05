@@ -430,26 +430,26 @@ impl CanvasRender {
             ctx.begin_path();
             let r = height * 0.25 * CORNER_DISTANCE;
             {
-                let p = compute_arc_point(start + step * chars.len() as f32, &a, &c, &b);
-                let rad = ab_center.get_radians(&p);
-                let p1 = p.get_xy(r, rad);
+                let p = compute_arc_point(start + step * (chars.len()) as f32, &a, &c, &b);
+                //let rad = ab_center.get_radians(&p);
+                let p1 = p.get_xy(r, rad + R_90);
                 ctx.move_to(p1.x as f64, p1.y as f64);
             }
 
-            for i in (0..chars.len() - 1).rev() {
-                let pos = start + (step * i as f32);
+            for i in (1..=chars.len() + 20).rev() {
+                let pos = start + (step * (i - 1) as f32);
                 let p = compute_arc_point(pos, &a, &c, &b);
-                let rad = ab_center.get_radians(&p);
-                let p1 = p.get_xy(r, rad);
+                //let rad = ab_center.get_radians(&p);
+                let p1 = p.get_xy(r, rad + R_90);
                 ctx.line_to(p1.x as f64, p1.y as f64);
             }
 
             let start = start - step * HALF;
-            for i in 0..chars.len() {
+            for i in 0..(chars.len() + 1) {
                 let pos = start + (step * i as f32);
                 let p = compute_arc_point(pos, &a, &c, &b);
-                let rad = p.get_radians(&ab_center);
-                let p1 = p.get_xy(r, rad);
+                //let rad = p.get_radians(&ab_center);
+                let p1 = p.get_xy(r, rad + R_270);
                 ctx.line_to(p1.x as f64, p1.y as f64);
             }
             ctx.close_path();

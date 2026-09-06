@@ -17,7 +17,10 @@ use crate::{
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{compute_arc_point, quadratic_arc_length, shift_arc_position},
+    utils::{
+        compute_arc_point, normalize_rad, quadratic_arc_length, rad_needs_normalization,
+        shift_arc_position,
+    },
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -389,18 +392,12 @@ impl CanvasRender {
         if text.is_empty() {
             return Ok(());
         }
-
         let lp = match position {
+            LabelPosition::Bottom => LabelPosition::Top,
+            LabelPosition::Top => LabelPosition::Bottom,
             LabelPosition::Center => LabelPosition::Center,
-            LabelPosition::Top => match side {
-                true => LabelPosition::Top,
-                false => LabelPosition::Bottom,
-            },
-            LabelPosition::Bottom => match side {
-                false => LabelPosition::Top,
-                true => LabelPosition::Bottom,
-            },
         };
+
         let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, &lp);
         // arc point visual center is half the height of the triangle.
 
@@ -442,6 +439,7 @@ impl CanvasRender {
         if highlight {
             ctx.set_fill_style_str(color);
             ctx.begin_path();
+            let rad = rad + R_270;
             let r = height * 0.25 * CORNER_DISTANCE;
             {
                 let p = compute_arc_point(start + step * ((chars.len()) as f32 + 0.75), &a, &c, &b);
@@ -480,6 +478,7 @@ impl CanvasRender {
         } else {
             ctx.set_fill_style_str(text_color);
             // normalize the rotation of the text!
+            let (rad, _) = normalize_rad(rad + R_90);
 
             let mut points = Vec::with_capacity(chars.len());
             for i in 0..chars.len() {
@@ -491,13 +490,17 @@ impl CanvasRender {
 
                 let k = (full_scale * rad.cos()) as f64;
                 let r = (full_scale * rad.sin()) as f64;
-                points.push((x, y, k, r));
+                points.push((Point { x, y }, k, r));
             }
 
             // prevent text from being renderd backwards.
             let iter: Box<dyn Iterator<Item = usize>> = {
+                let start = &points[0].0;
+                let end = &points[points.len() - 1].0;
+                let center = start.get_center(&end);
+                let rad = center.get_radians(&start);
                 // match (a.y < b.y && start.1 > end.1 && start.0 < end.0) || (a.y > b.y && a.x < b.x)
-                match side {
+                match rad_needs_normalization(rad) {
                     //match normalized {
                     false => Box::new((0..chars.len()).into_iter()),
                     true => Box::new((0..chars.len()).rev()),
@@ -506,7 +509,9 @@ impl CanvasRender {
             let mut piter = points.into_iter();
             for i in iter {
                 let v = &chars[i];
-                let (x, y, k, r) = unsafe { piter.next().unwrap_unchecked() };
+                let (p, k, r) = unsafe { piter.next().unwrap_unchecked() };
+                let x = p.x as f64;
+                let y = p.y as f64;
                 ctx.set_transform(k, r, -r, k, x as f64, y as f64)?;
                 ctx.fill_text(&v.to_string(), 0.0, 0.0)?;
             }

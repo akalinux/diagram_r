@@ -3,14 +3,14 @@ pub mod iters;
 use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
-    constants::{HALF, R_90, R_180, R_270, R_360, ZERO_POINT},
+    constants::{HALF, R_90, R_270, ZERO_POINT},
     link::iters::{ArcIter, FullBoxAccumulate, LineIter, LineIterSet},
     log,
     node::Node,
     square::Square,
     utils::{
         arc_contains_point, compute_arc_point, force_intersection, full_box_from, inside_box,
-        inside_circle, normalize_rad, rad_needs_normalization,
+        inside_circle, normalize_rad,
     },
 };
 pub type AnimationLink = (Point, Point, f32);
@@ -246,12 +246,12 @@ impl LinkSet {
         let side = src.layout.smallest_side(&dst.layout) * opt.link_scale;
 
         let mut links = Vec::with_capacity(self.links.len());
-        let (width, iter, mode) = match &self.point {
+        let (width, iter, mode, rad_base) = match &self.point {
             None => {
                 let iter = LineIter::new(&src_p, &dst_p, side, self.links.len(), &mut accumulate);
                 let width = iter.width;
                 let i: Box<dyn LineIterSet> = Box::new(iter);
-                (width, i, ArcType::Arc)
+                (width, i, ArcType::Arc, 0.0)
             }
             Some(p) => {
                 let iter = ArcIter::new(
@@ -263,9 +263,10 @@ impl LinkSet {
                     &mut accumulate,
                 );
                 let width = iter.width;
+                let rad = iter.rad;
                 let i: Box<dyn LineIterSet> = Box::new(iter);
 
-                (width, i, p.mode)
+                (width, i, p.mode, rad)
             }
         };
         let aw = width * HALF;
@@ -280,11 +281,7 @@ impl LinkSet {
                 Some(c) => {
                     let animation = self.compute_animation(link, &a, &b, Some((mode, &c)), aw);
                     match mode {
-                        ArcType::Arc => {
-                            let rad_base = c.normalize_to_right_angle(&a, &b);
-                            let rad = rad_base + R_270;
-                            SubLink::Arc([a, c, b], animation, rad, true)
-                        }
+                        ArcType::Arc => SubLink::Arc([a, c, b], animation, rad_base, false),
                         ArcType::Joint => SubLink::Joint(
                             [a, c, b],
                             animation,

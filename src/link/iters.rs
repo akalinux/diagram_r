@@ -2,9 +2,10 @@ use std::fmt::Display;
 
 use crate::{
     Point,
-    constants::{HALF, R_90, R_270},
+    constants::{HALF, R_90, R_180, R_270, R_360},
+    log,
     square::Corners,
-    utils::force_intersection,
+    utils::{force_intersection, rad_needs_normalization},
 };
 
 pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
@@ -124,6 +125,7 @@ pub struct ArcIter {
     pub width: f32,
     pub pos: usize,
     pub total: usize,
+    pub rad: f32,
 }
 
 impl ArcIter {
@@ -138,12 +140,22 @@ impl ArcIter {
         let (width, inital_scale, scale) = get_line_width(total, full_width);
         let r = full_width * HALF;
 
-        let a = NextPointSet::new(src, center, r, inital_scale, scale, R_90, counter);
-
-        let b = NextPointSet::new(dst, center, r, inital_scale, scale, R_270, counter);
+        let rad = center.center_radian_to(src, dst);
         let mid = src.get_center(dst);
+        let d1 = mid.get_distance_square(center);
+        let side_rad = mid.get_radians(src);
+        let p1 = mid.get_xy(d1, side_rad + R_90);
+        let p2 = mid.get_xy(d1, side_rad + R_270);
+        let (src, dst) = if p1.get_distance_square(center) > p2.get_distance_square(center) {
+            (src, dst)
+        } else {
+            (dst, src)
+        };
+
+        let a = NextPointSet::new(src, center, r, inital_scale, scale, R_90, counter);
+        let b = NextPointSet::new(dst, center, r, inital_scale, scale, R_270, counter);
+
         // going left
-        let rad = center.get_radians(&mid);
 
         let p = center.get_xy(r, rad);
         counter.step(&p);
@@ -156,6 +168,7 @@ impl ArcIter {
             total,
             a,
             b,
+            rad,
         }
     }
 }

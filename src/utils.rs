@@ -136,14 +136,15 @@ pub fn to_screen_xy(p: &Point, t: &Transform) -> Point {
     return Point { x, y };
 }
 
-pub fn rad_needs_normalization(angle: f32) -> bool {
-    angle >= R_90 && angle <= R_270
+pub fn rad_needs_normalization(rad: f32) -> bool {
+    let r = rad.abs() % R_360;
+    r >= R_90 && r <= R_270
 }
 
 pub fn normalize_rad(rad: f32) -> (f32, bool) {
     match rad_needs_normalization(rad) {
-        true => (rad + R_180, true),
-        false => (rad, false),
+        true => ((rad + R_180) % R_360, true),
+        false => (rad % R_360, false),
     }
 }
 

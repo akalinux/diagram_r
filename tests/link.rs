@@ -129,8 +129,8 @@ pub fn arc_point_test() {
     let mut iter = ArcIter::new(&a, &b, &c, 5.0, 1, &mut counter);
     let (w, set, y) = iter.next().unwrap();
     let x = set.unwrap();
-    assert_point!(w, a, 0.001);
+    assert_point!(w, c, 0.001);
     assert_point!(x, b, 0.001);
-    assert_point!(y, c, 0.001);
+    assert_point!(y, a, 0.001);
     assert!(iter.next().is_none());
 }

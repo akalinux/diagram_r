@@ -178,12 +178,12 @@ fn test_normalize_to_right_angle() {
         &Point { x: 10.0, y: 0.0 },
         &Point { x: 5.0, y: -20.0 },
     );
-    assert_relative_eq!(res.0.to_degrees(), 270.0, epsilon = 0.001);
+    assert_relative_eq!(res.to_degrees(), 270.0, epsilon = 0.001);
 
     res = normalize_to_right_angle(
         &ZERO_POINT,
         &Point { x: 10.0, y: 0.0 },
         &Point { x: 5.0, y: 20.0 },
     );
-    assert_relative_eq!(res.0.to_degrees() % 360.0, 90.0, epsilon = 0.001);
+    assert_relative_eq!(res.to_degrees() % 360.0, 90.0, epsilon = 0.001);
 }

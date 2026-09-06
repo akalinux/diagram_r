@@ -296,15 +296,10 @@ pub fn side_of_line(a: &Point, b: &Point, p: &Point) -> f32 {
 /// Produces a normalized right angle from a<->b relative to wihch side p is on.
 /// If p is on the line of a and b, then 270 degrees is added.
 /// So if p is above a<->b then 270 degrees added, else 90 degrees is added.
-/// True means above or +270 and false means below or +90.
-pub fn normalize_to_right_angle(a: &Point, b: &Point, p: &Point) -> (f32, bool) {
+pub fn normalize_to_right_angle(a: &Point, b: &Point, p: &Point) -> f32 {
     let base = a.get_radians(b);
     let rad = p.center_radian_to(a, b);
-    return if rad > R_180 {
-        (base + R_90, false)
-    } else {
-        (base + R_270, true)
-    };
+    base + if rad > R_180 { R_90 } else { R_270 }
 }
 
 pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {
@@ -360,19 +355,7 @@ pub fn arc_contains_point(r: f32, p: &Point, begin: &Point, control: &Point, end
     inside_circle(p, &check, r)
 }
 
-pub fn shift_arc_position(
-    a: &Point,
-    c: &Point,
-    b: &Point,
-    r: f32,
-    position: &LabelPosition,
-) -> [Point; 3] {
-    let offset = match position {
-        LabelPosition::Center => return [*a, *c, *b],
-        LabelPosition::Bottom => R_270,
-        LabelPosition::Top => R_90,
-    };
-
+pub fn shift_arc(a: &Point, c: &Point, b: &Point, r: f32, offset: f32) -> [Point; 3] {
     let d1 = a.get_distance_vec(c, r, offset);
     let d2 = c.get_distance_vec(&b, r, offset);
 
@@ -387,6 +370,22 @@ pub fn shift_arc_position(
     };
 
     [s1, c1, e1]
+}
+
+pub fn shift_arc_position(
+    a: &Point,
+    c: &Point,
+    b: &Point,
+    r: f32,
+    position: &LabelPosition,
+) -> [Point; 3] {
+    let offset = match position {
+        LabelPosition::Center => return [*a, *c, *b],
+        LabelPosition::Bottom => R_270,
+        LabelPosition::Top => R_90,
+    };
+
+    shift_arc(a, c, b, r, offset)
 }
 
 pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [Point; 6] {

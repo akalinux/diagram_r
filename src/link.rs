@@ -3,14 +3,14 @@ pub mod iters;
 use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
-    constants::{HALF, R_90, R_180, R_270, ZERO_POINT},
+    constants::{HALF, R_90, R_180, R_270, R_360, ZERO_POINT},
     link::iters::{ArcIter, FullBoxAccumulate, LineIter, LineIterSet},
     log,
     node::Node,
     square::Square,
     utils::{
         arc_contains_point, compute_arc_point, force_intersection, full_box_from, inside_box,
-        inside_circle, normalize_rad,
+        inside_circle, normalize_rad, rad_needs_normalization,
     },
 };
 pub type AnimationLink = (Point, Point, f32);
@@ -281,10 +281,9 @@ impl LinkSet {
                     let animation = self.compute_animation(link, &a, &b, Some((mode, &c)), aw);
                     match mode {
                         ArcType::Arc => {
-                            let (rad_base, side) = c.normalize_to_right_angle(&a, &b);
+                            let rad_base = c.normalize_to_right_angle(&a, &b);
                             let rad = rad_base + R_270;
-
-                            SubLink::Arc([a, c, b], animation, rad, side)
+                            SubLink::Arc([a, c, b], animation, rad, true)
                         }
                         ArcType::Joint => SubLink::Joint(
                             [a, c, b],

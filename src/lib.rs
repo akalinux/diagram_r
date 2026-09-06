@@ -196,7 +196,7 @@ impl Point {
     }
 
     /// Returns value in radians that is normalizeed to a right angle, based on which side self is to a and b.
-    pub fn normalize_to_right_angle(&self, a: &Point, b: &Point) -> (f32, bool) {
+    pub fn normalize_to_right_angle(&self, a: &Point, b: &Point) -> f32 {
         normalize_to_right_angle(a, b, self)
     }
 

@@ -10,16 +10,14 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_180, R_270},
+    constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_270},
     diagram::DiagramCore,
     imgcache::ImgCache,
     link::{LineAnimation, LinkContainer, SubLink},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{
-        compute_arc_point, normalize_rad, quadratic_arc_length, shift_arc_position, side_of_line,
-    },
+    utils::{compute_arc_point, quadratic_arc_length, shift_arc_position},
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -392,23 +390,21 @@ impl CanvasRender {
             return Ok(());
         }
 
-        /*
-                let lp = match position {
-                    LabelPosition::Center => LabelPosition::Center,
-                    LabelPosition::Top => match side {
-                        true => LabelPosition::Top,
-                        false => LabelPosition::Bottom,
-                    },
-                    LabelPosition::Bottom => match side {
-                        false => LabelPosition::Top,
-                        true => LabelPosition::Bottom,
-                    },
-                };
-                let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, &lp);
-        */
+        let lp = match position {
+            LabelPosition::Center => LabelPosition::Center,
+            LabelPosition::Top => match side {
+                true => LabelPosition::Top,
+                false => LabelPosition::Bottom,
+            },
+            LabelPosition::Bottom => match side {
+                false => LabelPosition::Top,
+                true => LabelPosition::Bottom,
+            },
+        };
+        let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, &lp);
         // arc point visual center is half the height of the triangle.
 
-        let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, position);
+        //let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, position);
         // Need to compute the text scale and position before either highlight or non highlight
         let mut width = 0.0;
         let mut height = 0.0;

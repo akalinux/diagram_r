@@ -2,10 +2,7 @@ use js_sys::Number;
 
 use crate::{
     LabelPosition, Point, Transform,
-    constants::{
-        AREA_SCALE_EPSILON, HALF, ONE_QUARTER, QUAD_ARC_FIND_REFINE_THRESHOLD, R_1, R_90, R_180,
-        R_270, R_360,
-    },
+    constants::{AREA_SCALE_EPSILON, HALF, R_90, R_180, R_270, R_360},
     square::Corners,
 };
 
@@ -224,34 +221,8 @@ pub fn find_arc_t_np(begin: &Point, control: &Point, end: &Point, p: &Point) -> 
             }
             let cmp = p1.get_manhattan_distance(start);
             let t1 = cmp / d;
-            let p2 = compute_arc_point(t1, begin, control, end);
-            let rad2_base = center.get_radians(&p2);
-            let diff = rad2_base - rad_base;
-            if diff.abs() <= QUAD_ARC_FIND_REFINE_THRESHOLD {
-                println!("  Base {}", rad.to_degrees());
-                return Some(t1);
-            }
-            let diff_rad = diff * ONE_QUARTER;
-            let new_rad = rad + diff_rad;
 
-            let cmp_point2 = p1.get_xy(base, new_rad);
-
-            let (start2, finish2) = if side_of_line(&center, control, &p2) < 0.0 {
-                (begin, control)
-            } else {
-                (control, end)
-            };
-            match get_intersection(start2, finish2, &p2, &cmp_point2) {
-                None => return Some(t1),
-                Some(p2) => {
-                    let cmp = p2.get_manhattan_distance(start2);
-                    let d = start2.get_manhattan_distance(finish2);
-                    if d < f32::EPSILON {
-                        return Some(t1);
-                    }
-                    Some(cmp / d)
-                }
-            }
+            Some(t1)
         }
         _ => None,
     }

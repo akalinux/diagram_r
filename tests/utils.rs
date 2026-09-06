@@ -4,7 +4,7 @@ mod common;
 use approx::assert_relative_eq;
 use diagram_r::{
     Point,
-    constants::{R_90, R_180, R_270, R_360, ZERO_POINT},
+    constants::{R_270, ZERO_POINT},
     utils::{
         arc_contains_point, closest_t_on_arc, closest_t_on_arc2, compute_arc_point, full_box_from,
         get_intersection, inside_box, normalize_to_right_angle, shift_arc_position, side_of_line,

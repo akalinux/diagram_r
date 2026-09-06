@@ -2,10 +2,9 @@ use std::fmt::Display;
 
 use crate::{
     Point,
-    constants::{HALF, R_90, R_180, R_270, R_360},
-    log,
+    constants::{HALF, R_90, R_270},
     square::Corners,
-    utils::{force_intersection, rad_needs_normalization},
+    utils::force_intersection,
 };
 
 pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {

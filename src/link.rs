@@ -3,9 +3,8 @@ pub mod iters;
 use crate::{
     DiagramOpt, Point,
     bsp::LookupPointResult,
-    constants::{HALF, R_90, R_270, ZERO_POINT},
+    constants::{HALF, R_90, ZERO_POINT},
     link::iters::{ArcIter, FullBoxAccumulate, LineIter, LineIterSet},
-    log,
     node::Node,
     square::Square,
     utils::{

@@ -124,11 +124,14 @@ pub fn rad_needs_normalization(rad: f32) -> bool {
     r >= R_90 && r <= R_270
 }
 
+pub fn apply_normalization_to_rad(rad: f32) -> f32 {
+    (rad + R_180) % R_360
+}
 pub fn normalize_rad(rad: f32) -> f32 {
-    (match rad_needs_normalization(rad) {
-        true => rad + R_180,
+    match rad_needs_normalization(rad) {
+        true => apply_normalization_to_rad(rad),
         false => rad,
-    }) % R_360
+    }
 }
 
 pub fn get_abc_from_points(begin: &Point, end: &Point) -> (f32, f32, f32) {

@@ -18,8 +18,8 @@ use crate::{
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
     utils::{
-        compute_arc_point, normalize_rad, quadratic_arc_length, rad_needs_normalization,
-        shift_arc_position,
+        apply_normalization_to_rad, compute_arc_point, quadratic_arc_length,
+        rad_needs_normalization, shift_arc_position,
     },
 };
 
@@ -475,40 +475,43 @@ impl CanvasRender {
             ctx.close_path();
             ctx.fill();
         } else {
-            ctx.set_fill_style_str(text_color);
-            // normalize the rotation of the text!
-            let rad = normalize_rad(rad + R_90);
-
             let mut points = Vec::with_capacity(chars.len());
             for i in 0..chars.len() {
                 let pos = start + (step * i as f32);
                 let p = compute_arc_point(pos, &a, &c, &b);
-                let full_scale = scale * t.k;
                 let x = p.x * t.k + t.x;
                 let y = p.y * t.k + t.y;
 
-                let k = (full_scale * rad.cos()) as f64;
-                let r = (full_scale * rad.sin()) as f64;
-                points.push((Point { x, y }, k, r));
+                points.push(Point { x, y });
             }
 
+            // FIXME!
             // prevent text from being renderd backwards.
-            let iter: Box<dyn Iterator<Item = usize>> = {
-                let start = &points[0].0;
-                let end = &points[points.len() - 1].0;
+            let (rad, iter): (f32, Box<dyn Iterator<Item = usize>>) = {
+                let start = &points[0];
+                let end = &points[points.len() - 1];
                 let center = start.get_center(&end);
                 let rad = center.get_radians(&start);
                 // match (a.y < b.y && start.1 > end.1 && start.0 < end.0) || (a.y > b.y && a.x < b.x)
                 match rad_needs_normalization(rad) {
                     //match normalized {
-                    false => Box::new((0..chars.len()).into_iter()),
-                    true => Box::new((0..chars.len()).rev()),
+                    false => (rad, Box::new((0..chars.len()).into_iter())),
+                    true => (
+                        apply_normalization_to_rad(rad),
+                        Box::new((0..chars.len()).rev()),
+                    ),
                 }
             };
+            let full_scale = scale * t.k;
+            let k = (full_scale * rad.cos()) as f64;
+            let r = (full_scale * rad.sin()) as f64;
             let mut piter = points.into_iter();
+
+            ctx.set_fill_style_str(text_color);
+
             for i in iter {
                 let v = &chars[i];
-                let (p, k, r) = unsafe { piter.next().unwrap_unchecked() };
+                let p = unsafe { piter.next().unwrap_unchecked() };
                 let x = p.x as f64;
                 let y = p.y as f64;
                 ctx.set_transform(k, r, -r, k, x as f64, y as f64)?;

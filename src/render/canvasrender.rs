@@ -19,7 +19,7 @@ use crate::{
     square::Square,
     utils::{
         apply_normalization_to_rad, compute_arc_point, quadratic_arc_length,
-        rad_needs_normalization, shift_arc_position,
+        rad_needs_normalization, shift_arc,
     },
 };
 
@@ -94,21 +94,21 @@ impl CoreRender for CanvasRender {
 
     fn render(&self) -> Result<(), JsValue> {
         self.animate.replace(false);
-        let context = &self.ctx;
-        context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
+        let ctx = &self.ctx;
+        ctx.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
         {
             let (width, height) = self.get_width_height();
-            context.clear_rect(0.0, 0.0, width as f64, height as f64);
+            ctx.clear_rect(0.0, 0.0, width as f64, height as f64);
         }
         let d = unsafe { self.diagram.upgrade().unwrap_unchecked() };
         let diagram = &*d.borrow();
         let opt = &diagram.render_ops;
         let t = *&*diagram.transform.borrow();
 
-        context.set_global_alpha(1.0);
-        self.draw_grid(opt)?;
-        context.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
-        context.set_line_dash_offset(*self.frame_tick.borrow() as f64);
+        ctx.set_global_alpha(1.0);
+        self.draw_grid(opt);
+        ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
+        ctx.set_line_dash_offset(*self.frame_tick.borrow() as f64);
 
         let cache = &diagram.img_cache;
 
@@ -144,7 +144,7 @@ impl CoreRender for CanvasRender {
             None => return Ok(()),
         };
 
-        context.set_global_alpha(opt.highlight_alpha as f64);
+        ctx.set_global_alpha(opt.highlight_alpha as f64);
         for id in &highlights.boxes {
             let node = &boxes_vec[*id];
             let o = diagram.get_opt(node.opt);
@@ -198,10 +198,10 @@ impl CoreRender for CanvasRender {
 }
 
 impl CanvasRender {
-    fn draw_grid(&self, dops: &DiagramOpt) -> Result<(), JsValue> {
+    fn draw_grid(&self, dops: &DiagramOpt) {
         let opt = match &dops.grid_opt {
             Some(o) => o,
-            None => return Ok(()),
+            None => return,
         };
         let (width, height) = self.get_width_height();
         let grid_size = opt.grid_size;
@@ -227,8 +227,6 @@ impl CanvasRender {
             p = i as f32 * y_scale + y_offset;
             self.raw_line_draw(0.0, p, width, p, w, color);
         }
-
-        Ok(())
     }
     fn draw_node_text_highlight(
         &self,
@@ -258,9 +256,6 @@ impl CanvasRender {
         ctx.stroke();
     }
 
-    fn draw_line(&self, src: &Point, dst: &Point, width: f32, color: &String) {
-        self.raw_line_draw(src.x, src.y, dst.x, dst.y, width, color);
-    }
     pub fn draw_box(
         &self,
         target: &Square,
@@ -288,28 +283,6 @@ impl CanvasRender {
         }
         Ok(())
     }
-    pub fn get_link_text_point_and_scale(
-        &self,
-        src: &Point,
-        dst: &Point,
-        height: f32,
-        new_rad: f32,
-        o: &ElementOpt,
-        font_height: f32,
-    ) -> Result<(Point, f32), JsValue> {
-        let center = src.get_center(dst);
-        let scale = height / font_height as f32;
-        let r = height * 0.75;
-
-        let p = match o.label_position {
-            // _ => center.scale(1.0 / scale),
-            LabelPosition::Center => center,
-            LabelPosition::Bottom => center.get_xy(r, new_rad + R_90),
-            LabelPosition::Top => center.get_xy(r, new_rad + R_270),
-        };
-
-        Ok((p, scale * HALF))
-    }
 
     pub fn draw_link_text(
         &self,
@@ -329,14 +302,26 @@ impl CanvasRender {
 
         let (fw, fh) = self.get_text_size(text)?;
         let font_height = fh as f32;
-        let (p, scale) =
-            self.get_link_text_point_and_scale(src, dst, line_width, new_rad, o, font_height)?;
+        let center = src.get_center(dst);
+        let (p, scale) = {
+            let scale = line_width / font_height;
+
+            let p = match o.label_position {
+                // _ => center.scale(1.0 / scale),
+                LabelPosition::Center => center,
+                LabelPosition::Bottom => center.get_xy(line_width, new_rad + R_90),
+                LabelPosition::Top => center.get_xy(line_width, new_rad + R_270),
+            };
+            (p, scale * 0.75)
+        };
         if highlight {
             let start = p.get_xy(fw as f32 * HALF * scale, new_rad);
             let end = p.add_distance(&start.get_move_distance(&p));
-            self.draw_line(
-                &start,
-                &end,
+            self.raw_line_draw(
+                start.x,
+                start.y,
+                end.x,
+                end.y,
                 font_height as f32 * scale,
                 &opt.highlight_color,
             );
@@ -354,9 +339,7 @@ impl CanvasRender {
         ctx.set_transform(k as f64, r, -r, k as f64, x as f64, y as f64)?;
 
         self.draw_text(0 as f64, 0 as f64, text, &opt.font_color)?;
-        ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
-
-        Ok(())
+        ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)
     }
 
     fn draw_link_arc_highlight(
@@ -391,16 +374,13 @@ impl CanvasRender {
         if text.is_empty() {
             return Ok(());
         }
-        let lp = match position {
-            LabelPosition::Bottom => LabelPosition::Top,
-            LabelPosition::Top => LabelPosition::Bottom,
-            LabelPosition::Center => LabelPosition::Center,
+        let [a, c, b] = match position {
+            LabelPosition::Center => [*a, *c, *b],
+            //LabelPosition::Bottom => R_270,
+            LabelPosition::Bottom => shift_arc(a, c, b, r * 0.75, R_90),
+            LabelPosition::Top => shift_arc(a, c, b, r * 0.75, R_270),
         };
 
-        let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, &lp);
-        // arc point visual center is half the height of the triangle.
-
-        //let [a, c, b] = shift_arc_position(a, c, b, r * 0.75, position);
         // Need to compute the text scale and position before either highlight or non highlight
         let mut width = 0.0;
         let mut height = 0.0;
@@ -587,14 +567,13 @@ impl CanvasRender {
                     &opt.font_color,
                     t,
                     dd.normalized_radians[0],
-                )?;
-                Ok(())
+                )
             }
             SubLink::Line([a, b], animations) => {
                 if highlight {
-                    self.draw_line(a, b, width, color);
+                    self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
                 } else {
-                    self.draw_line(a, b, width, color);
+                    self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
                     self.draw_link_animations(animations, &opt.animation_color, aw)?;
                 }
 
@@ -611,8 +590,10 @@ impl CanvasRender {
                 )
             }
             SubLink::Joint([a, b, c], animations) => {
-                self.draw_line(a, b, width, color);
-                self.draw_line(b, c, width, color);
+                //self.draw_line(a, b, width, color);
+                self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
+                self.raw_line_draw(b.x, b.y, c.x, c.y, width, color);
+                //self.draw_line(b, c, width, color);
                 self.draw_arc(b, color, width)?;
                 if !highlight {
                     self.draw_link_animations(animations, &opt.animation_color, aw)?;
@@ -635,12 +616,12 @@ impl CanvasRender {
         let replace = match animation {
             LineAnimation::Both([a, b, c, d]) => {
                 let w = width * HALF;
-                self.draw_line(a, b, w, color);
-                self.draw_line(c, d, w, color);
+                self.raw_line_draw(a.x, a.y, b.x, b.y, w, color);
+                self.raw_line_draw(c.x, c.y, d.x, d.y, w, color);
                 true
             }
             LineAnimation::Side([a, b]) => {
-                self.draw_line(a, b, width, color);
+                self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
                 true
             }
             LineAnimation::BothArc([a, b, c, d, e, f]) => {
@@ -659,13 +640,13 @@ impl CanvasRender {
                 let w = width * HALF;
                 for i in (0..8).step_by(2) {
                     //for i in (4..8).step_by(2) {
-                    self.draw_line(&s[i], &s[i + 1], w, color);
+                    self.raw_line_draw(s[i].x, s[i].y, s[i + 1].x, s[i + 1].y, w, color);
                 }
                 true
             }
             LineAnimation::JointSide([a, b, c]) => {
-                self.draw_line(a, b, width, color);
-                self.draw_line(b, c, width, color);
+                self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
+                self.raw_line_draw(b.x, b.y, c.x, c.y, width, color);
                 true
             }
             LineAnimation::None => false,
@@ -674,8 +655,7 @@ impl CanvasRender {
             self.animate.replace(replace);
         }
 
-        self.ctx.set_line_dash(&Array::new())?;
-        Ok(())
+        self.ctx.set_line_dash(&Array::new())
     }
     pub fn draw_link(
         &self,

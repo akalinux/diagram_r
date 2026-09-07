@@ -44,8 +44,7 @@ pub struct CanvasRender {
     total_and_offset: (f64, f64),
     dashes: Array,
     canvas: HtmlCanvasElement,
-    frame_timer: RefCell<Option<Rc<RefCell<FrameTimer>>>>,
-    animate: RefCell<bool>,
+    frame_timer: RefCell<Option<Box<Rc<RefCell<FrameTimer>>>>>,
 }
 
 impl BuildRender for CanvasRender {
@@ -76,7 +75,6 @@ impl BuildRender for CanvasRender {
             dashes,
             canvas,
             frame_timer: RefCell::new(None),
-            animate: RefCell::new(false),
         }))
     }
 }
@@ -93,7 +91,6 @@ impl CoreRender for CanvasRender {
     }
 
     fn render(&self) -> Result<(), JsValue> {
-        self.animate.replace(false);
         let ctx = &self.ctx;
         ctx.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
         {
@@ -126,10 +123,10 @@ impl CoreRender for CanvasRender {
             self.draw_node(node, diagram, opt, cache, false)?;
         }
 
-        if opt.animate && *self.animate.borrow() {
+        if opt.animate && diagram.animated() {
             if self.frame_timer.borrow().is_none() {
                 let ft = FrameTimer::new(self.diagram.clone())?;
-                self.frame_timer.replace(Some(ft));
+                self.frame_timer.replace(Some(Box::new(ft)));
             }
         } else {
             if self.frame_timer.borrow().is_some() {
@@ -547,13 +544,14 @@ impl CanvasRender {
         let width = dd.line_width;
         let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
+        let line_opts = &dd.normalized_radians;
         match &dd.links[i] {
             SubLink::Arc([a, c, b], animations) => {
                 if highlight {
                     self.draw_quad_arc(a, c, b, color, width);
                 } else {
                     self.draw_quad_arc(a, c, b, color, width);
-                    self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                    self.draw_link_animations(animations, &opt.animation_color, aw, line_opts)?;
                 }
                 self.draw_quad_arc_text(
                     a,
@@ -574,7 +572,7 @@ impl CanvasRender {
                     self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
                 } else {
                     self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
-                    self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                    self.draw_link_animations(animations, &opt.animation_color, aw, line_opts)?;
                 }
 
                 self.draw_link_text(
@@ -596,7 +594,7 @@ impl CanvasRender {
                 //self.draw_line(b, c, width, color);
                 self.draw_arc(b, color, width)?;
                 if !highlight {
-                    self.draw_link_animations(animations, &opt.animation_color, aw)?;
+                    self.draw_link_animations(animations, &opt.animation_color, aw, line_opts)?;
                 }
                 let ra = dd.normalized_radians[0];
                 let rb = dd.normalized_radians[1];
@@ -611,18 +609,17 @@ impl CanvasRender {
         animation: &LineAnimation,
         color: &String,
         width: f32,
+        link_options: &Box<[f32]>,
     ) -> Result<(), JsValue> {
         self.ctx.set_line_dash(&self.dashes)?;
-        let replace = match animation {
+        match animation {
             LineAnimation::Both([a, b, c, d]) => {
                 let w = width * HALF;
                 self.raw_line_draw(a.x, a.y, b.x, b.y, w, color);
                 self.raw_line_draw(c.x, c.y, d.x, d.y, w, color);
-                true
             }
             LineAnimation::Side([a, b]) => {
                 self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
-                true
             }
             LineAnimation::BothArc([a, b, c, d, e, f]) => {
                 let width = width * HALF;
@@ -630,11 +627,9 @@ impl CanvasRender {
                 // WORKS! COMMENTED OUT TO DEBUG THE OTHER LINE!
                 self.draw_quad_arc(a, b, c, color, width);
                 self.draw_quad_arc(d, e, f, color, width);
-                true
             }
             LineAnimation::SideArc([a, b, c]) => {
                 self.draw_quad_arc(a, b, c, color, width);
-                true
             }
             LineAnimation::JointBoth(s) => {
                 let w = width * HALF;
@@ -642,18 +637,13 @@ impl CanvasRender {
                     //for i in (4..8).step_by(2) {
                     self.raw_line_draw(s[i].x, s[i].y, s[i + 1].x, s[i + 1].y, w, color);
                 }
-                true
             }
             LineAnimation::JointSide([a, b, c]) => {
                 self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
                 self.raw_line_draw(b.x, b.y, c.x, c.y, width, color);
-                true
             }
-            LineAnimation::None => false,
+            LineAnimation::None => (),
         };
-        if replace {
-            self.animate.replace(replace);
-        }
 
         self.ctx.set_line_dash(&Array::new())
     }

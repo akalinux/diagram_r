@@ -270,11 +270,15 @@ impl LinkSet {
                 );
                 let width = iter.width;
                 let set: Box<[f32]> = match p.mode {
-                    ArcType::Arc => Box::new([iter.rad]),
+                    ArcType::Arc => Box::new([iter.rad, if iter.swapped { -1.0 } else { 1.0 }]),
                     ArcType::Joint => {
                         let ra = normalize_rad(src_p.get_radians(&p.point));
                         let rb = normalize_rad(p.point.get_radians(&dst_p));
-                        Box::new(if iter.swapped { [rb, ra] } else { [ra, rb] })
+                        Box::new(if iter.swapped {
+                            [rb, ra, -1.0]
+                        } else {
+                            [ra, rb, 1.0]
+                        })
                     }
                 };
                 let i: Box<dyn LineIterSet> = Box::new(iter);
@@ -283,15 +287,26 @@ impl LinkSet {
             }
         };
         let aw = width * HALF;
+        let mut animated: usize = 0;
+
         for (link_id, (a, arc, b)) in iter.enumerate() {
             let link = &self.links[link_id];
             links.push(match arc {
                 None => {
                     let animation = self.compute_animation(link, &a, &b, None, aw);
+                    match &animation {
+                        LineAnimation::None => (),
+                        _ => animated += 1,
+                    };
+
                     SubLink::Line([a, b], animation)
                 }
                 Some(c) => {
                     let animation = self.compute_animation(link, &a, &b, Some((mode, &c)), aw);
+                    match &animation {
+                        LineAnimation::None => (),
+                        _ => animated += 1,
+                    };
                     match mode {
                         ArcType::Arc => SubLink::Arc([a, c, b], animation),
                         ArcType::Joint => SubLink::Joint([a, c, b], animation),
@@ -310,6 +325,7 @@ impl LinkSet {
             links,
             index,
             normalized_radians,
+            animated: animated != 0,
         }
     }
 }
@@ -404,6 +420,7 @@ pub struct DrawData {
     pub bundles: Vec<Point>,
     pub links: Vec<SubLink>,
     pub index: Square,
+    pub animated: bool,
 }
 
 impl DrawData {
@@ -518,6 +535,9 @@ impl LinkContainer {
             draw_data: dd,
             id,
         }
+    }
+    pub fn animated(&self) -> bool {
+        self.draw_data.animated
     }
     pub fn get_src_dst(&self) -> (usize, usize) {
         (self.ls.src, self.ls.dst)

@@ -75,6 +75,7 @@ pub struct DiagramCore {
     pub render_ops: DiagramOpt,
     pub center: RefCell<Point>,
     pub pending_updates: RefCell<FxHashMap<ScreenSlot, IndexXY>>,
+    pub animated: RefCell<usize>,
 
     pub transform: RefCell<Transform>,
     pub img_cache: ImgCache,
@@ -202,6 +203,7 @@ impl DiagramCore {
     pub fn new(render_ops: DiagramOpt) -> Rc<RefCell<Self>> {
         let mut res = Self {
             timeout: RefCell::new(None),
+            animated: RefCell::new(0),
             current_target: RefCell::new(CurrentTarget::None),
             highlights: RefCell::new(None),
             this: Weak::new(),
@@ -345,11 +347,19 @@ impl DiagramCore {
             self.nodes.borrow_mut().push((node, Vec::new()));
         }
         self.links.borrow_mut().reserve(links.len());
+        let mut animated = 0;
         for lc in links {
-            self.add_link(lc)?;
+            let id = self.add_link(lc)?;
+            if self.links.borrow()[id].animated() {
+                animated += 1;
+            }
         }
+        self.animated.replace(animated);
 
         Ok(())
+    }
+    pub fn animated(&self) -> bool {
+        *self.animated.borrow() != 0
     }
 
     pub fn get_link_src_dst<'n>(&self, id: usize) -> Option<(&Node, &Node)> {
@@ -405,6 +415,7 @@ impl DiagramCore {
         self.links.borrow_mut().clear();
         self.idx.borrow_mut().clear();
         self.center.replace(ZERO_POINT);
+        self.animated.replace(0);
         self.clear_render();
     }
 

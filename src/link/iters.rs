@@ -8,10 +8,11 @@ use crate::{
 };
 
 pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
+    let tl = (total_links * 2) - (total_links & 1);
     let incremental_scale = 1.0 / total_links as f32;
     let (virtual_count, inital_scale) = match total_links {
-        1 => (2.0, 0.5),
-        _ => (total_links as f32 * 2.0 - 1.0, incremental_scale * 0.5),
+        1 => (2.0, HALF),
+        _ => (tl as f32, incremental_scale * HALF),
     };
     let link_width = full_width / virtual_count;
     (link_width, inital_scale, incremental_scale)

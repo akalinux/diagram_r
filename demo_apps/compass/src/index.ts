@@ -38,7 +38,7 @@ async function run() {
     new Link(0, "Both", Animation.Both), // 0
     new Link(0, "West to East", Animation.ToDst),  // 1
     new Link(0, "East to West", Animation.ToSrc),  // 2
-    new Link(6, "Dead", Animation.None),  // 2
+    //new Link(6, "Dead", Animation.None),  // 2
   ], [bundle, bundle2], 2, 3);
   const nts = new LinkSet(
     [
@@ -54,6 +54,7 @@ async function run() {
     [
       new Link(0, "Both", Animation.Both),
       new Link(0, "South To North", Animation.ToSrc),
+      //new Link(0, "Meh", Animation.ToSrc),
     ], [new Bundle(4, "Both", Uint32Array.from([0, 1]), 0.25)],
     0, 1,
     new LinePoint(new Point(300, 275), ArcType.Joint)

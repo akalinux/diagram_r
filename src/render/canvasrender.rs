@@ -387,7 +387,6 @@ impl CanvasRender {
         text_color: &String,
         t: &Transform,
         rad: f32,
-        side: bool,
     ) -> Result<(), JsValue> {
         if text.is_empty() {
             return Ok(());
@@ -566,7 +565,7 @@ impl CanvasRender {
         let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
         match &dd.links[i] {
-            SubLink::Arc([a, c, b], animations, rad, side) => {
+            SubLink::Arc([a, c, b], animations) => {
                 if highlight {
                     self.draw_quad_arc(a, c, b, color, width);
                 } else {
@@ -584,12 +583,11 @@ impl CanvasRender {
                     highlight,
                     &opt.font_color,
                     t,
-                    *rad,
-                    *side,
+                    dd.normalized_radians[0],
                 )?;
                 Ok(())
             }
-            SubLink::Line([a, b], animations, rad, _) => {
+            SubLink::Line([a, b], animations) => {
                 if highlight {
                     self.draw_line(a, b, width, color);
                 } else {
@@ -597,17 +595,29 @@ impl CanvasRender {
                     self.draw_link_animations(animations, &opt.animation_color, aw)?;
                 }
 
-                self.draw_link_text(a, b, o, text, width, *rad, opt, t, highlight)
+                self.draw_link_text(
+                    a,
+                    b,
+                    o,
+                    text,
+                    width,
+                    dd.normalized_radians[0],
+                    opt,
+                    t,
+                    highlight,
+                )
             }
-            SubLink::Joint([a, b, c], animations, [(ra, _), (rb, _)]) => {
+            SubLink::Joint([a, b, c], animations) => {
                 self.draw_line(a, b, width, color);
                 self.draw_line(b, c, width, color);
                 self.draw_arc(b, color, width)?;
                 if !highlight {
                     self.draw_link_animations(animations, &opt.animation_color, aw)?;
                 }
-                self.draw_link_text(a, b, o, text, width, *ra, opt, t, highlight)?;
-                self.draw_link_text(b, c, o, text, width, *rb, opt, t, highlight)
+                let ra = dd.normalized_radians[0];
+                let rb = dd.normalized_radians[1];
+                self.draw_link_text(a, b, o, text, width, ra, opt, t, highlight)?;
+                self.draw_link_text(b, c, o, text, width, rb, opt, t, highlight)
             }
         }
     }

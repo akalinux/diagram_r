@@ -50,12 +50,23 @@ async function run() {
     //new LinePoint(new Point(365, 285), ArcType.Arc)
   );
 
+  const nts2 = new LinkSet(
+    [
+      new Link(0, "Both", Animation.Both),
+      new Link(0, "South To North", Animation.ToSrc),
+    ], [new Bundle(4, "Both", Uint32Array.from([0, 1]), 0.25)],
+    0, 1,
+    new LinePoint(new Point(300, 275), ArcType.Joint)
+    //new LinePoint(new Point(365, 285), ArcType.Arc)
+  );
+
 
 
   //               0      1      2     3
   d.set_data([box], [north, south, west, east], [
     etw,
     nts,
+    nts2,
   ]);
 
   const el = document.getElementById("app") as HTMLCanvasElement;

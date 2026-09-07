@@ -245,12 +245,19 @@ impl LinkSet {
         let side = src.layout.smallest_side(&dst.layout) * opt.link_scale;
 
         let mut links = Vec::with_capacity(self.links.len());
-        let (width, iter, mode, rad_base) = match &self.point {
+        let (width, iter, mode, normalized_radians): (
+            f32,
+            Box<dyn LineIterSet>,
+            ArcType,
+            Box<[f32]>,
+        ) = match &self.point {
             None => {
                 let iter = LineIter::new(&src_p, &dst_p, side, self.links.len(), &mut accumulate);
                 let width = iter.width;
+                let (rad, _) = normalize_rad(src_p.get_radians(&dst_p));
                 let i: Box<dyn LineIterSet> = Box::new(iter);
-                (width, i, ArcType::Arc, 0.0)
+
+                (width, i, ArcType::Arc, Box::new([rad]))
             }
             Some(p) => {
                 let iter = ArcIter::new(
@@ -262,10 +269,19 @@ impl LinkSet {
                     &mut accumulate,
                 );
                 let width = iter.width;
-                let rad = iter.rad;
+                let set: Box<[f32]> = match p.mode {
+                    ArcType::Arc => Box::new([iter.rad]),
+                    ArcType::Joint => {
+                        let src = &iter.a.root;
+                        let dst = &iter.b.root;
+                        let (ra, _) = normalize_rad(src.get_radians(&p.point));
+                        let (rb, _) = normalize_rad(p.point.get_radians(dst));
+                        Box::new([ra, rb])
+                    }
+                };
                 let i: Box<dyn LineIterSet> = Box::new(iter);
 
-                (width, i, p.mode, rad)
+                (width, i, p.mode, set)
             }
         };
         let aw = width * HALF;
@@ -274,21 +290,13 @@ impl LinkSet {
             links.push(match arc {
                 None => {
                     let animation = self.compute_animation(link, &a, &b, None, aw);
-                    let (rad, norm) = normalize_rad(a.get_radians(&b));
-                    SubLink::Line([a, b], animation, rad, norm)
+                    SubLink::Line([a, b], animation)
                 }
                 Some(c) => {
                     let animation = self.compute_animation(link, &a, &b, Some((mode, &c)), aw);
                     match mode {
-                        ArcType::Arc => SubLink::Arc([a, c, b], animation, rad_base, false),
-                        ArcType::Joint => SubLink::Joint(
-                            [a, c, b],
-                            animation,
-                            [
-                                normalize_rad(a.get_radians(&c)),
-                                normalize_rad(c.get_radians(&b)),
-                            ],
-                        ),
+                        ArcType::Arc => SubLink::Arc([a, c, b], animation),
+                        ArcType::Joint => SubLink::Joint([a, c, b], animation),
                     }
                 }
             });
@@ -303,6 +311,7 @@ impl LinkSet {
             bundles,
             links,
             index,
+            normalized_radians,
         }
     }
 }
@@ -341,47 +350,47 @@ impl Bundle {
 
 #[derive(Debug, PartialEq)]
 pub enum SubLink {
-    Line([Point; 2], LineAnimation, f32, bool),
-    Joint([Point; 3], LineAnimation, [(f32, bool); 2]),
-    Arc([Point; 3], LineAnimation, f32, bool),
+    Line([Point; 2], LineAnimation),
+    Joint([Point; 3], LineAnimation),
+    Arc([Point; 3], LineAnimation),
 }
 impl SubLink {
     pub fn get_src_dst(&self) -> (Point, Point) {
         match self {
-            Self::Arc([a, _, b], _, _, _) => (*a, *b),
-            Self::Joint([a, _, b], _, _) => (*a, *b),
-            Self::Line([a, b], _, _, _) => (*a, *b),
+            Self::Arc([a, _, b], _) => (*a, *b),
+            Self::Joint([a, _, b], _) => (*a, *b),
+            Self::Line([a, b], _) => (*a, *b),
         }
     }
     pub fn sum_distance(&self) -> (usize, Point) {
         match &self {
-            Self::Arc([a, b, c], _, _, _) => (3, a.add_distance(b).add_distance(c)),
-            Self::Joint([a, b, c], _, _) => (3, a.add_distance(b).add_distance(c)),
-            Self::Line([a, b], _, _, _) => (2, a.add_distance(b)),
+            Self::Arc([a, b, c], _) => (3, a.add_distance(b).add_distance(c)),
+            Self::Joint([a, b, c], _) => (3, a.add_distance(b).add_distance(c)),
+            Self::Line([a, b], _) => (2, a.add_distance(b)),
         }
     }
     pub fn contains_point(&self, p: &Point, width: f32) -> bool {
         match self {
-            Self::Joint([a, b, c], _, _) => {
+            Self::Joint([a, b, c], _) => {
                 inside_circle(p, b, width)
                     || inside_box(&full_box_from(&a, &b, width).0, p)
                     || inside_box(&full_box_from(&b, &c, width).0, p)
             }
-            Self::Arc([a, b, c], _, _, _) => arc_contains_point(width, p, a, b, c),
-            Self::Line([a, b], _, _, _) => inside_box(&full_box_from(a, b, width).0, p),
+            Self::Arc([a, b, c], _) => arc_contains_point(width, p, a, b, c),
+            Self::Line([a, b], _) => inside_box(&full_box_from(a, b, width).0, p),
         }
     }
     pub fn move_distance(&mut self, d: &Point) {
         match self {
-            Self::Arc(a, b, _, _) => {
+            Self::Arc(a, b) => {
                 move_points(a, d);
                 b.move_distance(d);
             }
-            Self::Joint(a, b, _) => {
+            Self::Joint(a, b) => {
                 move_points(a, d);
                 b.move_distance(d);
             }
-            Self::Line(a, b, _, _) => {
+            Self::Line(a, b) => {
                 move_points(a, d);
                 b.move_distance(d);
             }
@@ -391,6 +400,7 @@ impl SubLink {
 
 #[derive(Debug, PartialEq)]
 pub struct DrawData {
+    pub normalized_radians: Box<[f32]>,
     pub line_width: f32,
     pub bundle_side: f32,
     pub bundles: Vec<Point>,
@@ -444,7 +454,10 @@ impl LinkContainer {
     }
     pub fn move_arc(&mut self, distance: &Point, src: &Node, dst: &Node, opt: &DiagramOpt) {
         match &mut self.ls.point {
-            Some(lp) => lp.point = lp.point.add_distance(&distance.scale(2.0)),
+            Some(lp) => match lp.mode {
+                ArcType::Arc => lp.point = lp.point.add_distance(&distance.scale(2.0)),
+                ArcType::Joint => lp.point = lp.point.add_distance(distance),
+            },
             None => (),
         }
         self.draw_data = self.ls.build_draw_data(src, dst, opt);

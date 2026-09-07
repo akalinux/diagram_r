@@ -4,7 +4,7 @@ mod common;
 use approx::assert_relative_eq;
 use diagram_r::{
     Point,
-    constants::{R_270, ZERO_POINT},
+    constants::ZERO_POINT,
     utils::{
         arc_contains_point, closest_t_on_arc, compute_arc_point, full_box_from, get_intersection,
         inside_box, normalize_to_right_angle, shift_arc_position, side_of_line,
@@ -20,10 +20,7 @@ fn full_box_from_testx() {
     let a = Point::new(0.0, 2.5);
     let b = Point::new(10.0, 2.5);
     let r = 2.5;
-    let ((nw, ne, sw, se), (distance, rad, _)) = full_box_from(&a, &b, r);
-    assert_relative_eq!(rad, R_270, epsilon = 0.001);
-    assert_relative_eq!(distance.y, 2.5, epsilon = 0.001);
-    assert_relative_eq!(distance.x, 0.0, epsilon = 0.001);
+    let (nw, ne, sw, se) = full_box_from(&a, &b, r);
     for (new, ctrl) in [
         (nw, ZERO_POINT),
         (ne, Point::new(10.0, 0.0)),
@@ -38,7 +35,7 @@ fn full_box_from_testx() {
 #[test]
 #[wasm_bindgen_test]
 fn inside_box_tests() {
-    let (pbox, _) = full_testbox2();
+    let pbox = full_testbox2();
     // top left
     assert!(inside_box(&pbox, &ZERO_POINT));
     // center

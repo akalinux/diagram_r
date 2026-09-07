@@ -371,11 +371,11 @@ impl SubLink {
         match self {
             Self::Joint([a, b, c], _) => {
                 inside_circle(p, b, width)
-                    || inside_box(&full_box_from(&a, &b, width).0, p)
-                    || inside_box(&full_box_from(&b, &c, width).0, p)
+                    || inside_box(&full_box_from(&a, &b, width), p)
+                    || inside_box(&full_box_from(&b, &c, width), p)
             }
             Self::Arc([a, b, c], _) => arc_contains_point(width, p, a, b, c),
-            Self::Line([a, b], _) => inside_box(&full_box_from(a, b, width).0, p),
+            Self::Line([a, b], _) => inside_box(&full_box_from(a, b, width), p),
         }
     }
     pub fn move_distance(&mut self, d: &Point) {

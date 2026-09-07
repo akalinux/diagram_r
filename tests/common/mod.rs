@@ -47,7 +47,7 @@ pub fn nodes_a_b() -> (Node, Node) {
     )
 }
 
-pub fn full_testbox2() -> (FullBox, (Point, f32, f32)) {
+pub fn full_testbox2() -> FullBox {
     let a = Point::new(0.0, 2.5);
     let b = Point::new(10.0, 2.5);
     let r = 2.5;

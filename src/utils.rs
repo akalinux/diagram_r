@@ -57,21 +57,16 @@ pub fn compute_line_box(ne: &Point, points: &[&Point]) -> Corners {
     (min_x, max_x, min_y, max_y)
 }
 
-pub fn north_box_from(a: &Point, b: &Point, r: f32) -> (Point, Point, Point, f32, f32) {
+pub fn full_box_from(a: &Point, b: &Point, r: f32) -> FullBox {
     let rad = a.get_radians(b);
     let north = rad + R_90;
     let nw = get_xy_r(a.x, a.y, r, north);
     let distance = nw.get_move_distance(&a);
-
     let ne = b.sub_distance(&distance);
-    (nw, ne, distance, north, rad)
-}
-pub fn full_box_from(a: &Point, b: &Point, r: f32) -> (FullBox, (Point, f32, f32)) {
-    let (nw, ne, distance, north, angle) = north_box_from(a, b, r);
 
     let sw = a.add_distance(&distance);
     let se = b.add_distance(&distance);
-    ((nw, ne, sw, se), (distance, north, angle))
+    (nw, ne, sw, se)
 }
 
 pub fn inside_box(pbox: &FullBox, p: &Point) -> bool {

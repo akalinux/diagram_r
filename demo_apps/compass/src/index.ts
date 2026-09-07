@@ -38,7 +38,7 @@ async function run() {
     new Link(0, "Both", Animation.Both), // 0
     new Link(0, "West to East", Animation.ToDst),  // 1
     new Link(0, "East to West", Animation.ToSrc),  // 2
-    //new Link(6, "Dead", Animation.None),  // 2
+    new Link(6, "Dead", Animation.None),  // 2
   ], [bundle, bundle2], 2, 3);
   const nts = new LinkSet(
     [

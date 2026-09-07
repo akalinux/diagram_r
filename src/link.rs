@@ -444,7 +444,7 @@ impl LinkContainer {
     }
     pub fn move_arc(&mut self, distance: &Point, src: &Node, dst: &Node, opt: &DiagramOpt) {
         match &mut self.ls.point {
-            Some(lp) => lp.point = lp.point.add_distance(distance),
+            Some(lp) => lp.point = lp.point.add_distance(&distance.scale(2.0)),
             None => (),
         }
         self.draw_data = self.ls.build_draw_data(src, dst, opt);

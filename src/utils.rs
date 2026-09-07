@@ -197,7 +197,7 @@ pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
     compute_arc_point_acb(t, s, c, e)[1]
 }
 
-pub fn find_arc_t_np(begin: &Point, control: &Point, end: &Point, p: &Point) -> Option<f32> {
+pub fn get_arc_t_on_line(begin: &Point, control: &Point, end: &Point, p: &Point) -> Option<f32> {
     let base = begin.get_distance_square(end);
     let center = begin.get_center(end);
 
@@ -214,40 +214,18 @@ pub fn find_arc_t_np(begin: &Point, control: &Point, end: &Point, p: &Point) -> 
     };
     match get_intersection(start, finish, p, &cmp_point) {
         Some(p1) => {
-            // need to pick our closest side
             let d = start.get_manhattan_distance(finish);
             if d < f32::EPSILON {
                 return None;
             }
             let cmp = p1.get_manhattan_distance(start);
-            let t1 = cmp / d;
 
-            Some(t1)
+            Some(cmp / d)
         }
         _ => None,
     }
 }
-pub fn closest_t_on_arc2(begin: &Point, control: &Point, end: &Point, p: &Point) -> f32 {
-    let da = begin.get_distance_square(p);
-    let db = end.get_distance_square(p);
-    // Hyper optimization for the median point!
-    if da > f32::EPSILON && ((db / da) - 1.0).abs() <= f32::EPSILON {
-        return 0.5;
-    } else if da < f32::EPSILON {
-        return 0.0;
-    } else if db < f32::EPSILON {
-        return 1.0;
-    }
-    // level and square are points
 
-    match find_arc_t_np(begin, control, end, p) {
-        Some(t1) => t1,
-        _ => match da < db {
-            true => 0.0,
-            false => 1.0,
-        },
-    }
-}
 /// Returns 0.0 if p is on the line of a->b.
 /// The number is negative p is above a and b.
 /// The number is positive if p is below a and b.
@@ -271,7 +249,7 @@ pub fn side_of_line(a: &Point, b: &Point, p: &Point) -> f32 {
 pub fn normalize_to_right_angle(a: &Point, b: &Point, p: &Point) -> f32 {
     let base = a.get_radians(b);
     let rad = p.center_radian_to(a, b);
-    base + if rad > R_180 { R_90 } else { R_270 }
+    (base + if rad > R_180 { R_90 } else { R_270 }) % R_360
 }
 
 pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {
@@ -375,7 +353,17 @@ pub fn compute_arc_line_boundries(a: &Point, c: &Point, b: &Point, r: f32) -> [P
 
 /// Calculates the exact parameter `t` [0.0, 1.0] on a 2D quadratic Bezier curve
 /// that minimizes the distance to a target point `m`.
-pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, m: &Point) -> f32 {
+pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, p: &Point) -> f32 {
+    let da = begin.get_distance_square(p);
+    let db = end.get_distance_square(p);
+    // Hyper optimization for the median point!
+    if da > f32::EPSILON && ((db / da) - 1.0).abs() <= f32::EPSILON {
+        return 0.5;
+    } else if da < f32::EPSILON {
+        return 0.0;
+    } else if db < f32::EPSILON {
+        return 1.0;
+    }
     // this provides the control point as an inveted vector
     let ax = begin.x - 2.0 * control.x + end.x;
     let ay = begin.y - 2.0 * control.y + end.y;
@@ -385,8 +373,8 @@ pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, m: &Point) 
     let by = 2.0 * (control.y - begin.y);
 
     // this provides a vector from begin to or test point of m
-    let cm_x = begin.x - m.x;
-    let cm_y = begin.y - m.y;
+    let cm_x = begin.x - p.x;
+    let cm_y = begin.y - p.y;
 
     // 2. Compute the derivative coefficients of the squared distance function
     // f(t) = a*t^3 + b*t^2 + c*t + d = 0 (Divided by 2 for optimization)
@@ -402,8 +390,8 @@ pub fn closest_t_on_arc(begin: &Point, control: &Point, end: &Point, m: &Point) 
 
     for t_sample in [0.0, 0.5, 0.75, 1.0] {
         let pt = compute_arc_point(t_sample, begin, control, end);
-        let dx = pt.x - m.x;
-        let dy = pt.y - m.y;
+        let dx = pt.x - p.x;
+        let dy = pt.y - p.y;
         let d_sq = dx * dx + dy * dy;
         // we are looking for the smallest distance squard from our seed point
         // to our check point.

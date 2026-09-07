@@ -125,6 +125,7 @@ pub struct ArcIter {
     pub pos: usize,
     pub total: usize,
     pub rad: f32,
+    pub swapped: bool,
 }
 
 impl ArcIter {
@@ -145,10 +146,11 @@ impl ArcIter {
         let side_rad = mid.get_radians(src);
         let p1 = mid.get_xy(d1, side_rad + R_90);
         let p2 = mid.get_xy(d1, side_rad + R_270);
-        let (src, dst) = if p1.get_distance_square(center) > p2.get_distance_square(center) {
-            (src, dst)
+        let (src, dst, swapped) = if p1.get_distance_square(center) > p2.get_distance_square(center)
+        {
+            (src, dst, false)
         } else {
-            (dst, src)
+            (dst, src, true)
         };
 
         let a = NextPointSet::new(src, center, r, inital_scale, scale, R_90, counter);
@@ -168,6 +170,7 @@ impl ArcIter {
             a,
             b,
             rad,
+            swapped,
         }
     }
 }

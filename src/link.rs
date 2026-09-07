@@ -272,11 +272,9 @@ impl LinkSet {
                 let set: Box<[f32]> = match p.mode {
                     ArcType::Arc => Box::new([iter.rad]),
                     ArcType::Joint => {
-                        let src = &iter.a.root;
-                        let dst = &iter.b.root;
-                        let (ra, _) = normalize_rad(src.get_radians(&p.point));
-                        let (rb, _) = normalize_rad(p.point.get_radians(dst));
-                        Box::new([ra, rb])
+                        let (ra, _) = normalize_rad(src_p.get_radians(&p.point));
+                        let (rb, _) = normalize_rad(p.point.get_radians(&dst_p));
+                        Box::new(if iter.swapped { [rb, ra] } else { [ra, rb] })
                     }
                 };
                 let i: Box<dyn LineIterSet> = Box::new(iter);

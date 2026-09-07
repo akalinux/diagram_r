@@ -177,7 +177,7 @@ impl Point {
         self.get_xy(r, rad)
     }
     pub fn get_normalized_point(&self, dst: &Self, r: f32, offset_rad: f32) -> Point {
-        let (rad, _) = normalize_rad(self.get_radians(dst) + offset_rad);
+        let rad = normalize_rad(self.get_radians(dst) + offset_rad);
 
         self.get_xy(r, rad)
     }

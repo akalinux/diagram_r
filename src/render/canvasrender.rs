@@ -477,7 +477,7 @@ impl CanvasRender {
         } else {
             ctx.set_fill_style_str(text_color);
             // normalize the rotation of the text!
-            let (rad, _) = normalize_rad(rad + R_90);
+            let rad = normalize_rad(rad + R_90);
 
             let mut points = Vec::with_capacity(chars.len());
             for i in 0..chars.len() {

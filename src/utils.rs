@@ -1,5 +1,3 @@
-use js_sys::Number;
-
 use crate::{
     LabelPosition, Point, Transform,
     constants::{AREA_SCALE_EPSILON, HALF, R_90, R_180, R_270, R_360},
@@ -14,14 +12,6 @@ pub fn to_map_xy(p: &Point, t: &Transform) -> Point {
     let x = px / t.k;
     let y = py / t.k;
     Point { x, y }
-}
-
-pub fn to_fixed_px(n: f32) -> String {
-    let js_num: Number = n.into();
-    let js_str = unsafe { js_num.to_fixed(2).unwrap_unchecked() };
-    let mut str = String::from(js_str);
-    str.push_str("px");
-    str
 }
 
 pub fn get_xy_r(cx: f32, cy: f32, r: f32, rad: f32) -> Point {
@@ -133,16 +123,17 @@ pub fn to_screen_xy(p: &Point, t: &Transform) -> Point {
     return Point { x, y };
 }
 
+/// Returns true if the radian value is ge 90 degrees and le 270 degrees.
 pub fn rad_needs_normalization(rad: f32) -> bool {
     let r = rad.abs() % R_360;
     r >= R_90 && r <= R_270
 }
 
-pub fn normalize_rad(rad: f32) -> (f32, bool) {
-    match rad_needs_normalization(rad) {
-        true => ((rad + R_180) % R_360, true),
-        false => (rad, false),
-    }
+pub fn normalize_rad(rad: f32) -> f32 {
+    (match rad_needs_normalization(rad) {
+        true => rad + R_180,
+        false => rad,
+    }) % R_360
 }
 
 pub fn get_abc_from_points(begin: &Point, end: &Point) -> (f32, f32, f32) {
@@ -177,12 +168,12 @@ pub fn force_intersection(start1: &Point, end1: &Point, start2: &Point, end2: &P
     }
 }
 
-pub fn compute_arc_point_acb(t: f32, s: &Point, c: &Point, e: &Point) -> [Point; 3] {
+pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
     // this is 16 steps
     let a = s.add_distance(&s.get_move_distance(c).scale(t));
     let b = c.add_distance(&c.get_move_distance(e).scale(t));
 
-    [a, a.add_distance(&a.get_move_distance(&b).scale(t)), b]
+    a.add_distance(&a.get_move_distance(&b).scale(t))
     /*
     // this is 20 steps
     let mt = 1.0 - t; // (1 - t)
@@ -192,9 +183,6 @@ pub fn compute_arc_point_acb(t: f32, s: &Point, c: &Point, e: &Point) -> [Point;
 
     Point { x, y }
     */
-}
-pub fn compute_arc_point(t: f32, s: &Point, c: &Point, e: &Point) -> Point {
-    compute_arc_point_acb(t, s, c, e)[1]
 }
 
 pub fn get_arc_t_on_line(begin: &Point, control: &Point, end: &Point, p: &Point) -> Option<f32> {

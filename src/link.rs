@@ -254,7 +254,7 @@ impl LinkSet {
             None => {
                 let iter = LineIter::new(&src_p, &dst_p, side, self.links.len(), &mut accumulate);
                 let width = iter.width;
-                let (rad, _) = normalize_rad(src_p.get_radians(&dst_p));
+                let rad = normalize_rad(src_p.get_radians(&dst_p));
                 let i: Box<dyn LineIterSet> = Box::new(iter);
 
                 (width, i, ArcType::Arc, Box::new([rad]))
@@ -272,8 +272,8 @@ impl LinkSet {
                 let set: Box<[f32]> = match p.mode {
                     ArcType::Arc => Box::new([iter.rad]),
                     ArcType::Joint => {
-                        let (ra, _) = normalize_rad(src_p.get_radians(&p.point));
-                        let (rb, _) = normalize_rad(p.point.get_radians(&dst_p));
+                        let ra = normalize_rad(src_p.get_radians(&p.point));
+                        let rb = normalize_rad(p.point.get_radians(&dst_p));
                         Box::new(if iter.swapped { [rb, ra] } else { [ra, rb] })
                     }
                 };

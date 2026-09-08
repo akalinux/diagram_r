@@ -1,54 +1,246 @@
-use std::mem;
+use std::fmt::Display;
 
-use crate::{Point, square::Square};
+use crate::{
+    Point,
+    constants::{HALF, R_90, R_270},
+    square::Corners,
+    utils::force_intersection,
+};
 
-pub struct BundlePointIter {
-    next: Option<(usize, Point)>,
-    distance: Point,
-    side: f64,
-    last: usize,
-    offset: f64,
-    src: Point,
+pub fn get_line_width(total_links: usize, full_width: f32) -> (f32, f32, f32) {
+    let tl = (total_links * 2) - (total_links & 1);
+    let incremental_scale = 1.0 / total_links as f32;
+    let (virtual_count, inital_scale) = match total_links {
+        1 => (2.0, HALF),
+        _ => (tl as f32, incremental_scale * HALF),
+    };
+    let link_width = full_width / virtual_count;
+    (link_width, inital_scale, incremental_scale)
 }
-impl BundlePointIter {
-    pub fn pos(i: usize, src: &Point, d: &Point) -> (usize, Point) {
-        (
-            i,
-            Point::new(src.x + d.x * i as f64, src.x + d.y * i as f64),
+
+pub struct FullBoxAccumulate(Option<(f32, f32, f32, f32)>);
+
+impl FullBoxAccumulate {
+    pub fn new() -> Self {
+        FullBoxAccumulate(None)
+    }
+    pub fn step(&mut self, p: &Point) {
+        match self.0.as_mut() {
+            Some((min_x, max_x, min_y, max_y)) => {
+                if *min_x > p.x {
+                    *min_x = p.x
+                }
+                if *min_y > p.y {
+                    *min_y = p.y
+                }
+                if *max_x < p.x {
+                    *max_x = p.x
+                }
+                if *max_y < p.x {
+                    *max_y = p.x
+                }
+            }
+
+            None => self.0 = Some((p.x, p.x, p.y, p.y)),
+        }
+    }
+    pub fn full_box_from(self) -> Corners {
+        unsafe { self.0.unwrap_unchecked() }
+    }
+}
+
+fn builder(
+    src: &Point,
+    dst: &Point,
+    r: f32,
+    inital_scale: f32,
+    scale: f32,
+    offset: f32,
+) -> (Point, Point, Point, Point) {
+    let left = src.get_point(dst, r, offset);
+    let d = left.get_move_distance(src);
+
+    let distance = d.scale(2.0);
+
+    let init = distance.scale(inital_scale);
+    let chunk = distance.scale(scale);
+    let start = left.add_distance(&init);
+    (start, chunk, left, distance)
+}
+
+#[derive(Debug)]
+pub struct NextPointSet {
+    pub root: Point,
+    pub chunk: Point,
+    pub distance: Point,
+}
+
+impl Display for NextPointSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Root: {}, , Chunk: {}, Distance: {}",
+            self.root, self.chunk, self.distance,
         )
     }
+}
 
-    pub fn new(src: &Point, dst: &Point, bundles: usize, side: f64) -> Self {
-        let distance = src.get_move_distance(dst).scale(1.0 / (bundles * 2) as f64);
-        let (next, last) = match bundles == 0 {
-            true => (None, 0),
-            false => (Some(Self::pos(1, src, &distance)), bundles * 2),
-        };
+impl NextPointSet {
+    pub fn new(
+        src: &Point,
+        dst: &Point,
+        r: f32,
+        init_scale: f32,
+        scale: f32,
+        offset: f32,
+        counter: &mut FullBoxAccumulate,
+    ) -> Self {
+        let (root, chunk, left, offset) = builder(src, dst, r, init_scale, scale, offset);
+
+        let distance = src.get_move_distance(dst);
+        counter.step(&left);
+        counter.step(&left.add_distance(&offset));
+        let end = left.add_distance(&distance);
+        counter.step(&end);
+        counter.step(&end.add_distance(&offset));
         Self {
-            src: *src,
-            side,
+            root,
+            chunk,
             distance,
-            last,
-            offset: side * 0.5,
-            next,
+        }
+    }
+    pub fn point(&self, scale: f32) -> Point {
+        self.root.add_distance(&self.chunk.scale(scale))
+    }
+    pub fn line(&self, scale: f32) -> (Point, Point) {
+        let start = self.point(scale);
+        let end = start.add_distance(&self.distance);
+        (start, end)
+    }
+}
+
+pub struct ArcIter {
+    pub a: NextPointSet,
+    pub b: NextPointSet,
+    pub width: f32,
+    pub pos: usize,
+    pub total: usize,
+    pub rad: f32,
+    pub swapped: bool,
+}
+
+impl ArcIter {
+    pub fn new(
+        src: &Point,
+        center: &Point,
+        dst: &Point,
+        full_width: f32,
+        total: usize,
+        counter: &mut FullBoxAccumulate,
+    ) -> Self {
+        let (width, inital_scale, scale) = get_line_width(total, full_width);
+        let r = full_width * HALF;
+
+        let rad = center.center_radian_to(src, dst);
+        let mid = src.get_center(dst);
+        let d1 = mid.get_distance_square(center);
+        let side_rad = mid.get_radians(src);
+        let p1 = mid.get_xy(d1, side_rad + R_90);
+        let p2 = mid.get_xy(d1, side_rad + R_270);
+        let (src, dst, swapped) = if p1.get_distance_square(center) > p2.get_distance_square(center)
+        {
+            (src, dst, false)
+        } else {
+            (dst, src, true)
+        };
+
+        let a = NextPointSet::new(src, center, r, inital_scale, scale, R_90, counter);
+        let b = NextPointSet::new(dst, center, r, inital_scale, scale, R_270, counter);
+
+        // going left
+
+        let p = center.get_xy(r, rad);
+        counter.step(&p);
+        let pe = center.add_distance(&p.get_move_distance(center));
+        counter.step(&pe);
+
+        Self {
+            width,
+            pos: 0,
+            total,
+            a,
+            b,
+            rad,
+            swapped,
         }
     }
 }
-impl Iterator for BundlePointIter {
-    type Item = Square;
+
+pub trait LineIterSet: Iterator<Item = (Point, Option<Point>, Point)> {}
+
+impl Iterator for ArcIter {
+    type Item = (Point, Option<Point>, Point);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (next, last) = match &self.next {
-            Some((pos, p)) => {
-                let next = Some(Self::pos(pos + 2, &self.src, &self.distance));
-                let x = p.x - self.offset;
-                let y = p.x - self.offset;
-                let last = Some(Square::new(x, y, self.side, self.side));
-                (next, last)
+        match self.pos < self.total {
+            true => {
+                let pos = self.pos;
+                self.pos += 1;
+                let i = pos as f32;
+                let a = self.a.line(i);
+
+                let b = self.b.line(i);
+                let c = force_intersection(&a.0, &a.1, &b.0, &b.1);
+
+                return Some((a.0, Some(c), b.0));
             }
-            None => return None,
-        };
-        let _ = mem::replace(&mut self.next, next);
-        last
+            false => return None,
+        }
     }
 }
+
+pub struct LineIter {
+    pub np: NextPointSet,
+    pub width: f32,
+    pub total: usize,
+    pub pos: usize,
+}
+
+impl LineIter {
+    pub fn new(
+        src: &Point,
+        dst: &Point,
+        full_width: f32,
+        total: usize,
+        counter: &mut FullBoxAccumulate,
+    ) -> Self {
+        let (width, inital_scale, scale) = get_line_width(total, full_width);
+        let r = full_width * HALF;
+
+        let np = NextPointSet::new(src, dst, r, inital_scale, scale, R_90, counter);
+        Self {
+            np,
+            total: total,
+            pos: 0,
+            width,
+        }
+    }
+}
+
+impl Iterator for LineIter {
+    type Item = (Point, Option<Point>, Point);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pos < self.total {
+            let pos = self.pos;
+            let scale = pos as f32;
+            self.pos += 1;
+
+            let (a, b) = self.np.line(scale);
+
+            return Some((a, None, b));
+        }
+        None
+    }
+}
+impl LineIterSet for LineIter {}
+impl LineIterSet for ArcIter {}

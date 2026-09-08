@@ -10,14 +10,17 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
 use crate::{
     DiagramOpt, ElementOpt, LabelPosition, Point, Transform,
     bsp::ScreenSlot,
-    constants::{CANVAS_ERROR, HALF},
-    diagram::{DiagramCore, LinkAndElement},
+    constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_270},
+    diagram::DiagramCore,
     imgcache::ImgCache,
-    link::{Link, LinkContainer, SubLink},
+    link::{LineAnimation, LinkContainer, SubLink},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
-    utils::{get_angle, get_xy, normalize_angle},
+    utils::{
+        apply_normalization_to_rad, compute_arc_point, quadratic_arc_length,
+        rad_needs_normalization, shift_arc,
+    },
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -41,8 +44,7 @@ pub struct CanvasRender {
     total_and_offset: (f64, f64),
     dashes: Array,
     canvas: HtmlCanvasElement,
-    frame_timer: RefCell<Option<Rc<RefCell<FrameTimer>>>>,
-    animate: RefCell<bool>,
+    frame_timer: RefCell<Option<Box<Rc<RefCell<FrameTimer>>>>>,
 }
 
 impl BuildRender for CanvasRender {
@@ -73,7 +75,6 @@ impl BuildRender for CanvasRender {
             dashes,
             canvas,
             frame_timer: RefCell::new(None),
-            animate: RefCell::new(false),
         }))
     }
 }
@@ -90,22 +91,21 @@ impl CoreRender for CanvasRender {
     }
 
     fn render(&self) -> Result<(), JsValue> {
-        self.animate.replace(false);
-        let context = &self.ctx;
-        context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
+        let ctx = &self.ctx;
+        ctx.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)?;
         {
             let (width, height) = self.get_width_height();
-            context.clear_rect(0.0, 0.0, width as f64, height as f64);
+            ctx.clear_rect(0.0, 0.0, width as f64, height as f64);
         }
         let d = unsafe { self.diagram.upgrade().unwrap_unchecked() };
         let diagram = &*d.borrow();
         let opt = &diagram.render_ops;
         let t = *&*diagram.transform.borrow();
 
-        context.set_global_alpha(1.0);
-        self.draw_grid(opt)?;
-        context.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
-        context.set_line_dash_offset(*self.frame_tick.borrow() as f64);
+        ctx.set_global_alpha(1.0);
+        self.draw_grid(opt);
+        ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
+        ctx.set_line_dash_offset(*self.frame_tick.borrow() as f64);
 
         let cache = &diagram.img_cache;
 
@@ -123,10 +123,10 @@ impl CoreRender for CanvasRender {
             self.draw_node(node, diagram, opt, cache, false)?;
         }
 
-        if *self.animate.borrow() {
+        if opt.animate && diagram.animated() {
             if self.frame_timer.borrow().is_none() {
                 let ft = FrameTimer::new(self.diagram.clone())?;
-                self.frame_timer.replace(Some(ft));
+                self.frame_timer.replace(Some(Box::new(ft)));
             }
         } else {
             if self.frame_timer.borrow().is_some() {
@@ -141,8 +141,7 @@ impl CoreRender for CanvasRender {
             None => return Ok(()),
         };
 
-        let highight_color = &opt.highlight_color;
-        context.set_global_alpha(opt.highlight_alpha as f64);
+        ctx.set_global_alpha(opt.highlight_alpha as f64);
         for id in &highlights.boxes {
             let node = &boxes_vec[*id];
             let o = diagram.get_opt(node.opt);
@@ -151,12 +150,12 @@ impl CoreRender for CanvasRender {
         }
 
         for set in &highlights.links {
-            let link = &link_vec[set.link];
-            let smallest_side = node_vec[link.ls.src]
-                .0
-                .layout
-                .smallest_side(&node_vec[link.ls.dst].0.layout);
-            self.draw_link_highlight(link, diagram, set, highight_color, smallest_side)?;
+            let lc = &link_vec[set.link];
+
+            self.draw_sublink(lc, set.element, diagram, opt, &t, true)?;
+        }
+        if let Some(id) = &highlights.arc {
+            self.draw_link_arc_highlight(*id, diagram, opt)?;
         }
         for set in &highlights.bundles {
             let link = &link_vec[set.link];
@@ -196,51 +195,10 @@ impl CoreRender for CanvasRender {
 }
 
 impl CanvasRender {
-    fn draw_link_highlight(
-        &self,
-        link: &LinkContainer,
-        diagram: &DiagramCore,
-        set: &LinkAndElement,
-        highight_color: &String,
-        smallest_side: f32,
-    ) -> Result<(), JsValue> {
-        let (src, dst, _, _) = &link.draw_data.links[set.element];
-        let width = link.draw_data.line_width;
-
-        let angle = get_angle(src.x, src.y, dst.x, dst.y);
-        let start = get_xy(dst.x, dst.y, smallest_side * 0.4, angle);
-        let end = src.sub_distance(&dst.get_move_distance(&start));
-        self.draw_line(&start, &end, width, highight_color);
-
-        let target = &link.ls.links[set.element];
-        let text = &target.label;
-        if text.is_empty() {
-            return Ok(());
-        }
-        let (text_width, text_height) = self.get_text_size(text)?;
-        let o = diagram.get_opt(target.opt);
-        let line_width = link.draw_data.line_width;
-        let (normalized_angle, _) = normalize_angle(angle);
-        let (p, scale) = self.get_link_text_point_and_scale(
-            src,
-            dst,
-            line_width,
-            normalized_angle,
-            o,
-            text_height as f32,
-        )?;
-        let width = text_width as f32 * scale;
-        let height = text_height as f32 * scale;
-        let start = get_xy(p.x, p.y, width * HALF, angle);
-        let d = start.get_move_distance(&p);
-        let end = p.add_distance(&d);
-        self.draw_line(&start, &end, height, &highight_color);
-        Ok(())
-    }
-    fn draw_grid(&self, dops: &DiagramOpt) -> Result<(), JsValue> {
+    fn draw_grid(&self, dops: &DiagramOpt) {
         let opt = match &dops.grid_opt {
             Some(o) => o,
-            None => return Ok(()),
+            None => return,
         };
         let (width, height) = self.get_width_height();
         let grid_size = opt.grid_size;
@@ -266,8 +224,6 @@ impl CanvasRender {
             p = i as f32 * y_scale + y_offset;
             self.raw_line_draw(0.0, p, width, p, w, color);
         }
-
-        Ok(())
     }
     fn draw_node_text_highlight(
         &self,
@@ -296,9 +252,7 @@ impl CanvasRender {
 
         ctx.stroke();
     }
-    fn draw_line(&self, src: &Point, dst: &Point, width: f32, color: &String) {
-        self.raw_line_draw(src.x, src.y, dst.x, dst.y, width, color);
-    }
+
     pub fn draw_box(
         &self,
         target: &Square,
@@ -326,28 +280,6 @@ impl CanvasRender {
         }
         Ok(())
     }
-    pub fn get_link_text_point_and_scale(
-        &self,
-        src: &Point,
-        dst: &Point,
-        height: f32,
-        new_angle: f32,
-        o: &ElementOpt,
-        font_height: f32,
-    ) -> Result<(Point, f32), JsValue> {
-        let center = src.get_center(dst);
-        let scale = height / font_height as f32;
-        let r = height * 0.75;
-
-        let p = match o.label_position {
-            // _ => center.scale(1.0 / scale),
-            LabelPosition::Center => center,
-            LabelPosition::Bottom => get_xy(center.x, center.y, r, new_angle + 90.0),
-            LabelPosition::Top => get_xy(center.x, center.y, r, new_angle + 270.0),
-        };
-
-        Ok((p, scale * HALF))
-    }
 
     pub fn draw_link_text(
         &self,
@@ -356,19 +288,42 @@ impl CanvasRender {
         o: &ElementOpt,
         text: &String,
         line_width: f32,
-        new_angle: f32,
+        new_rad: f32,
         opt: &DiagramOpt,
         t: &Transform,
+        highlight: bool,
     ) -> Result<(), JsValue> {
         if text.is_empty() {
             return Ok(());
         }
 
-        let meta = self.ctx.measure_text(&text)?;
-        let font_height =
-            (meta.actual_bounding_box_ascent() + meta.actual_bounding_box_descent()) as f32;
-        let (p, scale) =
-            self.get_link_text_point_and_scale(src, dst, line_width, new_angle, o, font_height)?;
+        let (fw, fh) = self.get_text_size(text)?;
+        let font_height = fh as f32;
+        let center = src.get_center(dst);
+        let (p, scale) = {
+            let scale = line_width / font_height;
+
+            let p = match o.label_position {
+                // _ => center.scale(1.0 / scale),
+                LabelPosition::Center => center,
+                LabelPosition::Bottom => center.get_xy(line_width, new_rad + R_90),
+                LabelPosition::Top => center.get_xy(line_width, new_rad + R_270),
+            };
+            (p, scale * 0.75)
+        };
+        if highlight {
+            let start = p.get_xy(fw as f32 * HALF * scale, new_rad);
+            let end = p.add_distance(&start.get_move_distance(&p));
+            self.raw_line_draw(
+                start.x,
+                start.y,
+                end.x,
+                end.y,
+                font_height as f32 * scale,
+                &opt.highlight_color,
+            );
+            return Ok(());
+        }
 
         let full_scale = scale * t.k;
 
@@ -376,43 +331,345 @@ impl CanvasRender {
         let y = p.y * t.k + t.y;
         let ctx = &self.ctx;
 
-        let angle = new_angle.to_radians();
-        let k = (full_scale * angle.cos()) as f64;
-        let r = (full_scale * angle.sin()) as f64;
+        let k = (full_scale * new_rad.cos()) as f64;
+        let r = (full_scale * new_rad.sin()) as f64;
         ctx.set_transform(k as f64, r, -r, k as f64, x as f64, y as f64)?;
 
         self.draw_text(0 as f64, 0 as f64, text, &opt.font_color)?;
-        ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
+        ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)
+    }
 
+    fn draw_link_arc_highlight(
+        &self,
+        link_id: usize,
+        diagram: &DiagramCore,
+        opt: &DiagramOpt,
+    ) -> Result<(), JsValue> {
+        let lc = &diagram.links.borrow()[link_id];
+        let width = lc.draw_data.line_width;
+        let r = HALF * width + width * lc.draw_data.links.len() as f32;
+        let p = lc.get_render_center();
+        self.draw_arc(&p, &opt.highlight_color, r)?;
+        let p = unsafe { lc.ls.point.unwrap_unchecked().point };
+        self.draw_arc(&p, &opt.highlight_color, width)
+    }
+
+    fn draw_quad_arc_text(
+        &self,
+        a: &Point,
+        c: &Point,
+        b: &Point,
+        color: &String,
+        r: f32,
+        position: &LabelPosition,
+        text: &String,
+        highlight: bool,
+        text_color: &String,
+        t: &Transform,
+        rad: f32,
+    ) -> Result<(), JsValue> {
+        if text.is_empty() {
+            return Ok(());
+        }
+        let [a, c, b] = match position {
+            LabelPosition::Center => [*a, *c, *b],
+            //LabelPosition::Bottom => R_270,
+            LabelPosition::Bottom => shift_arc(a, c, b, r * 0.75, R_90),
+            LabelPosition::Top => shift_arc(a, c, b, r * 0.75, R_270),
+        };
+
+        // Need to compute the text scale and position before either highlight or non highlight
+        let mut width = 0.0;
+        let mut height = 0.0;
+        let mut chars = Vec::new();
+        for l in text.chars() {
+            let s = l.to_string();
+            let (h, w) = self.get_text_size(&s)?;
+            let w = w as f32;
+            let h = h as f32;
+            height = match height < h {
+                true => h,
+                false => height,
+            };
+            width += match h > w {
+                true => h,
+                false => w,
+            };
+            chars.push(l);
+        }
+        if height < f32::EPSILON {
+            return Ok(());
+        }
+        let scale = (height / r) * HALF;
+        let rw = width * scale;
+        let ql = quadratic_arc_length(&a, &c, &b);
+        let s = (ql - rw) * HALF;
+        let ctx = &self.ctx;
+
+        let start = s / ql;
+        let step = {
+            let scale_step = 1.0 / chars.len() as f32;
+            let scale = rw / ql;
+            scale_step * scale
+        };
+        if highlight {
+            ctx.set_fill_style_str(color);
+            ctx.begin_path();
+            let rad = rad + R_270;
+            let r = height * 0.25 * CORNER_DISTANCE;
+            {
+                let p = compute_arc_point(start + step * ((chars.len()) as f32 + 0.75), &a, &c, &b);
+                let p1 = p.get_xy(r, rad + R_90);
+                ctx.move_to(p1.x as f64, p1.y as f64);
+            }
+
+            for i in (0..=chars.len()).rev() {
+                let pos = start + step * (i as f32);
+                let p = compute_arc_point(pos, &a, &c, &b);
+                let p1 = p.get_xy(r, rad + R_90);
+                ctx.line_to(p1.x as f64, p1.y as f64);
+            }
+            {
+                let pos = start + step * -1.5;
+                let p = compute_arc_point(pos, &a, &c, &b);
+                let p1 = p.get_xy(r, rad + R_90);
+                ctx.line_to(p1.x as f64, p1.y as f64);
+            }
+
+            let start = start - step * HALF;
+            for i in 0..=chars.len() {
+                let pos = start + (step * (i as f32 - 1.0));
+                let p = compute_arc_point(pos, &a, &c, &b);
+                let p1 = p.get_xy(r, rad + R_270);
+                ctx.line_to(p1.x as f64, p1.y as f64);
+            }
+            {
+                let pos = start + (step) * (1.5 + chars.len() as f32);
+                let p = compute_arc_point(pos, &a, &c, &b);
+                let p1 = p.get_xy(r, rad + R_270);
+                ctx.line_to(p1.x as f64, p1.y as f64);
+            }
+            ctx.close_path();
+            ctx.fill();
+        } else {
+            let mut points = Vec::with_capacity(chars.len());
+            for i in 0..chars.len() {
+                let pos = start + (step * i as f32);
+                let p = compute_arc_point(pos, &a, &c, &b);
+                let x = p.x * t.k + t.x;
+                let y = p.y * t.k + t.y;
+
+                points.push(Point { x, y });
+            }
+
+            // FIXME!
+            // prevent text from being renderd backwards.
+            let (rad, iter): (f32, Box<dyn Iterator<Item = usize>>) = {
+                let start = &points[0];
+                let end = &points[points.len() - 1];
+                let center = start.get_center(&end);
+                let rad = center.get_radians(&start);
+                // match (a.y < b.y && start.1 > end.1 && start.0 < end.0) || (a.y > b.y && a.x < b.x)
+                match rad_needs_normalization(rad) {
+                    //match normalized {
+                    false => (rad, Box::new((0..chars.len()).into_iter())),
+                    true => (
+                        apply_normalization_to_rad(rad),
+                        Box::new((0..chars.len()).rev()),
+                    ),
+                }
+            };
+            let full_scale = scale * t.k;
+            let k = (full_scale * rad.cos()) as f64;
+            let r = (full_scale * rad.sin()) as f64;
+            let mut piter = points.into_iter();
+
+            ctx.set_fill_style_str(text_color);
+
+            for i in iter {
+                let v = &chars[i];
+                let p = unsafe { piter.next().unwrap_unchecked() };
+                let x = p.x as f64;
+                let y = p.y as f64;
+                ctx.set_transform(k, r, -r, k, x as f64, y as f64)?;
+                ctx.fill_text(&v.to_string(), 0.0, 0.0)?;
+            }
+
+            // reset our transform
+            ctx.set_transform(t.k as f64, 0.0, 0.0, t.k as f64, t.x as f64, t.y as f64)?;
+        }
+        //shift_arc_position(a, c, b, r, position)
+        Ok(())
+    }
+    fn draw_quad_arc(&self, a: &Point, c: &Point, e: &Point, color: &String, width: f32) {
+        let ctx = &self.ctx;
+        ctx.begin_path();
+        ctx.set_line_width(width as f64);
+        ctx.set_stroke_style_str(&color);
+        ctx.move_to(a.x as f64, a.y as f64);
+        ctx.quadratic_curve_to(c.x as f64, c.y as f64, e.x as f64, e.y as f64);
+        ctx.stroke();
+    }
+    fn draw_arc(&self, p: &Point, color: &String, width: f32) -> Result<(), JsValue> {
+        let ctx = &self.ctx;
+        ctx.begin_path();
+        ctx.arc(
+            p.x as f64,
+            p.y as f64,
+            (width * HALF) as f64,
+            0.0,
+            DOUBLE_PIE as f64,
+        )?;
+        ctx.set_fill_style_str(color);
+        ctx.fill();
         Ok(())
     }
     pub fn draw_sublink(
         &self,
-        ld: &Link,
+        lc: &LinkContainer,
+        i: usize,
         diagram: &DiagramCore,
         opt: &DiagramOpt,
         t: &Transform,
-        data: &SubLink,
-        width: f32,
-        normalized_angle: f32,
+        highlight: bool,
     ) -> Result<(), JsValue> {
-        let (a, b, _, animations) = data;
-        let o = diagram.get_opt(ld.opt);
-        self.draw_line(a, b, width, &o.color);
-        if let Some(list) = animations {
-            self.ctx.set_line_dash(&self.dashes)?;
-            if list.len() != 0 {
-                self.animate.replace(true);
+        let link = &lc.ls.links[i];
+        let o = diagram.get_opt(link.opt);
+        let color = match highlight {
+            true => &opt.highlight_color,
+            false => &o.color,
+        };
+        let text = &link.label;
+        let dd = &lc.draw_data;
+        let width = dd.line_width;
+        let aw = width * HALF;
+        let o = diagram.get_opt(link.opt);
+        let line_opts = &dd.normalized_radians;
+        match &dd.links[i] {
+            SubLink::Arc([a, c, b], animations) => {
+                if highlight {
+                    self.draw_quad_arc(a, c, b, color, width);
+                } else {
+                    self.draw_quad_arc(a, c, b, color, width);
+                    self.draw_link_animations(animations, &opt.animation_color, aw, line_opts)?;
+                }
+                self.draw_quad_arc_text(
+                    a,
+                    c,
+                    b,
+                    &opt.highlight_color,
+                    width,
+                    &o.label_position,
+                    text,
+                    highlight,
+                    &opt.font_color,
+                    t,
+                    dd.normalized_radians[0],
+                )
             }
-            for (src, dst, _, width) in list {
-                self.draw_line(src, dst, *width, &opt.animation_color);
+            SubLink::Line([a, b], animations) => {
+                if highlight {
+                    self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
+                } else {
+                    self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
+                    self.draw_link_animations(animations, &opt.animation_color, aw, line_opts)?;
+                }
+
+                self.draw_link_text(
+                    a,
+                    b,
+                    o,
+                    text,
+                    width,
+                    dd.normalized_radians[0],
+                    opt,
+                    t,
+                    highlight,
+                )
             }
-            self.ctx.set_line_dash(&Array::new())?;
+            SubLink::Joint([a, b, c], animations) => {
+                //self.draw_line(a, b, width, color);
+                self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
+                self.raw_line_draw(b.x, b.y, c.x, c.y, width, color);
+                //self.draw_line(b, c, width, color);
+                self.draw_arc(b, color, width)?;
+                if !highlight {
+                    self.draw_link_animations(animations, &opt.animation_color, aw, line_opts)?;
+                }
+                let ra = dd.normalized_radians[0];
+                let rb = dd.normalized_radians[1];
+                self.draw_link_text(a, b, o, text, width, ra, opt, t, highlight)?;
+                self.draw_link_text(b, c, o, text, width, rb, opt, t, highlight)
+            }
         }
-        self.draw_link_text(a, b, o, &ld.label, width, normalized_angle, opt, t)?;
-        Ok(())
     }
 
+    pub fn draw_link_animations(
+        &self,
+        animation: &LineAnimation,
+        color: &String,
+        width: f32,
+        link_options: &Box<[f32]>,
+    ) -> Result<(), JsValue> {
+        self.ctx.set_line_dash(&self.dashes)?;
+        match animation {
+            LineAnimation::Both(s) | LineAnimation::Side(s) => {
+                let w = match s.len() > 2 {
+                    true => width * HALF,
+                    false => width,
+                };
+                for i in (0..s.len()).step_by(2) {
+                    let a = &s[i];
+                    let b = &s[i + 1];
+                    self.raw_line_draw(a.x, a.y, b.x, b.y, w, color);
+                }
+            }
+            LineAnimation::BothArc(s) | LineAnimation::SideArc(s) => {
+                let w = match s.len() > 3 {
+                    true => width * HALF,
+                    false => width,
+                };
+
+                let (oa, oc) = match link_options[1] < 0.0 {
+                    true => (2, 0),
+                    false => (0, 2),
+                };
+
+                for i in (0..s.len()).step_by(3) {
+                    let (a, b, c) = (&s[i + oa], &s[i + 1], &s[i + oc]);
+                    self.draw_quad_arc(a, b, c, color, w);
+                }
+            }
+            LineAnimation::JointSide(s) => {
+                let (oa, oc) = match link_options[2] < 0.0 {
+                    true => (2, 0),
+                    false => (0, 2),
+                };
+
+                let (a, b, c) = (&s[oa], &s[1], &s[oc]);
+                self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
+                self.raw_line_draw(b.x, b.y, c.x, c.y, width, color);
+            }
+            LineAnimation::JointBoth(s) => {
+                let w = match s.len() > 4 {
+                    true => width * HALF,
+                    false => width,
+                };
+                let (oa, ob) = match link_options[2] < 0.0 {
+                    true => (1, 0),
+                    false => (0, 1),
+                };
+                for i in (0..s.len()).step_by(2) {
+                    let a = &s[i + oa];
+                    let b = &s[i + ob];
+                    self.raw_line_draw(a.x, a.y, b.x, b.y, w, color);
+                }
+            }
+            LineAnimation::None => (),
+        };
+
+        self.ctx.set_line_dash(&Array::new())
+    }
     pub fn draw_link(
         &self,
         link: &LinkContainer,
@@ -421,20 +678,10 @@ impl CanvasRender {
         cache: &ImgCache,
         t: &Transform,
     ) -> Result<(), JsValue> {
+        for i in 0..link.ls.links.len() {
+            self.draw_sublink(link, i, diagram, opt, t, false)?;
+        }
         let data = &link.draw_data;
-        if data.links.len() == 0 {
-            return Ok(());
-        }
-        let angle = {
-            let (a, b, _, _) = &data.links[0];
-            get_angle(a.x, a.y, b.x, b.y)
-        };
-        let (normalized_angle, _) = normalize_angle(angle);
-        let width = data.line_width;
-
-        for (i, ld) in link.ls.links.iter().enumerate() {
-            self.draw_sublink(ld, diagram, opt, t, &data.links[i], width, normalized_angle)?;
-        }
 
         for (i, bundle) in link.ls.bundles.iter().enumerate() {
             let target = data.bundle_draw_box(i);

@@ -19,11 +19,11 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
     let ct = DiagramCore::new(ops);
 
     let (node_a, node_b) = nodes_a_b();
-    let links = vec![default_link_set((0, 1))];
+    let links = Box::new([default_link_set((0, 1))]);
 
     match ct
         .borrow_mut()
-        .set_data(vec![box_a()], vec![node_a, node_b], links)
+        .set_data(Box::new([box_a()]), Box::new([node_a, node_b]), links)
     {
         Err(_) => panic!("Setting data failed!"),
         Ok(_) => (),
@@ -49,7 +49,8 @@ fn test_highlights() {
             nodes: vec![0],
             links: vec![],
             boxes: vec![],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -58,7 +59,8 @@ fn test_highlights() {
             nodes: vec![1],
             links: vec![],
             boxes: vec![],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -67,7 +69,8 @@ fn test_highlights() {
             nodes: vec![],
             links: vec![],
             boxes: vec![0],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -79,7 +82,8 @@ fn test_highlights() {
                 element: 0
             }],
             boxes: vec![],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -91,7 +95,8 @@ fn test_highlights() {
                 element: 1
             }],
             boxes: vec![],
-            bundles: vec![]
+            bundles: vec![],
+            arc: None,
         }
     );
     assert_eq!(
@@ -112,7 +117,8 @@ fn test_highlights() {
             bundles: vec![LinkAndElement {
                 link: 0,
                 element: 0
-            },]
+            },],
+            arc: None,
         }
     );
 }
@@ -168,11 +174,11 @@ fn reload_data() -> Rc<RefCell<DiagramCore>> {
 
     let (node_a, node_b) = nodes_a_b();
     let box_a = box_a();
-    let links = vec![default_link_set((0, 1))];
+    let links = Box::new([default_link_set((0, 1))]);
 
     match diagram
         .borrow_mut()
-        .set_data(vec![box_a], vec![node_a, node_b], links)
+        .set_data(Box::new([box_a]), Box::new([node_a, node_b]), links)
     {
         Err(_) => panic!("Setting data failed!"),
         Ok(_) => (),
@@ -199,7 +205,7 @@ fn test_move_box() {
     test_points(Rc::clone(&diagram), ZERO_POINT);
     let distance = &Point { x: 5.0, y: 5.0 };
 
-    diagram.borrow_mut().move_nodes(
+    diagram.borrow_mut().move_targets(
         distance,
         &[MoveTarget::Box(0), MoveTarget::Node(0), MoveTarget::Node(1)],
     );

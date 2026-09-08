@@ -24,7 +24,7 @@ pub fn box_a() -> Node {
         Square::new(0.0, 0.0, 10.0, 2.0),
         String::from("box-a"),
         0,
-        Some(vec![0]),
+        Some(Box::new([0])),
         None,
     )
 }
@@ -34,20 +34,20 @@ pub fn nodes_a_b() -> (Node, Node) {
             Square::new(0.0, 0.0, 1.0, 1.0),
             String::from("node-a"),
             0,
-            Some(vec![1]),
+            Some(Box::new([1])),
             None,
         ),
         Node::new(
             Square::new(9.0, 0.0, 1.0, 1.0),
             String::from("node-b"),
             0,
-            Some(vec![0]),
+            Some(Box::new([0])),
             None,
         ),
     )
 }
 
-pub fn full_testbox2() -> (FullBox, (Point, f32, f32)) {
+pub fn full_testbox2() -> FullBox {
     let a = Point::new(0.0, 2.5);
     let b = Point::new(10.0, 2.5);
     let r = 2.5;
@@ -86,4 +86,12 @@ pub fn test_lc_b1_l3(
     let d = Link::new(2, String::from("link b"), Animation::ToDst);
     let ls = LinkSet::new(vec![a, b, d], vec![c], ids.0, ids.1, None);
     LinkContainer::new(ls, src, dst, opt, id)
+}
+
+#[macro_export]
+macro_rules! assert_point {
+    ($a:expr,$b:expr,$e:expr) => {
+        assert_relative_eq!($a.x, $b.x, epsilon = $e);
+        assert_relative_eq!($a.y, $b.y, epsilon = $e);
+    };
 }

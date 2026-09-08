@@ -134,7 +134,7 @@ impl ScreenIndex {
                         }
                     }
                     Slot::Node => {
-                        if d.nodes.borrow()[set.id].0.layout.contains_point(p) {
+                        if d.nodes.borrow()[set.id].layout.contains_point(p) {
                             return LookupPointResult::Node(set.id);
                         }
                     }

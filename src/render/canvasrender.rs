@@ -119,7 +119,7 @@ impl CoreRender for CanvasRender {
         for link in link_vec.iter().rev() {
             self.draw_link(link, diagram, opt, cache, &t)?;
         }
-        for (node, _) in node_vec.iter().rev() {
+        for node in node_vec.iter().rev() {
             self.draw_node(node, diagram, opt, cache, false)?;
         }
 
@@ -166,7 +166,7 @@ impl CoreRender for CanvasRender {
             self.draw_node_text_highlight(&target, &bundle.label, o, opt)?;
         }
         for id in &highlights.nodes {
-            let node = &node_vec[*id].0;
+            let node = &node_vec[*id];
             let o = diagram.get_opt(node.opt);
             self.draw_box(&node.layout, opt, o, true, cache)?;
             self.draw_node_text_highlight(&node.layout, &node.label, o, opt)?;

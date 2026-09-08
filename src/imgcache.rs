@@ -59,7 +59,7 @@ impl ImgCache {
     pub fn is_done(&self) -> bool {
         self.cache.borrow().loading == 0
     }
-    pub fn load_images(&self, opts: &Vec<ElementOpt>) {
+    pub fn load_images(&self, opts: &Box<[ElementOpt]>) {
         self.cache.borrow_mut().bulk = true;
         for opt in opts {
             self.load_img(&opt.img);

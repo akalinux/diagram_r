@@ -187,9 +187,8 @@ impl LinkSet {
             force_intersection(&s, &c2, &c3, &e)
         };
         [
-            // link1
-            s1, c1, c1, e1, // Link 2
-            p, c2, c3, p,
+            s1, c1, c1, e1, // link1
+            p, c2, c3, p, // Link 2
         ]
     }
 

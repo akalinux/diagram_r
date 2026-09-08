@@ -384,21 +384,19 @@ impl CanvasRender {
         // Need to compute the text scale and position before either highlight or non highlight
         let mut width = 0.0;
         let mut height = 0.0;
-        let mut chars = Vec::new();
-        for l in text.chars() {
+        let chars: Box<[char]> = text.chars().collect::<Vec<char>>().into_boxed_slice();
+        for l in &chars {
             let s = l.to_string();
             let (h, w) = self.get_text_size(&s)?;
             let w = w as f32;
             let h = h as f32;
-            height = match height < h {
-                true => h,
-                false => height,
-            };
+            if height < h {
+                height = h;
+            }
             width += match h > w {
                 true => h,
                 false => w,
             };
-            chars.push(l);
         }
         if height < f32::EPSILON {
             return Ok(());

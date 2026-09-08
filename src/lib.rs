@@ -142,15 +142,21 @@ impl Point {
     pub fn to_map_xy(&self, t: &Transform) -> Self {
         to_map_xy(&self, t)
     }
-    /// Using self as the starting point, how far did we move to get to: p?
+    /// This is really a wrapper for self.sub_distance(p).
     pub fn get_move_distance(&self, p: &Self) -> Self {
         p.sub_distance(self)
     }
     pub fn add_distance(&self, distance: &Point) -> Point {
-        Self::new(self.x + distance.x, self.y + distance.y)
+        Self {
+            x: self.x + distance.x,
+            y: self.y + distance.y,
+        }
     }
     pub fn sub_distance(&self, distance: &Point) -> Point {
-        Self::new(self.x - distance.x, self.y - distance.y)
+        Self {
+            x: self.x - distance.x,
+            y: self.y - distance.y,
+        }
     }
 
     pub fn scale(&self, scale: f32) -> Self {

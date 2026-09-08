@@ -384,7 +384,7 @@ impl DiagramCore {
         let id = self.links.borrow().len();
         let (lc, a, b);
         {
-            (a, b) = (ls.src as usize, ls.dst as usize);
+            (a, b) = (ls.src, ls.dst);
             if a == b {
                 return Err(JsValue::from(LINK_ADD_ERROR));
             }

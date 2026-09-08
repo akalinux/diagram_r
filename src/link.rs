@@ -101,15 +101,15 @@ impl LinkSet {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum LineAnimation {
     None,
-    Both([Point; 4]),
-    Side([Point; 2]),
-    BothArc([Point; 6]),
-    SideArc([Point; 3]),
-    JointBoth([Point; 8]),
-    JointSide([Point; 3]),
+    Both(Box<[Point]>),
+    Side(Box<[Point]>),
+    BothArc(Box<[Point]>),
+    SideArc(Box<[Point]>),
+    JointBoth(Box<[Point]>),
+    JointSide(Box<[Point]>),
 }
 
 fn move_points(list: &mut [Point], d: &Point) {
@@ -205,34 +205,34 @@ impl LinkSet {
             None => match link.animation {
                 Animation::Both => {
                     let d = src.get_point(dst, r * HALF, R_90).get_move_distance(&src);
-                    LineAnimation::Both([
+                    LineAnimation::Both(Box::new([
                         src.sub_distance(&d),
                         dst.sub_distance(&d),
                         dst.add_distance(&d),
                         src.add_distance(&d),
-                    ])
+                    ]))
                 }
-                Animation::ToSrc => LineAnimation::Side([*dst, *src]),
-                Animation::ToDst => LineAnimation::Side([*src, *dst]),
+                Animation::ToSrc => LineAnimation::Side(Box::new([*dst, *src])),
+                Animation::ToDst => LineAnimation::Side(Box::new([*src, *dst])),
                 _ => LineAnimation::None,
             },
             Some((t, c)) => match t {
                 ArcType::Joint => match link.animation {
                     Animation::None => LineAnimation::None,
-                    Animation::ToSrc => LineAnimation::JointSide([*dst, *c, *src]),
-                    Animation::ToDst => LineAnimation::JointSide([*src, *c, *dst]),
+                    Animation::ToSrc => LineAnimation::JointSide(Box::new([*dst, *c, *src])),
+                    Animation::ToDst => LineAnimation::JointSide(Box::new([*src, *c, *dst])),
                     Animation::Both => {
-                        LineAnimation::JointBoth(self.arc_joint_animation(r, src, c, dst))
+                        LineAnimation::JointBoth(Box::new(self.arc_joint_animation(r, src, c, dst)))
                     }
                 },
                 ArcType::Arc => match link.animation {
                     Animation::Both => {
                         //LineAnimation::BothArc(compute_arc_line_boundries(src, c, dst, r * HALF))
                         let [a, b, _, c, e, f, d, _] = self.arc_joint_animation(r, src, c, dst);
-                        LineAnimation::BothArc([a, b, c, d, e, f])
+                        LineAnimation::BothArc(Box::new([a, b, c, d, e, f]))
                     }
-                    Animation::ToSrc => LineAnimation::SideArc([*dst, *c, *src]),
-                    Animation::ToDst => LineAnimation::SideArc([*src, *c, *dst]),
+                    Animation::ToSrc => LineAnimation::SideArc(Box::new([*dst, *c, *src])),
+                    Animation::ToDst => LineAnimation::SideArc(Box::new([*src, *c, *dst])),
                     _ => LineAnimation::None,
                 },
             },

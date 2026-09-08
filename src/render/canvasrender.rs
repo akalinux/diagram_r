@@ -613,34 +613,57 @@ impl CanvasRender {
     ) -> Result<(), JsValue> {
         self.ctx.set_line_dash(&self.dashes)?;
         match animation {
-            LineAnimation::Both([a, b, c, d]) => {
-                let w = width * HALF;
-                self.raw_line_draw(a.x, a.y, b.x, b.y, w, color);
-                self.raw_line_draw(c.x, c.y, d.x, d.y, w, color);
-            }
-            LineAnimation::Side([a, b]) => {
-                self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
-            }
-            LineAnimation::BothArc([a, b, c, d, e, f]) => {
-                let width = width * HALF;
-
-                // WORKS! COMMENTED OUT TO DEBUG THE OTHER LINE!
-                self.draw_quad_arc(a, b, c, color, width);
-                self.draw_quad_arc(d, e, f, color, width);
-            }
-            LineAnimation::SideArc([a, b, c]) => {
-                self.draw_quad_arc(a, b, c, color, width);
-            }
-            LineAnimation::JointBoth(s) => {
-                let w = width * HALF;
-                for i in (0..8).step_by(2) {
-                    //for i in (4..8).step_by(2) {
-                    self.raw_line_draw(s[i].x, s[i].y, s[i + 1].x, s[i + 1].y, w, color);
+            LineAnimation::Both(s) | LineAnimation::Side(s) => {
+                let w = match s.len() > 2 {
+                    true => width * HALF,
+                    false => width,
+                };
+                for i in (0..s.len()).step_by(2) {
+                    let a = &s[i];
+                    let b = &s[i + 1];
+                    self.raw_line_draw(a.x, a.y, b.x, b.y, w, color);
                 }
             }
-            LineAnimation::JointSide([a, b, c]) => {
+            LineAnimation::BothArc(s) | LineAnimation::SideArc(s) => {
+                let w = match s.len() > 3 {
+                    true => width * HALF,
+                    false => width,
+                };
+
+                let (oa, oc) = match link_options[1] < 0.0 {
+                    true => (2, 0),
+                    false => (0, 2),
+                };
+
+                for i in (0..s.len()).step_by(3) {
+                    let (a, b, c) = (&s[i + oa], &s[i + 1], &s[i + oc]);
+                    self.draw_quad_arc(a, b, c, color, w);
+                }
+            }
+            LineAnimation::JointSide(s) => {
+                let (oa, oc) = match link_options[2] < 0.0 {
+                    true => (2, 0),
+                    false => (0, 2),
+                };
+
+                let (a, b, c) = (&s[oa], &s[1], &s[oc]);
                 self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
                 self.raw_line_draw(b.x, b.y, c.x, c.y, width, color);
+            }
+            LineAnimation::JointBoth(s) => {
+                let w = match s.len() > 4 {
+                    true => width * HALF,
+                    false => width,
+                };
+                let (oa, ob) = match link_options[2] < 0.0 {
+                    true => (1, 0),
+                    false => (0, 1),
+                };
+                for i in (0..s.len()).step_by(2) {
+                    let a = &s[i + oa];
+                    let b = &s[i + ob];
+                    self.raw_line_draw(a.x, a.y, b.x, b.y, w, color);
+                }
             }
             LineAnimation::None => (),
         };

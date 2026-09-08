@@ -13,7 +13,7 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
     let ct = DiagramCore::new(ops);
 
     let (node_a, node_b) = nodes_a_b();
-    let links = Box::new([default_link_set((0, 1))]);
+    let links = default_link_set((0, 1)).take();
 
     match ct
         .borrow_mut()

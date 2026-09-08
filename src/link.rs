@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use wasm_bindgen::prelude::*;
 pub mod iters;
 use crate::{
@@ -75,9 +77,9 @@ pub struct LinkSet {
     pub dst: usize,
 
     #[wasm_bindgen(skip)]
-    pub links: Vec<Link>,
+    pub links: Box<[Link]>,
     #[wasm_bindgen(skip)]
-    pub bundles: Vec<Bundle>,
+    pub bundles: Box<[Bundle]>,
     pub point: Option<LinePoint>,
 }
 
@@ -85,8 +87,8 @@ pub struct LinkSet {
 impl LinkSet {
     #[wasm_bindgen(constructor)]
     pub fn new(
-        links: Vec<Link>,
-        bundles: Vec<Bundle>,
+        links: Box<[Link]>,
+        bundles: Box<[Bundle]>,
         src: usize,
         dst: usize,
         point: Option<LinePoint>,
@@ -133,7 +135,7 @@ impl LineAnimation {
 
 impl LinkSet {
     pub fn get_link_render_center(&self) {}
-    pub fn compute_bunlde_points(&self, src: &Point, dst: &Point) -> Vec<Point> {
+    pub fn compute_bunlde_points(&self, src: &Point, dst: &Point) -> Box<[Point]> {
         let mut points = Vec::with_capacity(self.bundles.len());
 
         match &self.point {
@@ -162,7 +164,7 @@ impl LinkSet {
                 }
             }
         }
-        points
+        points.into_boxed_slice()
     }
 
     pub fn arc_joint_animation(&self, r: f32, src: &Point, c: &Point, dst: &Point) -> [Point; 8] {
@@ -320,8 +322,8 @@ impl LinkSet {
         DrawData {
             line_width: width,
             bundle_side: side,
-            bundles,
-            links,
+            bundles: bundles,
+            links: links.into_boxed_slice(),
             index,
             normalized_radians,
             animated: animated != 0,
@@ -345,13 +347,13 @@ impl Link {
 pub struct Bundle {
     pub opt: usize,
     pub label: String,
-    pub links: Vec<usize>,
+    pub links: Box<[usize]>,
     pub pos: f32,
 }
 #[wasm_bindgen]
 impl Bundle {
     #[wasm_bindgen(constructor)]
-    pub fn new(opt: usize, label: String, links: Vec<usize>, pos: f32) -> Self {
+    pub fn new(opt: usize, label: String, links: Box<[usize]>, pos: f32) -> Self {
         Self {
             opt,
             label,
@@ -416,8 +418,8 @@ pub struct DrawData {
     pub normalized_radians: Box<[f32]>,
     pub line_width: f32,
     pub bundle_side: f32,
-    pub bundles: Vec<Point>,
-    pub links: Vec<SubLink>,
+    pub bundles: Box<[Point]>,
+    pub links: Box<[SubLink]>,
     pub index: Square,
     pub animated: bool,
 }
@@ -453,33 +455,33 @@ impl DrawData {
 
 #[derive(Debug)]
 pub struct LinkContainer {
-    pub ls: LinkSet,
+    pub ls: Rc<RefCell<Box<[LinkSet]>>>,
     pub draw_data: DrawData,
     pub id: usize,
 }
 
 impl LinkContainer {
     pub fn move_distance(&mut self, distance: &Point) {
-        match &mut self.ls.point {
+        match &mut self.ls.borrow_mut()[self.id].point {
             Some(lp) => lp.point = lp.point.add_distance(distance),
             None => (),
         };
         self.draw_data.move_distance(distance);
     }
     pub fn move_arc(&mut self, distance: &Point, src: &Node, dst: &Node, opt: &DiagramOpt) {
-        match &mut self.ls.point {
+        match &mut self.ls.borrow_mut()[self.id].point {
             Some(lp) => match lp.mode {
                 ArcType::Arc => lp.point = lp.point.add_distance(&distance.scale(2.0)),
                 ArcType::Joint => lp.point = lp.point.add_distance(distance),
             },
             None => (),
         }
-        self.draw_data = self.ls.build_draw_data(src, dst, opt);
+        self.draw_data = self.ls.borrow()[self.id].build_draw_data(src, dst, opt);
     }
 
     pub fn get_render_center(&self) -> Point {
         let (src, dst) = self.draw_data.get_src_dst();
-        match &self.ls.point {
+        match &self.ls.borrow()[self.id].point {
             Some(arc) => {
                 match arc.mode {
                     ArcType::Arc => {
@@ -496,7 +498,7 @@ impl LinkContainer {
         let dd = &self.draw_data;
         let width = dd.line_width;
         let w = width * HALF;
-        if let Some(arc) = &self.ls.point {
+        if let Some(arc) = &self.ls.borrow()[self.id].point {
             let r = w + w * (dd.links.len() as f32) - w * HALF;
             match arc.mode {
                 ArcType::Arc => {
@@ -513,7 +515,7 @@ impl LinkContainer {
             }
         }
         // first check bundles
-        for (i, _) in self.ls.bundles.iter().enumerate() {
+        for (i, _) in self.ls.borrow()[self.id].bundles.iter().enumerate() {
             let square = dd.bundle_draw_box(i);
             if square.contains_point(p) {
                 return LookupPointResult::Bundle((self.id, i));
@@ -527,8 +529,14 @@ impl LinkContainer {
         }
         return LookupPointResult::NoMatch;
     }
-    pub fn new(ls: LinkSet, src: &Node, dst: &Node, opt: &DiagramOpt, id: usize) -> Self {
-        let dd = ls.build_draw_data(src, dst, opt);
+    pub fn new(
+        ls: Rc<RefCell<Box<[LinkSet]>>>,
+        src: &Node,
+        dst: &Node,
+        opt: &DiagramOpt,
+        id: usize,
+    ) -> Self {
+        let dd = ls.borrow()[id].build_draw_data(src, dst, opt);
         Self {
             ls,
             draw_data: dd,
@@ -539,13 +547,16 @@ impl LinkContainer {
         self.draw_data.animated
     }
     pub fn get_src_dst(&self) -> (usize, usize) {
-        (self.ls.src, self.ls.dst)
+        let ls = &self.ls.borrow()[self.id];
+        (ls.src, ls.dst)
     }
 
     pub fn get_center(&self, check: &LookupPointResult) -> Point {
         let dd = &self.draw_data;
         match check {
-            LookupPointResult::Arc(_) => unsafe { self.ls.point.unwrap_unchecked().point },
+            LookupPointResult::Arc(_) => unsafe {
+                self.ls.borrow()[self.id].point.unwrap_unchecked().point
+            },
             LookupPointResult::Link(_) => {
                 let mut start = ZERO_POINT;
                 let mut count = 0;

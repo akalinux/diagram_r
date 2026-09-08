@@ -18,11 +18,6 @@ use crate::{
 };
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen(inspectable, getter_with_clone)]
-pub struct MovedNodes {
-    pub nodes: Vec<MovedNode>,
-    pub boxes: Vec<MovedNode>,
-}
 #[wasm_bindgen]
 #[derive(Copy, Clone)]
 pub struct MovedNode {
@@ -46,11 +41,9 @@ pub enum GroupID {
     Box(usize),
 }
 
-pub type NodeSet = (Node, Vec<usize>);
-
 #[derive(Clone, Debug)]
 pub enum CurrentTarget {
-    Move(Vec<MoveTarget>, Point),
+    Move(Box<[MoveTarget]>, Point),
     Screen(Point),
     Lookup(Point),
     Highlight,
@@ -70,7 +63,8 @@ pub struct DiagramCore {
     pub nodes: RefCell<Box<[Node]>>,
     pub node_links: RefCell<FxHashMap<usize, Vec<usize>>>,
     pub boxes: RefCell<Box<[Node]>>,
-    pub links: RefCell<Vec<LinkContainer>>,
+    pub core_links: Rc<RefCell<Box<[LinkSet]>>>,
+    pub links: RefCell<Box<[LinkContainer]>>,
     pub idx: RefCell<ScreenIndex>,
     pub render_ops: DiagramOpt,
     pub center: RefCell<Point>,
@@ -150,10 +144,10 @@ impl LinkAndElement {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct HighlightTargets {
-    pub nodes: Vec<usize>,
-    pub boxes: Vec<usize>,
-    pub links: Vec<LinkAndElement>,
-    pub bundles: Vec<LinkAndElement>,
+    pub nodes: Box<[usize]>,
+    pub boxes: Box<[usize]>,
+    pub links: Box<[LinkAndElement]>,
+    pub bundles: Box<[LinkAndElement]>,
     pub arc: Option<usize>,
 }
 
@@ -170,9 +164,9 @@ pub enum CoreMouseEvent {
 
 #[wasm_bindgen(inspectable, getter_with_clone)]
 pub struct MovedElements {
-    pub nodes: Vec<NodeChanges>,
-    pub boxes: Vec<NodeChanges>,
-    pub links: Vec<LinkChanges>,
+    pub nodes: Box<[NodeChanges]>,
+    pub boxes: Box<[NodeChanges]>,
+    pub links: Box<[LinkChanges]>,
 }
 #[wasm_bindgen(inspectable)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -210,7 +204,8 @@ impl DiagramCore {
             nodes: RefCell::new(Box::new([])),
             boxes: RefCell::new(Box::new([])),
             node_links: RefCell::new(FxHashMap::default()),
-            links: RefCell::new(Vec::new()),
+            links: RefCell::new(Box::new([])),
+            core_links: Rc::new(RefCell::new(Box::new([]))),
             el_ops: Box::new([ElementOpt::defaults()]),
             idx: RefCell::new(ScreenIndex::new(render_ops.index_step)),
             render_ops,
@@ -249,10 +244,10 @@ impl DiagramCore {
                     link: *idx,
                     element: *el,
                 });
-                let link = &self.links.borrow()[*idx];
+                let (src, dst) = &self.links.borrow()[*idx].get_src_dst();
                 nodes.reserve(2);
-                nodes.push(link.ls.src);
-                nodes.push(link.ls.dst);
+                nodes.push(*src);
+                nodes.push(*dst);
             }
             LookupPointResult::Box(id) => {
                 boxes.push(*id);
@@ -266,12 +261,15 @@ impl DiagramCore {
                     link: *idx,
                     element: *el,
                 });
-                let bl = &link.ls.bundles[*el].links;
+                let ls = &link.ls.borrow()[link.id];
+                let bl = &ls.bundles[*el].links;
+
+                let (src, dst) = &self.links.borrow()[*idx].get_src_dst();
                 nodes.reserve(2);
-                nodes.push(link.ls.src);
-                nodes.push(link.ls.dst);
+                nodes.push(*src);
+                nodes.push(*dst);
                 links.reserve(bl.len());
-                let src = &link.ls.links;
+                let src = &ls.links;
                 for id in bl {
                     match src.get(*id) {
                         Some(_) => {
@@ -287,10 +285,10 @@ impl DiagramCore {
             _ => (),
         }
         HighlightTargets {
-            nodes,
-            boxes,
-            links,
-            bundles,
+            nodes: nodes.into_boxed_slice(),
+            boxes: boxes.into_boxed_slice(),
+            links: links.into_boxed_slice(),
+            bundles: bundles.into_boxed_slice(),
             arc,
         }
     }
@@ -344,14 +342,18 @@ impl DiagramCore {
         for (id, node) in self.nodes.borrow().iter().enumerate() {
             self.add_node(id, true, &node);
         }
-        self.links.borrow_mut().reserve(links.len());
         let mut animated = 0;
-        for lc in links {
-            let id = self.add_link(lc)?;
-            if self.links.borrow()[id].animated() {
+        let mut link_containers = Vec::new();
+        self.core_links.replace(links);
+        for id in 0..self.core_links.borrow().len() {
+            let core_links = self.core_links.clone();
+            let lc = self.add_link(id, core_links)?;
+            if lc.animated() {
                 animated += 1;
             }
+            link_containers.push(lc);
         }
+        self.links.replace(link_containers.into_boxed_slice());
         self.animated.replace(animated);
 
         Ok(())
@@ -360,14 +362,19 @@ impl DiagramCore {
         *self.animated.borrow() != 0
     }
 
-    fn add_link(&self, ls: LinkSet) -> Result<usize, JsValue> {
-        if ls.links.len() == 0 {
-            return Err(JsValue::from(LINK_ADD_ERROR));
-        }
-        let id = self.links.borrow().len();
-        let (lc, a, b);
-        {
-            (a, b) = (ls.src, ls.dst);
+    fn add_link(
+        &self,
+        id: usize,
+        ls: Rc<RefCell<Box<[LinkSet]>>>,
+    ) -> Result<LinkContainer, JsValue> {
+        let (a, b) = {
+            let raw = &ls.borrow()[id];
+            if raw.links.len() == 0 {
+                return Err(JsValue::from(LINK_ADD_ERROR));
+            }
+            (raw.src, raw.dst)
+        };
+        let lc = {
             if a == b {
                 return Err(JsValue::from(LINK_ADD_ERROR));
             }
@@ -377,8 +384,8 @@ impl DiagramCore {
                 _ => return Err(JsValue::from(LINK_ADD_ERROR)),
             };
 
-            lc = LinkContainer::new(ls, src, dst, &self.render_ops, id);
-        }
+            LinkContainer::new(ls, src, dst, &self.render_ops, id)
+        };
         if self.render_ops.interactive {
             let mut nl = self.node_links.borrow_mut();
             for node_id in [a, b] {
@@ -395,12 +402,10 @@ impl DiagramCore {
                 .borrow_mut()
                 .manage(&ScreenSlot::Link(id), points, IdxBoxAction::Add);
         }
-        self.links.borrow_mut().push(lc);
-        Ok(id)
+        Ok(lc)
     }
 
     fn clear(&mut self) {
-        self.links.borrow_mut().clear();
         self.node_links.borrow_mut().clear();
         self.idx.borrow_mut().clear();
         self.center.replace(ZERO_POINT);
@@ -408,7 +413,7 @@ impl DiagramCore {
         self.clear_render();
     }
 
-    pub fn get_related_nodes(&self, node_ids: &[GroupID]) -> Vec<MoveTarget> {
+    pub fn get_related_nodes(&self, node_ids: &[GroupID]) -> Box<[MoveTarget]> {
         let mut ids = FxHashSet::with_capacity_and_hasher(node_ids.len(), FxBuildHasher::default());
         let boxes = self.boxes.borrow();
         let nodes = self.nodes.borrow();
@@ -513,13 +518,15 @@ impl DiagramCore {
                     .borrow_mut()
                     .insert(ss, lc.draw_data.index.idx(step));
             }
-            let (src, dst) = (lc.ls.src, lc.ls.dst);
+            let (src, dst) = lc.get_src_dst();
             if upodated_nodes.contains(&src) && upodated_nodes.contains(&dst) {
                 lc.move_distance(distance);
             } else {
-                lc.draw_data = lc
-                    .ls
-                    .build_draw_data(&nodes[src], &nodes[dst], &self.render_ops);
+                lc.draw_data = lc.ls.borrow()[lc.id].build_draw_data(
+                    &nodes[src],
+                    &nodes[dst],
+                    &self.render_ops,
+                );
             }
             self.update_render(ScreenSlot::Link(lid));
         }
@@ -694,8 +701,9 @@ impl DiagramCore {
                     MoveTarget::Link(id) => links.push(LinkChanges {
                         id,
                         point: unsafe {
-                            let links = self.links.borrow();
-                            let p = links[id].ls.point.as_ref().unwrap_unchecked();
+                            let links = self.core_links.borrow();
+
+                            let p = links[id].point.as_ref().unwrap_unchecked();
                             let res = *&p.point;
                             res
                         },
@@ -703,9 +711,9 @@ impl DiagramCore {
                 }
             }
             let moved = MovedElements {
-                nodes,
-                boxes,
-                links,
+                nodes: nodes.into_boxed_slice(),
+                boxes: boxes.into_boxed_slice(),
+                links: links.into_boxed_slice(),
             };
             self.run_callback(CoreMouseEvent::Moved(moved), p);
         }
@@ -731,12 +739,12 @@ impl DiagramCore {
                 LookupPointResult::NoMatch => {
                     return CurrentTarget::Screen(*p);
                 }
-                LookupPointResult::Arc(id) => vec![MoveTarget::Link(*id)],
+                LookupPointResult::Arc(id) => Box::new([MoveTarget::Link(*id)]),
                 LookupPointResult::Box(id) => self.get_related_nodes(&[GroupID::Box(*id)]),
                 LookupPointResult::Node(id) => self.get_related_nodes(&[GroupID::Node(*id)]),
                 LookupPointResult::Bundle((link_id, _)) | LookupPointResult::Link((link_id, _)) => {
-                    let link = &self.links.borrow()[*link_id].ls;
-                    vec![MoveTarget::Node(link.src), MoveTarget::Node(link.dst)]
+                    let (src, dst) = &self.links.borrow()[*link_id].get_src_dst();
+                    Box::new([MoveTarget::Node(*src), MoveTarget::Node(*dst)])
                 }
             },
             *p,

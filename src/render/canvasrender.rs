@@ -112,6 +112,7 @@ impl CoreRender for CanvasRender {
         let node_vec = &diagram.nodes.borrow();
         let boxes_vec = &diagram.boxes.borrow();
         let link_vec = &diagram.links.borrow();
+        let cl_vec = &diagram.core_links.borrow();
         for node in boxes_vec.iter().rev() {
             self.draw_node(node, diagram, opt, cache, false)?;
         }
@@ -158,9 +159,10 @@ impl CoreRender for CanvasRender {
             self.draw_link_arc_highlight(*id, diagram, opt)?;
         }
         for set in &highlights.bundles {
-            let link = &link_vec[set.link];
-            let bundle = &link.ls.bundles[set.element];
-            let target = link.draw_data.bundle_draw_box(set.element);
+            let link = &cl_vec[set.link];
+            let bundle = &link.bundles[set.element];
+            let lc = &link_vec[set.link];
+            let target = lc.draw_data.bundle_draw_box(set.element);
             let o = diagram.get_opt(bundle.opt);
             self.draw_box(&target, opt, o, true, cache)?;
             self.draw_node_text_highlight(&target, &bundle.label, o, opt)?;
@@ -345,12 +347,13 @@ impl CanvasRender {
         diagram: &DiagramCore,
         opt: &DiagramOpt,
     ) -> Result<(), JsValue> {
+        let link = &diagram.core_links.borrow()[link_id];
         let lc = &diagram.links.borrow()[link_id];
         let width = lc.draw_data.line_width;
         let r = HALF * width + width * lc.draw_data.links.len() as f32;
         let p = lc.get_render_center();
         self.draw_arc(&p, &opt.highlight_color, r)?;
-        let p = unsafe { lc.ls.point.unwrap_unchecked().point };
+        let p = unsafe { link.point.unwrap_unchecked().point };
         self.draw_arc(&p, &opt.highlight_color, width)
     }
 
@@ -533,7 +536,7 @@ impl CanvasRender {
         t: &Transform,
         highlight: bool,
     ) -> Result<(), JsValue> {
-        let link = &lc.ls.links[i];
+        let link = &lc.ls.borrow()[lc.id].links[i];
         let o = diagram.get_opt(link.opt);
         let color = match highlight {
             true => &opt.highlight_color,
@@ -678,12 +681,12 @@ impl CanvasRender {
         cache: &ImgCache,
         t: &Transform,
     ) -> Result<(), JsValue> {
-        for i in 0..link.ls.links.len() {
+        for i in 0..link.ls.borrow()[link.id].links.len() {
             self.draw_sublink(link, i, diagram, opt, t, false)?;
         }
         let data = &link.draw_data;
 
-        for (i, bundle) in link.ls.bundles.iter().enumerate() {
+        for (i, bundle) in link.ls.borrow()[link.id].bundles.iter().enumerate() {
             let target = data.bundle_draw_box(i);
             self.draw_box(&target, opt, diagram.get_opt(bundle.opt), false, &cache)?;
 

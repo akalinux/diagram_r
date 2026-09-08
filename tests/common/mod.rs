@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+use std::{cell::RefCell, rc::Rc};
+
 use diagram_r::{
     DiagramOpt, Point,
     link::{Animation, Bundle, Link, LinkContainer, LinkSet},
@@ -55,15 +57,21 @@ pub fn full_testbox2() -> FullBox {
 }
 
 pub fn data_lc_b1_l2() -> (Link, Link, Bundle) {
-    let c = Bundle::new(1, String::from("test bundle"), vec![0, 1], 0.5);
+    let c = Bundle::new(1, String::from("test bundle"), Box::new([0, 1]), 0.5);
     let a = Link::new(1, String::from("link a"), Animation::ToDst);
     let b = Link::new(2, String::from("link b"), Animation::ToDst);
     (a, b, c)
 }
 
-pub fn default_link_set(ids: (usize, usize)) -> LinkSet {
+pub fn default_link_set(ids: (usize, usize)) -> Rc<RefCell<Box<[LinkSet]>>> {
     let (a, b, c) = data_lc_b1_l2();
-    LinkSet::new(vec![a, b], vec![c], ids.0, ids.1, None)
+    Rc::new(RefCell::new(Box::new([LinkSet::new(
+        Box::new([a, b]),
+        Box::new([c]),
+        ids.0,
+        ids.1,
+        None,
+    )])))
 }
 pub fn test_lc_b1_l2(
     src: &Node,
@@ -84,7 +92,13 @@ pub fn test_lc_b1_l3(
 ) -> LinkContainer {
     let (a, b, c) = data_lc_b1_l2();
     let d = Link::new(2, String::from("link b"), Animation::ToDst);
-    let ls = LinkSet::new(vec![a, b, d], vec![c], ids.0, ids.1, None);
+    let ls: Rc<RefCell<Box<[LinkSet]>>> = Rc::new(RefCell::new(Box::new([LinkSet::new(
+        Box::new([a, b, d]),
+        Box::new([c]),
+        ids.0,
+        ids.1,
+        None,
+    )])));
     LinkContainer::new(ls, src, dst, opt, id)
 }
 

@@ -19,7 +19,7 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
     let ct = DiagramCore::new(ops);
 
     let (node_a, node_b) = nodes_a_b();
-    let links = Box::new([default_link_set((0, 1))]);
+    let links = default_link_set((0, 1)).take();
 
     match ct
         .borrow_mut()
@@ -46,64 +46,64 @@ fn test_highlights() {
     assert_eq!(
         d.get_highlights(&d.contains_point(&ZERO_POINT)),
         HighlightTargets {
-            nodes: vec![0],
-            links: vec![],
-            boxes: vec![],
-            bundles: vec![],
+            nodes: Box::new([0]),
+            links: Box::new([]),
+            boxes: Box::new([]),
+            bundles: Box::new([]),
             arc: None,
         }
     );
     assert_eq!(
         d.get_highlights(&d.contains_point(&Point { x: 10.0, y: 0.000 })),
         HighlightTargets {
-            nodes: vec![1],
-            links: vec![],
-            boxes: vec![],
-            bundles: vec![],
+            nodes: Box::new([1]),
+            links: Box::new([]),
+            boxes: Box::new([]),
+            bundles: Box::new([]),
             arc: None,
         }
     );
     assert_eq!(
         d.get_highlights(&d.contains_point(&Point { x: 5.0, y: 0.0 })),
         HighlightTargets {
-            nodes: vec![],
-            links: vec![],
-            boxes: vec![0],
-            bundles: vec![],
+            nodes: Box::new([]),
+            links: Box::new([]),
+            boxes: Box::new([0]),
+            bundles: Box::new([]),
             arc: None,
         }
     );
     assert_eq!(
         d.get_highlights(&d.contains_point(&Point { x: 2.5, y: 0.21 })),
         HighlightTargets {
-            nodes: vec![0, 1],
-            links: vec![LinkAndElement {
+            nodes: Box::new([0, 1]),
+            links: Box::new([LinkAndElement {
                 link: 0,
                 element: 0
-            }],
-            boxes: vec![],
-            bundles: vec![],
+            }]),
+            boxes: Box::new([]),
+            bundles: Box::new([]),
             arc: None,
         }
     );
     assert_eq!(
         d.get_highlights(&d.contains_point(&Point { x: 2.5, y: 0.66 })),
         HighlightTargets {
-            nodes: vec![0, 1],
-            links: vec![LinkAndElement {
+            nodes: Box::new([0, 1]),
+            links: Box::new([LinkAndElement {
                 link: 0,
                 element: 1
-            }],
-            boxes: vec![],
-            bundles: vec![],
+            }]),
+            boxes: Box::new([]),
+            bundles: Box::new([]),
             arc: None,
         }
     );
     assert_eq!(
         d.get_highlights(&d.contains_point(&Point { x: 5.0, y: 0.5 })),
         HighlightTargets {
-            nodes: vec![0, 1],
-            links: vec![
+            nodes: Box::new([0, 1]),
+            links: Box::new([
                 LinkAndElement {
                     link: 0,
                     element: 0
@@ -112,12 +112,12 @@ fn test_highlights() {
                     link: 0,
                     element: 1
                 },
-            ],
-            boxes: vec![],
-            bundles: vec![LinkAndElement {
+            ]),
+            boxes: Box::new([]),
+            bundles: Box::new([LinkAndElement {
                 link: 0,
                 element: 0
-            },],
+            },]),
             arc: None,
         }
     );
@@ -174,7 +174,7 @@ fn reload_data() -> Rc<RefCell<DiagramCore>> {
 
     let (node_a, node_b) = nodes_a_b();
     let box_a = box_a();
-    let links = Box::new([default_link_set((0, 1))]);
+    let links = default_link_set((0, 1)).take();
 
     match diagram
         .borrow_mut()

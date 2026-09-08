@@ -8,8 +8,8 @@ pub struct Node {
     pub layout: Square,
     pub label: String,
     pub opt: usize,
-    pub nodes: Vec<usize>,
-    pub boxes: Vec<usize>,
+    pub nodes: Box<[usize]>,
+    pub boxes: Box<[usize]>,
 }
 
 #[wasm_bindgen]
@@ -19,16 +19,16 @@ impl Node {
         layout: Square,
         label: String,
         opt: usize,
-        nodes: Option<Vec<usize>>,
-        boxes: Option<Vec<usize>>,
+        nodes: Option<Box<[usize]>>,
+        boxes: Option<Box<[usize]>>,
     ) -> Self {
         let nodes = match nodes {
             Some(nodes) => nodes,
-            None => Vec::new(),
+            None => Box::new([]),
         };
         let boxes = match boxes {
             Some(nodes) => nodes,
-            None => Vec::new(),
+            None => Box::new([]),
         };
         Self {
             label,

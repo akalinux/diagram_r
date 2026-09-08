@@ -24,7 +24,7 @@ pub fn box_a() -> Node {
         Square::new(0.0, 0.0, 10.0, 2.0),
         String::from("box-a"),
         0,
-        Some(vec![0]),
+        Some(Box::new([0])),
         None,
     )
 }
@@ -34,14 +34,14 @@ pub fn nodes_a_b() -> (Node, Node) {
             Square::new(0.0, 0.0, 1.0, 1.0),
             String::from("node-a"),
             0,
-            Some(vec![1]),
+            Some(Box::new([1])),
             None,
         ),
         Node::new(
             Square::new(9.0, 0.0, 1.0, 1.0),
             String::from("node-b"),
             0,
-            Some(vec![0]),
+            Some(Box::new([0])),
             None,
         ),
     )

@@ -13,11 +13,11 @@ pub fn base_diagram() -> Rc<RefCell<DiagramCore>> {
     let ct = DiagramCore::new(ops);
 
     let (node_a, node_b) = nodes_a_b();
-    let links = vec![default_link_set((0, 1))];
+    let links = Box::new([default_link_set((0, 1))]);
 
     match ct
         .borrow_mut()
-        .set_data(vec![box_a()], vec![node_a, node_b], links)
+        .set_data(Box::new([box_a()]), Box::new([node_a, node_b]), links)
     {
         Err(_) => panic!("Setting data failed!"),
         Ok(_) => (),

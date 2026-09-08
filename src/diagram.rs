@@ -69,7 +69,7 @@ pub struct DiagramCore {
     pub this: Weak<RefCell<Self>>,
     pub el_ops: Vec<ElementOpt>,
     pub nodes: RefCell<Vec<NodeSet>>,
-    pub boxes: RefCell<Vec<Node>>,
+    pub boxes: RefCell<Box<[Node]>>,
     pub links: RefCell<Vec<LinkContainer>>,
     pub idx: RefCell<ScreenIndex>,
     pub render_ops: DiagramOpt,
@@ -117,9 +117,9 @@ impl Diagram {
     }
     pub fn set_data(
         &self,
-        boxes: Vec<Node>,
-        nodes: Vec<Node>,
-        links: Vec<LinkSet>,
+        boxes: Box<[Node]>,
+        nodes: Box<[Node]>,
+        links: Box<[LinkSet]>,
     ) -> Result<(), JsValue> {
         self.core.borrow_mut().set_data(boxes, nodes, links)
     }
@@ -208,7 +208,7 @@ impl DiagramCore {
             highlights: RefCell::new(None),
             this: Weak::new(),
             nodes: RefCell::new(Vec::new()),
-            boxes: RefCell::new(Vec::new()),
+            boxes: RefCell::new(Box::new([])),
             links: RefCell::new(Vec::new()),
             el_ops: vec![ElementOpt::defaults()],
             idx: RefCell::new(ScreenIndex::new(render_ops.index_step)),
@@ -331,15 +331,14 @@ impl DiagramCore {
     }
     pub fn set_data(
         &mut self,
-        boxes: Vec<Node>,
-        nodes: Vec<Node>,
-        links: Vec<LinkSet>,
+        boxes: Box<[Node]>,
+        nodes: Box<[Node]>,
+        links: Box<[LinkSet]>,
     ) -> Result<(), JsValue> {
         self.clear();
-        self.boxes.borrow_mut().reserve(boxes.len());
-        for (id, node) in boxes.into_iter().enumerate() {
-            self.add_node(id, false, &node);
-            self.boxes.borrow_mut().push(node);
+        self.boxes.replace(boxes);
+        for (id, node) in self.boxes.borrow().iter().enumerate() {
+            self.add_node(id, false, node);
         }
         self.nodes.borrow_mut().reserve(nodes.len());
         for (id, node) in nodes.into_iter().enumerate() {
@@ -411,7 +410,6 @@ impl DiagramCore {
 
     fn clear(&mut self) {
         self.nodes.borrow_mut().clear();
-        self.boxes.borrow_mut().clear();
         self.links.borrow_mut().clear();
         self.idx.borrow_mut().clear();
         self.center.replace(ZERO_POINT);

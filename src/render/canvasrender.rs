@@ -160,8 +160,8 @@ impl CoreRender for CanvasRender {
         for set in &highlights.bundles {
             let link = &link_vec[set.link];
             let bundle = &link.bundles[set.element];
-            let dd = unsafe { link.draw_data.as_ref().unwrap_unchecked() };
-            let target = dd.bundle_draw_box(set.element);
+            let target =
+                unsafe { link.draw_data.as_ref().unwrap_unchecked() }.bundle_draw_box(set.element);
             let o = diagram.get_opt(bundle.opt);
             self.draw_box(&target, opt, o, true, cache)?;
             self.draw_node_text_highlight(&target, &bundle.label, o, opt)?;

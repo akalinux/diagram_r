@@ -60,6 +60,8 @@ pub struct ElementOpt {
     pub img: String,
     pub color: String,
     pub label_position: LabelPosition,
+    #[wasm_bindgen(skip)]
+    pub id: usize,
 }
 #[wasm_bindgen]
 impl ElementOpt {
@@ -69,6 +71,7 @@ impl ElementOpt {
             img,
             label_position,
             color,
+            id: 0,
         }
     }
 }
@@ -79,6 +82,7 @@ impl ElementOpt {
             img: String::from(""),
             color: String::from(DEFAULT_COLOR),
             label_position: LabelPosition::Top,
+            id: 0,
         };
     }
 }

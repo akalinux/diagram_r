@@ -105,7 +105,7 @@ impl Diagram {
     pub fn set_element_options(&self, el_ops: Box<[ElementOpt]>) {
         self.core.borrow_mut().set_element_options(el_ops);
     }
-    pub fn set_element_option(&self, id: u32, opt: ElementOpt) {
+    pub fn set_element_option(&self, id: usize, opt: ElementOpt) {
         self.core.borrow_mut().set_opt(id, opt);
     }
     pub fn set_data(
@@ -290,9 +290,15 @@ impl DiagramCore {
         }
     }
 
-    pub fn set_opt(&mut self, id: u32, opt: ElementOpt) {
-        let id = id as usize;
-        self.el_ops[id] = opt;
+    pub fn set_opt(&mut self, id: usize, mut opt: ElementOpt) {
+        let slot = match self.el_ops.get_mut(id) {
+            Some(o) => o,
+            None => return,
+        };
+
+        opt.id = id;
+        self.img_cache.update(&opt);
+        *slot = opt;
     }
 
     pub fn set_transform(&self, t: Transform) {
@@ -306,6 +312,9 @@ impl DiagramCore {
             self.el_ops = Box::new([ElementOpt::defaults()]);
         } else {
             self.el_ops = el_ops
+        }
+        for (i, o) in self.el_ops.iter_mut().enumerate() {
+            o.id = i;
         }
         self.img_cache.load_images(&self.el_ops);
     }

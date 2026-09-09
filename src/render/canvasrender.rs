@@ -270,9 +270,7 @@ impl CanvasRender {
             ctx.fill_rect(x, y, w, h);
         } else {
             let (x, y, w, h) = target.render_points64();
-            if let Some(res) = cache.load_img(&o.img)
-                && let Ok(img) = res
-            {
+            if let Some(img) = cache.get_img(o.id) {
                 ctx.draw_image_with_html_image_element_and_dw_and_dh(&img, x, y, w, h)?;
             } else {
                 ctx.set_fill_style_str(&o.color);

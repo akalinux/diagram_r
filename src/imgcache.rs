@@ -1,4 +1,3 @@
-use rustc_hash::FxHashMap;
 use std::{
     cell::RefCell,
     rc::{Rc, Weak},
@@ -15,9 +14,15 @@ pub struct ImgLoader {
 }
 
 pub enum CacheState {
-    Downloading(ImgLoader),
-    Loaded(HtmlImageElement),
-    Failed(JsValue),
+    Downloading(Box<(String, ImgLoader)>),
+    Loaded(Box<(String, HtmlImageElement)>),
+    Failed(Box<(String, JsValue)>),
+    NeverLoaded,
+}
+impl Default for CacheState {
+    fn default() -> Self {
+        CacheState::NeverLoaded
+    }
 }
 
 pub struct ImgCache {
@@ -25,7 +30,7 @@ pub struct ImgCache {
     pub cache: Rc<RefCell<Cache>>,
 }
 pub struct Cache {
-    pub imgs: FxHashMap<String, CacheState>,
+    pub imgs: Box<[CacheState]>,
     pub loading: u32,
     pub bulk: bool,
 }
@@ -35,17 +40,17 @@ impl ImgCache {
         Self {
             diagram: diagram,
             cache: Rc::new(RefCell::new(Cache {
-                imgs: FxHashMap::default(),
+                imgs: Box::new([]),
                 loading: 0,
                 bulk: false,
             })),
         }
     }
-    pub fn on_load(&self, src: &String, state: CacheState) {
+    pub fn on_load(&self, src: usize, state: CacheState) {
         {
             let mut cache = self.cache.borrow_mut();
             cache.loading -= 1;
-            cache.imgs.insert(src.clone(), state);
+            cache.imgs[src] = state;
             if cache.bulk {
                 return;
             }
@@ -61,8 +66,11 @@ impl ImgCache {
     }
     pub fn load_images(&self, opts: &Box<[ElementOpt]>) {
         self.cache.borrow_mut().bulk = true;
-        for opt in opts {
-            self.load_img(&opt.img);
+        let mut imgs = Vec::with_capacity(opts.len());
+        imgs.resize_with(opts.len(), CacheState::default);
+        self.cache.borrow_mut().imgs = imgs.into_boxed_slice();
+        for opt in opts.iter() {
+            self.load_img(opt);
         }
 
         self.cache.borrow_mut().bulk = false;
@@ -72,30 +80,54 @@ impl ImgCache {
                 .on_img(&self);
         }
     }
-    pub fn load_img(&self, url: &String) -> Option<Result<HtmlImageElement, JsValue>> {
-        if url.is_empty() {
-            return None;
-        }
-        match self.cache.borrow().imgs.get(url) {
+    pub fn get_img(&self, id: usize) -> Option<HtmlImageElement> {
+        match self.cache.borrow().imgs.get(id) {
             Some(cs) => match cs {
-                CacheState::Downloading(_) => return None,
-                CacheState::Loaded(img) => return Some(Ok(img.clone())),
-                CacheState::Failed(e) => return Some(Err(e.clone())),
+                CacheState::Loaded(data) => Some(data.1.clone()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+    pub fn update(&self, opt: &ElementOpt) {
+        let add = {
+            let cs = self.cache.borrow();
+            let slot = match cs.imgs.get(opt.id) {
+                Some(s) => s,
+                None => return,
+            };
+            let (cmp, add) = match slot {
+                CacheState::Downloading(data) => (&data.0, 0),
+                CacheState::Loaded(data) => (&data.0, 1),
+                CacheState::Failed(data) => (&data.0, 1),
+                // this should not be possible!
+                _ => return,
+            };
+            if *cmp == opt.img {
+                return;
+            }
+            add
+        };
+        {
+            let mut cache = self.cache.borrow_mut();
+            cache.imgs[opt.id] = CacheState::NeverLoaded;
+            cache.loading += add;
+        }
+        ImgLoader::new(opt, self.clone());
+    }
+    fn load_img(&self, opt: &ElementOpt) {
+        match self.cache.borrow().imgs.get(opt.id) {
+            Some(cs) => match cs {
+                CacheState::Downloading(_) | CacheState::Failed(_) | CacheState::Loaded(_) => {
+                    return;
+                }
+                CacheState::NeverLoaded => (),
             },
             _ => (),
         }
 
         self.cache.borrow_mut().loading += 1;
-        ImgLoader::new(url, self.clone());
-
-        match self.cache.borrow().imgs.get(url) {
-            Some(cs) => match cs {
-                CacheState::Downloading(_) => None,
-                CacheState::Loaded(img) => Some(Ok(img.clone())),
-                CacheState::Failed(e) => Some(Err(e.clone())),
-            },
-            _ => None,
-        }
+        ImgLoader::new(opt, self.clone());
     }
 }
 impl Clone for ImgCache {
@@ -108,12 +140,11 @@ impl Clone for ImgCache {
 }
 
 impl ImgLoader {
-    pub fn new(url: &String, cache: ImgCache) {
-        let img;
-        match HtmlImageElement::new() {
-            Ok(i) => img = i,
+    pub fn new(opt: &ElementOpt, cache: ImgCache) {
+        let img = match HtmlImageElement::new() {
+            Ok(i) => i,
             Err(e) => {
-                cache.on_load(url, CacheState::Failed(e));
+                cache.on_load(opt.id, CacheState::Failed(Box::new((opt.img.clone(), e))));
                 return;
             }
         };
@@ -125,35 +156,36 @@ impl ImgLoader {
         };
 
         let img_ok = res.img.clone();
-        let src = url.clone();
 
         let wanted = cache.clone();
-        let on_load = Closure::wrap(Box::new(move || {
+        let src = opt.img.clone();
+        let id = opt.id;
+        let on_load = Closure::wrap(Box::new(move || 
             // This will drop self
-            wanted.on_load(&src, CacheState::Loaded(img_ok.clone()));
-        }));
+            wanted.on_load(
+                id,
+                CacheState::Loaded(Box::new((src.clone(), img_ok.clone()))),
+            )
+        ));
         res.img.set_onload(Some(on_load.as_ref().unchecked_ref()));
         res.onload = Some(on_load);
 
-        let src = url.clone();
+        let src = opt.img.clone();
         let wanted = cache.clone();
-        let on_err = Closure::wrap(Box::new(move |e: ErrorEvent| {
+        let on_err = Closure::wrap(Box::new(move |e: ErrorEvent| 
             // This will drop self
-            wanted.on_load(&src, CacheState::Failed(e.into()));
-        }));
+            wanted.on_load(id, CacheState::Failed(Box::new((src.clone(), e.into()))))
+        ));
         res.img.set_onerror(Some(on_err.as_ref().unchecked_ref()));
         res.onerr = Some(on_err);
+        let img = res.img.clone();
 
-        let cp = res.img.clone();
-        //let cache = cache.clone();
-        cache
-            .cache
-            .borrow_mut()
-            .imgs
-            .insert(url.clone(), CacheState::Downloading(res));
+        cache.cache.borrow_mut().imgs[id] =
+            CacheState::Downloading(Box::new((opt.img.clone(), res)));
 
-        // this can run the callback before we return a value!
-        cp.set_src(url);
+        // this can run the callback before a value can be returned..
+        // So there is no point in having a return statement!
+        img.set_src(&opt.img);
     }
 }
 impl Drop for ImgLoader {

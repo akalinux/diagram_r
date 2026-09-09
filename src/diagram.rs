@@ -10,7 +10,7 @@ use crate::{
     bsp::{IndexXY, LookupPointResult, ScreenIndex, ScreenSlot, iter::IdxBoxAction},
     constants::*,
     imgcache::ImgCache,
-    link::{LinkContainer, LinkSet},
+    link::LinkSet,
     node::Node,
     render::{CoreRender, pointerwatcher::PointerWatcher, timeout::Timeout},
     square::Square,
@@ -63,8 +63,7 @@ pub struct DiagramCore {
     pub nodes: RefCell<Box<[Node]>>,
     pub node_links: RefCell<FxHashMap<usize, Vec<usize>>>,
     pub boxes: RefCell<Box<[Node]>>,
-    pub core_links: Rc<RefCell<Box<[LinkSet]>>>,
-    pub links: RefCell<Box<[LinkContainer]>>,
+    pub links: RefCell<Box<[LinkSet]>>,
     pub idx: RefCell<ScreenIndex>,
     pub render_ops: DiagramOpt,
     pub center: RefCell<Point>,
@@ -205,7 +204,6 @@ impl DiagramCore {
             boxes: RefCell::new(Box::new([])),
             node_links: RefCell::new(FxHashMap::default()),
             links: RefCell::new(Box::new([])),
-            core_links: Rc::new(RefCell::new(Box::new([]))),
             el_ops: Box::new([ElementOpt::defaults()]),
             idx: RefCell::new(ScreenIndex::new(render_ops.index_step)),
             render_ops,
@@ -261,15 +259,14 @@ impl DiagramCore {
                     link: *idx,
                     element: *el,
                 });
-                let ls = &link.ls.borrow()[link.id];
-                let bl = &ls.bundles[*el].links;
+                let bl = &link.bundles[*el].links;
 
                 let (src, dst) = &self.links.borrow()[*idx].get_src_dst();
                 nodes.reserve(2);
                 nodes.push(*src);
                 nodes.push(*dst);
                 links.reserve(bl.len());
-                let src = &ls.links;
+                let src = &link.links;
                 for id in bl {
                     match src.get(*id) {
                         Some(_) => {
@@ -343,17 +340,13 @@ impl DiagramCore {
             self.add_node(id, true, &node);
         }
         let mut animated = 0;
-        let mut link_containers = Vec::new();
-        self.core_links.replace(links);
-        for id in 0..self.core_links.borrow().len() {
-            let core_links = self.core_links.clone();
-            let lc = self.add_link(id, core_links)?;
-            if lc.animated() {
+        self.links.replace(links);
+        for (id, link) in self.links.borrow_mut().iter_mut().enumerate() {
+            self.process_link(id, link)?;
+            if link.animated() {
                 animated += 1;
             }
-            link_containers.push(lc);
         }
-        self.links.replace(link_containers.into_boxed_slice());
         self.animated.replace(animated);
 
         Ok(())
@@ -362,19 +355,10 @@ impl DiagramCore {
         *self.animated.borrow() != 0
     }
 
-    fn add_link(
-        &self,
-        id: usize,
-        ls: Rc<RefCell<Box<[LinkSet]>>>,
-    ) -> Result<LinkContainer, JsValue> {
-        let (a, b) = {
-            let raw = &ls.borrow()[id];
-            if raw.links.len() == 0 {
-                return Err(JsValue::from(LINK_ADD_ERROR));
-            }
-            (raw.src, raw.dst)
-        };
-        let lc = {
+    fn process_link(&self, id: usize, link: &mut LinkSet) -> Result<(), JsValue> {
+        let (a, b) = link.get_src_dst();
+        link.id = id;
+        let dd = {
             if a == b {
                 return Err(JsValue::from(LINK_ADD_ERROR));
             }
@@ -383,8 +367,7 @@ impl DiagramCore {
                 (Some(a), Some(b)) => (a, b),
                 _ => return Err(JsValue::from(LINK_ADD_ERROR)),
             };
-
-            LinkContainer::new(ls, src, dst, &self.render_ops, id)
+            link.build_draw_data(src, dst, &self.render_ops)
         };
         if self.render_ops.interactive {
             let mut nl = self.node_links.borrow_mut();
@@ -397,12 +380,13 @@ impl DiagramCore {
                     }
                 }
             }
-            let points = lc.draw_data.index.idx(self.render_ops.index_step);
+            let points = dd.index.idx(self.render_ops.index_step);
             self.idx
                 .borrow_mut()
                 .manage(&ScreenSlot::Link(id), points, IdxBoxAction::Add);
         }
-        Ok(lc)
+        link.draw_data = Some(Box::new(dd));
+        Ok(())
     }
 
     fn clear(&mut self) {
@@ -484,10 +468,11 @@ impl DiagramCore {
 
                     if !self.pending_updates.borrow().contains_key(&ss) {
                         let link = &self.links.borrow_mut()[*id];
+                        let dd = unsafe { link.draw_data.as_ref().unwrap_unchecked() };
 
                         self.pending_updates
                             .borrow_mut()
-                            .insert(ss, link.draw_data.index.idx(step));
+                            .insert(ss, dd.index.idx(step));
                     }
 
                     let link = &mut self.links.borrow_mut()[*id];
@@ -514,19 +499,20 @@ impl DiagramCore {
             ss = ScreenSlot::Link(lid);
 
             if !self.pending_updates.borrow().contains_key(&ss) {
+                let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
                 self.pending_updates
                     .borrow_mut()
-                    .insert(ss, lc.draw_data.index.idx(step));
+                    .insert(ss, dd.index.idx(step));
             }
             let (src, dst) = lc.get_src_dst();
             if upodated_nodes.contains(&src) && upodated_nodes.contains(&dst) {
                 lc.move_distance(distance);
             } else {
-                lc.draw_data = lc.ls.borrow()[lc.id].build_draw_data(
+                lc.draw_data = Some(Box::new(lc.build_draw_data(
                     &nodes[src],
                     &nodes[dst],
                     &self.render_ops,
-                );
+                )));
             }
             self.update_render(ScreenSlot::Link(lid));
         }
@@ -557,17 +543,19 @@ impl DiagramCore {
                     .unwrap_unchecked()
             };
             match ss {
-                ScreenSlot::Box(b) => {
-                    let new = boxes[b].layout.idx(step);
-                    idx.update(&ScreenSlot::Box(b), old, new);
+                ScreenSlot::Box(i) => {
+                    let new = boxes[i].layout.idx(step);
+                    idx.update(&ScreenSlot::Box(i), old, new);
                 }
-                ScreenSlot::Node(b) => {
-                    let new = nodes[b].layout.idx(step);
-                    idx.update(&ScreenSlot::Node(b), old, new);
+                ScreenSlot::Node(i) => {
+                    let new = nodes[i].layout.idx(step);
+                    idx.update(&ScreenSlot::Node(i), old, new);
                 }
-                ScreenSlot::Link(b) => {
-                    let new = links[b].draw_data.index.idx(step);
-                    idx.update(&ScreenSlot::Link(b), old, new);
+                ScreenSlot::Link(i) => {
+                    let new = unsafe { links[i].draw_data.as_ref().unwrap_unchecked() }
+                        .index
+                        .idx(step);
+                    idx.update(&ScreenSlot::Link(i), old, new);
                 }
             }
         }
@@ -701,9 +689,9 @@ impl DiagramCore {
                     MoveTarget::Link(id) => links.push(LinkChanges {
                         id,
                         point: unsafe {
-                            let links = self.core_links.borrow();
+                            let link = &self.links.borrow()[id];
 
-                            let p = links[id].point.as_ref().unwrap_unchecked();
+                            let p = link.point.as_ref().unwrap_unchecked();
                             let res = *&p.point;
                             res
                         },

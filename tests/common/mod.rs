@@ -1,9 +1,8 @@
 #![allow(dead_code)]
-use std::{cell::RefCell, rc::Rc};
 
 use diagram_r::{
     DiagramOpt, Point,
-    link::{Animation, Bundle, Link, LinkContainer, LinkSet},
+    link::{Animation, Bundle, Link, LinkSet},
     node::Node,
     square::Square,
     utils::{FullBox, full_box_from},
@@ -63,15 +62,9 @@ pub fn data_lc_b1_l2() -> (Link, Link, Bundle) {
     (a, b, c)
 }
 
-pub fn default_link_set(ids: (usize, usize)) -> Rc<RefCell<Box<[LinkSet]>>> {
+pub fn default_link_set(ids: (usize, usize)) -> LinkSet {
     let (a, b, c) = data_lc_b1_l2();
-    Rc::new(RefCell::new(Box::new([LinkSet::new(
-        Box::new([a, b]),
-        Box::new([c]),
-        ids.0,
-        ids.1,
-        None,
-    )])))
+    LinkSet::new(Box::new([a, b]), Box::new([c]), ids.0, ids.1, None)
 }
 pub fn test_lc_b1_l2(
     src: &Node,
@@ -79,8 +72,12 @@ pub fn test_lc_b1_l2(
     opt: &DiagramOpt,
     id: usize,
     ids: (usize, usize),
-) -> LinkContainer {
-    LinkContainer::new(default_link_set(ids), src, dst, opt, id)
+) -> LinkSet {
+    let mut link = default_link_set(ids);
+
+    link.draw_data = Some(Box::new(link.build_draw_data(src, dst, opt)));
+    link.id = id;
+    link
 }
 
 pub fn test_lc_b1_l3(
@@ -89,17 +86,13 @@ pub fn test_lc_b1_l3(
     opt: &DiagramOpt,
     id: usize,
     ids: (usize, usize),
-) -> LinkContainer {
+) -> LinkSet {
     let (a, b, c) = data_lc_b1_l2();
     let d = Link::new(2, String::from("link b"), Animation::ToDst);
-    let ls: Rc<RefCell<Box<[LinkSet]>>> = Rc::new(RefCell::new(Box::new([LinkSet::new(
-        Box::new([a, b, d]),
-        Box::new([c]),
-        ids.0,
-        ids.1,
-        None,
-    )])));
-    LinkContainer::new(ls, src, dst, opt, id)
+    let mut link = LinkSet::new(Box::new([a, b, d]), Box::new([c]), ids.0, ids.1, None);
+    link.draw_data = Some(Box::new(link.build_draw_data(src, dst, opt)));
+    link.id = id;
+    link
 }
 
 #[macro_export]

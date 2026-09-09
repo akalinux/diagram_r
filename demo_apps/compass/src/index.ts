@@ -33,7 +33,7 @@ async function run() {
 
 
   const bundle = new Bundle(4, "First two", Uint32Array.from([0, 1]), 0.25)
-  const bundle2 = new Bundle(4, "Outside Pairs", Uint32Array.from([0, 2]), 0.75)
+  const bundle2 = new Bundle(4, "Outside Pairs", Uint32Array.from([0, 3]), 0.75)
   const etw = new LinkSet([
     new Link(0, "Both", Animation.Both), // 0
     new Link(0, "West to East", Animation.ToDst),  // 1

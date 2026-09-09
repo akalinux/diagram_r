@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use wasm_bindgen::prelude::*;
 pub mod iters;
 use crate::{
@@ -77,6 +75,12 @@ pub struct LinkSet {
     pub dst: usize,
 
     #[wasm_bindgen(skip)]
+    pub draw_data: Option<Box<DrawData>>,
+
+    #[wasm_bindgen(skip)]
+    pub id: usize,
+
+    #[wasm_bindgen(skip)]
     pub links: Box<[Link]>,
     #[wasm_bindgen(skip)]
     pub bundles: Box<[Bundle]>,
@@ -94,6 +98,8 @@ impl LinkSet {
         point: Option<LinePoint>,
     ) -> Self {
         Self {
+            draw_data: None,
+            id: 0,
             src,
             dst,
             links,
@@ -134,7 +140,100 @@ impl LineAnimation {
 }
 
 impl LinkSet {
-    pub fn get_link_render_center(&self) {}
+    pub fn move_distance(&mut self, distance: &Point) {
+        match &mut self.point {
+            Some(lp) => lp.point = lp.point.add_distance(distance),
+            None => (),
+        };
+        unsafe { self.draw_data.as_mut().unwrap_unchecked() }.move_distance(distance);
+    }
+    pub fn move_arc(&mut self, distance: &Point, src: &Node, dst: &Node, opt: &DiagramOpt) {
+        match &mut self.point {
+            Some(lp) => match lp.mode {
+                ArcType::Arc => lp.point = lp.point.add_distance(&distance.scale(2.0)),
+                ArcType::Joint => lp.point = lp.point.add_distance(distance),
+            },
+            None => (),
+        }
+        self.draw_data = Some(Box::new(self.build_draw_data(src, dst, opt)));
+    }
+
+    pub fn get_render_center(&self) -> Point {
+        let (src, dst) = unsafe { self.draw_data.as_ref().unwrap_unchecked() }.get_src_dst();
+        match &self.point {
+            Some(arc) => {
+                match arc.mode {
+                    ArcType::Arc => {
+                        // this is not the arc center.. this is the apex center that the user sees
+                        src.get_center(&dst).get_center(&arc.point)
+                    }
+                    ArcType::Joint => arc.point,
+                }
+            }
+            None => src.get_center(&dst),
+        }
+    }
+    pub fn contains_point(&self, p: &Point) -> LookupPointResult {
+        let dd = unsafe { self.draw_data.as_ref().unwrap_unchecked() };
+        let width = dd.line_width;
+        let w = width * HALF;
+        if let Some(arc) = &self.point {
+            let r = w + w * (dd.links.len() as f32) - w * HALF;
+            match arc.mode {
+                ArcType::Arc => {
+                    let center = self.get_render_center();
+                    if inside_circle(p, &center, r) {
+                        return LookupPointResult::Arc(self.id);
+                    }
+                }
+                ArcType::Joint => {
+                    if inside_circle(p, &arc.point, r) {
+                        return LookupPointResult::Arc(self.id);
+                    }
+                }
+            }
+        }
+        // first check bundles
+        for (i, _) in self.bundles.iter().enumerate() {
+            let square = dd.bundle_draw_box(i);
+            if square.contains_point(p) {
+                return LookupPointResult::Bundle((self.id, i));
+            }
+        }
+
+        for (i, line) in dd.links.iter().enumerate() {
+            if line.contains_point(p, w) {
+                return LookupPointResult::Link((self.id, i));
+            }
+        }
+        return LookupPointResult::NoMatch;
+    }
+
+    pub fn animated(&self) -> bool {
+        unsafe { self.draw_data.as_ref().unwrap_unchecked() }.animated
+    }
+    pub fn get_src_dst(&self) -> (usize, usize) {
+        (self.src, self.dst)
+    }
+
+    pub fn get_center(&self, check: &LookupPointResult) -> Point {
+        let dd = unsafe { self.draw_data.as_ref().unwrap_unchecked() };
+        match check {
+            LookupPointResult::Arc(_) => unsafe { self.point.unwrap_unchecked().point },
+            LookupPointResult::Link(_) => {
+                let mut start = ZERO_POINT;
+                let mut count = 0;
+                for sublink in &dd.links {
+                    let (i, p) = sublink.sum_distance();
+                    count += i;
+                    start = start.add_distance(&p);
+                }
+                start.scale(1.0 / count as f32)
+            }
+            LookupPointResult::Bundle((i, _)) => dd.bundles[*i],
+            _ => ZERO_POINT,
+        }
+    }
     pub fn compute_bunlde_points(&self, src: &Point, dst: &Point) -> Box<[Point]> {
         let mut points = Vec::with_capacity(self.bundles.len());
 
@@ -363,7 +462,7 @@ impl Bundle {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum SubLink {
     Line([Point; 2], LineAnimation),
     Joint([Point; 3], LineAnimation),
@@ -413,7 +512,7 @@ impl SubLink {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct DrawData {
     pub normalized_radians: Box<[f32]>,
     pub line_width: f32,
@@ -449,126 +548,6 @@ impl DrawData {
         }
         for bundle in &mut self.bundles {
             *bundle = bundle.add_distance(distance);
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct LinkContainer {
-    pub ls: Rc<RefCell<Box<[LinkSet]>>>,
-    pub draw_data: DrawData,
-    pub id: usize,
-}
-
-impl LinkContainer {
-    pub fn move_distance(&mut self, distance: &Point) {
-        match &mut self.ls.borrow_mut()[self.id].point {
-            Some(lp) => lp.point = lp.point.add_distance(distance),
-            None => (),
-        };
-        self.draw_data.move_distance(distance);
-    }
-    pub fn move_arc(&mut self, distance: &Point, src: &Node, dst: &Node, opt: &DiagramOpt) {
-        match &mut self.ls.borrow_mut()[self.id].point {
-            Some(lp) => match lp.mode {
-                ArcType::Arc => lp.point = lp.point.add_distance(&distance.scale(2.0)),
-                ArcType::Joint => lp.point = lp.point.add_distance(distance),
-            },
-            None => (),
-        }
-        self.draw_data = self.ls.borrow()[self.id].build_draw_data(src, dst, opt);
-    }
-
-    pub fn get_render_center(&self) -> Point {
-        let (src, dst) = self.draw_data.get_src_dst();
-        match &self.ls.borrow()[self.id].point {
-            Some(arc) => {
-                match arc.mode {
-                    ArcType::Arc => {
-                        // this is not the arc center.. this is the apex center that the user sees
-                        src.get_center(&dst).get_center(&arc.point)
-                    }
-                    ArcType::Joint => arc.point,
-                }
-            }
-            None => src.get_center(&dst),
-        }
-    }
-    pub fn contains_point(&self, p: &Point) -> LookupPointResult {
-        let dd = &self.draw_data;
-        let width = dd.line_width;
-        let w = width * HALF;
-        if let Some(arc) = &self.ls.borrow()[self.id].point {
-            let r = w + w * (dd.links.len() as f32) - w * HALF;
-            match arc.mode {
-                ArcType::Arc => {
-                    let center = self.get_render_center();
-                    if inside_circle(p, &center, r) {
-                        return LookupPointResult::Arc(self.id);
-                    }
-                }
-                ArcType::Joint => {
-                    if inside_circle(p, &arc.point, r) {
-                        return LookupPointResult::Arc(self.id);
-                    }
-                }
-            }
-        }
-        // first check bundles
-        for (i, _) in self.ls.borrow()[self.id].bundles.iter().enumerate() {
-            let square = dd.bundle_draw_box(i);
-            if square.contains_point(p) {
-                return LookupPointResult::Bundle((self.id, i));
-            }
-        }
-
-        for (i, line) in dd.links.iter().enumerate() {
-            if line.contains_point(p, w) {
-                return LookupPointResult::Link((self.id, i));
-            }
-        }
-        return LookupPointResult::NoMatch;
-    }
-    pub fn new(
-        ls: Rc<RefCell<Box<[LinkSet]>>>,
-        src: &Node,
-        dst: &Node,
-        opt: &DiagramOpt,
-        id: usize,
-    ) -> Self {
-        let dd = ls.borrow()[id].build_draw_data(src, dst, opt);
-        Self {
-            ls,
-            draw_data: dd,
-            id,
-        }
-    }
-    pub fn animated(&self) -> bool {
-        self.draw_data.animated
-    }
-    pub fn get_src_dst(&self) -> (usize, usize) {
-        let ls = &self.ls.borrow()[self.id];
-        (ls.src, ls.dst)
-    }
-
-    pub fn get_center(&self, check: &LookupPointResult) -> Point {
-        let dd = &self.draw_data;
-        match check {
-            LookupPointResult::Arc(_) => unsafe {
-                self.ls.borrow()[self.id].point.unwrap_unchecked().point
-            },
-            LookupPointResult::Link(_) => {
-                let mut start = ZERO_POINT;
-                let mut count = 0;
-                for sublink in &dd.links {
-                    let (i, p) = sublink.sum_distance();
-                    count += i;
-                    start = start.add_distance(&p);
-                }
-                start.scale(1.0 / count as f32)
-            }
-            LookupPointResult::Bundle((i, _)) => dd.bundles[*i],
-            _ => ZERO_POINT,
         }
     }
 }

@@ -13,7 +13,7 @@ use crate::{
     constants::{CANVAS_ERROR, CORNER_DISTANCE, DOUBLE_PIE, HALF, R_90, R_270},
     diagram::DiagramCore,
     imgcache::ImgCache,
-    link::{LineAnimation, LinkContainer, SubLink},
+    link::{LineAnimation, LinkSet, SubLink},
     node::Node,
     render::{BuildRender, CoreRender, rendertimer::FrameTimer},
     square::Square,
@@ -112,7 +112,6 @@ impl CoreRender for CanvasRender {
         let node_vec = &diagram.nodes.borrow();
         let boxes_vec = &diagram.boxes.borrow();
         let link_vec = &diagram.links.borrow();
-        let cl_vec = &diagram.core_links.borrow();
         for node in boxes_vec.iter().rev() {
             self.draw_node(node, diagram, opt, cache, false)?;
         }
@@ -159,10 +158,10 @@ impl CoreRender for CanvasRender {
             self.draw_link_arc_highlight(*id, diagram, opt)?;
         }
         for set in &highlights.bundles {
-            let link = &cl_vec[set.link];
+            let link = &link_vec[set.link];
             let bundle = &link.bundles[set.element];
-            let lc = &link_vec[set.link];
-            let target = lc.draw_data.bundle_draw_box(set.element);
+            let dd = unsafe { link.draw_data.as_ref().unwrap_unchecked() };
+            let target = dd.bundle_draw_box(set.element);
             let o = diagram.get_opt(bundle.opt);
             self.draw_box(&target, opt, o, true, cache)?;
             self.draw_node_text_highlight(&target, &bundle.label, o, opt)?;
@@ -347,11 +346,11 @@ impl CanvasRender {
         diagram: &DiagramCore,
         opt: &DiagramOpt,
     ) -> Result<(), JsValue> {
-        let link = &diagram.core_links.borrow()[link_id];
-        let lc = &diagram.links.borrow()[link_id];
-        let width = lc.draw_data.line_width;
-        let r = HALF * width + width * lc.draw_data.links.len() as f32;
-        let p = lc.get_render_center();
+        let link = &diagram.links.borrow()[link_id];
+        let dd = unsafe { link.draw_data.as_ref().unwrap_unchecked() };
+        let width = dd.line_width;
+        let r = HALF * width + width * dd.links.len() as f32;
+        let p = link.get_render_center();
         self.draw_arc(&p, &opt.highlight_color, r)?;
         let p = unsafe { link.point.unwrap_unchecked().point };
         self.draw_arc(&p, &opt.highlight_color, width)
@@ -527,21 +526,21 @@ impl CanvasRender {
     }
     pub fn draw_sublink(
         &self,
-        lc: &LinkContainer,
+        lc: &LinkSet,
         i: usize,
         diagram: &DiagramCore,
         opt: &DiagramOpt,
         t: &Transform,
         highlight: bool,
     ) -> Result<(), JsValue> {
-        let link = &lc.ls.borrow()[lc.id].links[i];
+        let link = &lc.links[i];
         let o = diagram.get_opt(link.opt);
         let color = match highlight {
             true => &opt.highlight_color,
             false => &o.color,
         };
         let text = &link.label;
-        let dd = &lc.draw_data;
+        let dd = unsafe { lc.draw_data.as_ref().unwrap_unchecked() };
         let width = dd.line_width;
         let aw = width * HALF;
         let o = diagram.get_opt(link.opt);
@@ -673,18 +672,18 @@ impl CanvasRender {
     }
     pub fn draw_link(
         &self,
-        link: &LinkContainer,
+        link: &LinkSet,
         diagram: &DiagramCore,
         opt: &DiagramOpt,
         cache: &ImgCache,
         t: &Transform,
     ) -> Result<(), JsValue> {
-        for i in 0..link.ls.borrow()[link.id].links.len() {
+        for i in 0..link.links.len() {
             self.draw_sublink(link, i, diagram, opt, t, false)?;
         }
-        let data = &link.draw_data;
+        let data = unsafe { link.draw_data.as_ref().unwrap_unchecked() };
 
-        for (i, bundle) in link.ls.borrow()[link.id].bundles.iter().enumerate() {
+        for (i, bundle) in link.bundles.iter().enumerate() {
             let target = data.bundle_draw_box(i);
             self.draw_box(&target, opt, diagram.get_opt(bundle.opt), false, &cache)?;
 

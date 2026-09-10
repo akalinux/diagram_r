@@ -9,7 +9,7 @@ use crate::{
     square::Square,
     utils::{
         arc_contains_point, compute_arc_point, force_intersection, full_box_from, inside_box,
-        inside_circle, normalize_rad,
+        inside_circle, normalize_rad, quadratic_arc_length,
     },
 };
 pub type AnimationLink = (Point, Point, f32);
@@ -370,7 +370,11 @@ impl LinkSet {
                 );
                 let width = iter.width;
                 let set: Box<[f32]> = match p.mode {
-                    ArcType::Arc => Box::new([iter.rad, if iter.swapped { -1.0 } else { 1.0 }]),
+                    ArcType::Arc => {
+                        let ql = quadratic_arc_length(&src_p, &p.point, &dst_p);
+
+                        Box::new([iter.rad, if iter.swapped { -1.0 } else { 1.0 }, ql])
+                    }
                     ArcType::Joint => {
                         let ra = normalize_rad(src_p.get_radians(&p.point));
                         let rb = normalize_rad(p.point.get_radians(&dst_p));
@@ -399,7 +403,7 @@ impl LinkSet {
                         _ => animated += 1,
                     };
 
-                    SubLink::Line([a, b], animation)
+                    SubLink::Line(Box::new([a, b]), animation)
                 }
                 Some(c) => {
                     let animation = self.compute_animation(link, &a, &b, Some((mode, &c)), aw);
@@ -407,9 +411,10 @@ impl LinkSet {
                         LineAnimation::None => (),
                         _ => animated += 1,
                     };
+                    let bd = Box::new([a, c, b]);
                     match mode {
-                        ArcType::Arc => SubLink::Arc([a, c, b], animation),
-                        ArcType::Joint => SubLink::Joint([a, c, b], animation),
+                        ArcType::Arc => SubLink::Arc(bd, animation),
+                        ArcType::Joint => SubLink::Joint(bd, animation),
                     }
                 }
             });
@@ -464,34 +469,49 @@ impl Bundle {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum SubLink {
-    Line([Point; 2], LineAnimation),
-    Joint([Point; 3], LineAnimation),
-    Arc([Point; 3], LineAnimation),
+    Line(
+        Box<[Point]>, // 2 elements
+        LineAnimation,
+    ),
+    Joint(
+        Box<[Point]>, // 3 elements
+        LineAnimation,
+    ),
+    Arc(
+        Box<[Point]>, // 3 elements
+        LineAnimation,
+    ),
 }
 impl SubLink {
     pub fn get_src_dst(&self) -> (Point, Point) {
-        match self {
-            Self::Arc([a, _, b], _) => (*a, *b),
-            Self::Joint([a, _, b], _) => (*a, *b),
-            Self::Line([a, b], _) => (*a, *b),
-        }
+        let d = match self {
+            Self::Arc(d, _) => d,
+            Self::Joint(d, _) => d,
+            Self::Line(d, _) => d,
+        };
+        (d[0], d[d.len() - 1])
     }
     pub fn sum_distance(&self) -> (usize, Point) {
-        match &self {
-            Self::Arc([a, b, c], _) => (3, a.add_distance(b).add_distance(c)),
-            Self::Joint([a, b, c], _) => (3, a.add_distance(b).add_distance(c)),
-            Self::Line([a, b], _) => (2, a.add_distance(b)),
+        let d = match &self {
+            Self::Arc(d, _) => d,
+            Self::Joint(d, _) => d,
+            Self::Line(d, _) => d,
+        };
+        let mut sum = d[0];
+        for i in 1..d.len() {
+            sum = sum.add_distance(&d[i]);
         }
+        (d.len(), sum)
     }
     pub fn contains_point(&self, p: &Point, width: f32) -> bool {
         match self {
-            Self::Joint([a, b, c], _) => {
-                inside_circle(p, b, width)
-                    || inside_box(&full_box_from(&a, &b, width), p)
-                    || inside_box(&full_box_from(&b, &c, width), p)
+            Self::Joint(d, _) => {
+                inside_circle(p, &d[1], width)
+                    || inside_box(&full_box_from(&d[0], &d[1], width), p)
+                    || inside_box(&full_box_from(&d[1], &d[2], width), p)
             }
-            Self::Arc([a, b, c], _) => arc_contains_point(width, p, a, b, c),
-            Self::Line([a, b], _) => inside_box(&full_box_from(a, b, width), p),
+            Self::Arc(d, _) => arc_contains_point(width, p, &d[0], &d[1], &d[2]),
+            Self::Line(d, _) => inside_box(&full_box_from(&d[0], &d[1], width), p),
         }
     }
     pub fn move_distance(&mut self, d: &Point) {

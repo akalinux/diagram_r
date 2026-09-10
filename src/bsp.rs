@@ -123,9 +123,7 @@ impl ScreenIndex {
                     Slot::Link => match d.links.borrow()[set.id].contains_point(p) {
                         LookupPointResult::Arc(id) => return LookupPointResult::Arc(id),
                         LookupPointResult::Link(res) => return LookupPointResult::Link(res),
-                        LookupPointResult::Bundle(res) => {
-                            return LookupPointResult::Bundle(res);
-                        }
+                        LookupPointResult::Bundle(res) => return LookupPointResult::Bundle(res),
                         _ => (),
                     },
                     Slot::Box => {
@@ -133,6 +131,7 @@ impl ScreenIndex {
                             return LookupPointResult::Box(set.id);
                         }
                     }
+
                     Slot::Node => {
                         if d.nodes.borrow()[set.id].layout.contains_point(p) {
                             return LookupPointResult::Node(set.id);

@@ -15,12 +15,9 @@ use crate::{
     imgcache::ImgCache,
     link::{LineAnimation, LinkSet, SubLink},
     node::Node,
-    render::{BuildRender, CoreRender, rendertimer::FrameTimer},
+    render::{BuildRender, CoreRender, grid::Grid, rendertimer::FrameTimer},
     square::Square,
-    utils::{
-        apply_normalization_to_rad, compute_arc_point, quadratic_arc_length,
-        rad_needs_normalization, shift_arc,
-    },
+    utils::{apply_normalization_to_rad, compute_arc_point, rad_needs_normalization, shift_arc},
 };
 
 pub fn unpack_canvas(c: HtmlCanvasElement) -> Result<CanvasRenderingContext2d, JsValue> {
@@ -202,28 +199,10 @@ impl CanvasRender {
             None => return,
         };
         let (width, height) = self.get_width_height();
-        let grid_size = opt.grid_size;
-        let grid_slots = opt.grid_slots;
-        let divider_width = opt.grid_divider_width;
-        let line_width = opt.grid_line_width;
         let color = &opt.grid_color;
-        let x_offset = (width % grid_size as f32) * HALF;
-        let y_offset = (height % grid_size as f32) * HALF;
-        let y_scale = height / width;
-        let mut slot = 0;
-        let (mut p, mut pos);
-
-        for i in (0..width as u32).step_by(grid_size as usize) {
-            slot += 1;
-            p = i as f32 + x_offset;
-            pos = slot % grid_slots;
-            let w = match pos == 0 {
-                false => divider_width,
-                true => line_width,
-            };
-            self.raw_line_draw(p, 0.0, p, height, w, color);
-            p = i as f32 * y_scale + y_offset;
-            self.raw_line_draw(0.0, p, width, p, w, color);
+        for [w, x1, y1, x2, y2, x3, y3, x4, y4] in Grid::new(width, height, opt) {
+            self.raw_line_draw(x1, y1, x2, y2, w, color);
+            self.raw_line_draw(x3, y3, x4, y4, w, color);
         }
     }
     fn draw_node_text_highlight(
@@ -367,6 +346,7 @@ impl CanvasRender {
         text_color: &String,
         t: &Transform,
         rad: f32,
+        ql: f32,
     ) -> Result<(), JsValue> {
         if text.is_empty() {
             return Ok(());
@@ -400,7 +380,7 @@ impl CanvasRender {
         }
         let scale = (height / r) * HALF;
         let rw = width * scale;
-        let ql = quadratic_arc_length(&a, &c, &b);
+        //let ql = quadratic_arc_length(&a, &c, &b);
         let s = (ql - rw) * HALF;
         let ctx = &self.ctx;
 
@@ -460,7 +440,6 @@ impl CanvasRender {
                 points.push(Point { x, y });
             }
 
-            // FIXME!
             // prevent text from being renderd backwards.
             let (rad, iter): (f32, Box<dyn Iterator<Item = usize>>) = {
                 let start = &points[0];
@@ -544,7 +523,8 @@ impl CanvasRender {
         let o = diagram.get_opt(link.opt);
         let line_opts = &dd.normalized_radians;
         match &dd.links[i] {
-            SubLink::Arc([a, c, b], animations) => {
+            SubLink::Arc(d, animations) => {
+                let (a, c, b) = (&d[0], &d[1], &d[2]);
                 if highlight {
                     self.draw_quad_arc(a, c, b, color, width);
                 } else {
@@ -563,9 +543,11 @@ impl CanvasRender {
                     &opt.font_color,
                     t,
                     dd.normalized_radians[0],
+                    dd.normalized_radians[2],
                 )
             }
-            SubLink::Line([a, b], animations) => {
+            SubLink::Line(d, animations) => {
+                let (a, b) = (&d[0], &d[1]);
                 if highlight {
                     self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
                 } else {
@@ -585,7 +567,8 @@ impl CanvasRender {
                     highlight,
                 )
             }
-            SubLink::Joint([a, b, c], animations) => {
+            SubLink::Joint(d, animations) => {
+                let (a, b, c) = (&d[0], &d[1], &d[2]);
                 //self.draw_line(a, b, width, color);
                 self.raw_line_draw(a.x, a.y, b.x, b.y, width, color);
                 self.raw_line_draw(b.x, b.y, c.x, c.y, width, color);

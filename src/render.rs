@@ -1,6 +1,7 @@
 use std::{cell::RefCell, rc::Weak};
 pub mod canvasrender;
 pub mod event_watcher;
+pub mod grid;
 pub mod size_watcher;
 pub mod timeout;
 use wasm_bindgen::JsValue;

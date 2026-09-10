@@ -23,18 +23,19 @@ fn link_container_update_tests() {
     assert_relative_eq!(dd.bundles[0].y, center.y, epsilon = 0.001);
     let mut left = Point::new(0.5, 0.25);
     let mut right = Point::new(9.5, 0.25);
-    match *&dd.links[0] {
-        SubLink::Line([a, b], _) => {
-            assert_point!(a, left, 0.001);
-            assert_point!(b, right, 0.001);
+    match &dd.links[0] {
+        SubLink::Line(d, _) => {
+            assert_point!(d[0], left, 0.001);
+            assert_point!(d[1], right, 0.001);
         }
         _ => panic!("Unexpected SubLink type"),
     }
     left.y = 0.75;
     right.y = 0.75;
 
-    match *&dd.links[1] {
-        SubLink::Line([a, b], _) => {
+    match &dd.links[1] {
+        SubLink::Line(d, _) => {
+            let (a, b) = (d[0], d[1]);
             assert_point!(a, left, 0.001);
             assert_point!(b, right, 0.001);
         }

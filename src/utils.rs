@@ -239,6 +239,7 @@ pub fn normalize_to_right_angle(a: &Point, b: &Point, p: &Point) -> f32 {
 }
 
 pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {
+    // based on: https://stackoverflow.com/questions/11854907/calculate-the-length-of-a-segment-of-a-quadratic-bezier
     let ax = control.x - begin.x;
     let ay = control.y - begin.y;
 

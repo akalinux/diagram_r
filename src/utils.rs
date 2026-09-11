@@ -239,41 +239,38 @@ pub fn normalize_to_right_angle(a: &Point, b: &Point, p: &Point) -> f32 {
 }
 
 pub fn quadratic_arc_length(begin: &Point, control: &Point, end: &Point) -> f32 {
-    // Vector components
-    // v = P1 - P0
-    let vx = control.x - begin.x;
-    let vy = control.y - begin.y;
+    let ax = control.x - begin.x;
+    let ay = control.y - begin.y;
 
-    // w = P2 - P1
-    let wx = end.x - control.x;
-    let wy = end.y - control.y;
+    let bx = end.x - control.x;
+    let by = end.y - control.y;
 
-    // u = w - v = P2 - 2*P1 + P0
-    let ux = wx - vx;
-    let uy = wy - vy;
+    let cx = bx - ax;
+    let cy = by - ay;
 
-    // Coefficients of the polynomial inside the radical: f(t) = c*t^2 + b*t + a
-    let c = ux * ux + uy * uy;
-    let b = 2.0 * (ux * vx + uy * vy);
-    let a = vx * vx + vy * vy;
+    let a = ax * ax + ay * ay;
+    let b = 2.0 * (cx * ax + cy * ay);
+    let c = cx * cx + cy * cy;
 
-    // Handle collinear or degenerate curves (straight line or overlapping points)
+    // test for strait line, or almost strait line
     if c.abs() < f32::EPSILON {
-        // If c is zero, the path speed is constant: 2 * sqrt(a)
         return 2.0 * a.sqrt();
     }
 
-    // The velocity magnitude is multiplied by 2.0 because P'(t) = 2 * (1-t)(P1-P0) + 2t(P2-P1)
-    2.0 * (qd_arc_sup(a, b, c, 1.0) - qd_arc_sup(a, b, c, 0.0))
+    let k = 4.0 * a * c - b * b;
+    2.0 * (qd_arc_sup(a, b, c, 1.0, k) - qd_arc_sup(a, b, c, 0.0, k))
 }
 
-fn qd_arc_sup(a: f32, b: f32, c: f32, t: f32) -> f32 {
-    let temp = 2.0 * c * t + b;
-    let radical = (c * t * t + b * t + a).sqrt();
+fn qd_arc_sup(a: f32, b: f32, c: f32, t: f32, k: f32) -> f32 {
+    let tc = c * t;
+    //let temp = 2.0 * c * t + b;
+    let temp = 2.0 * tc + b;
+    //let radical = (t * c * t + b * t + a).sqrt();
+    let radical = (tc * t + b * t + a).sqrt();
 
     let term1 = (temp * radical) / (4.0 * c);
 
-    let k = 4.0 * a * c - b * b;
+    //let k = 4.0 * a * c - b * b;
     let log_arg = temp + 2.0 * c.sqrt() * radical;
 
     let term2 = if log_arg > 0.0 {

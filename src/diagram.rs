@@ -58,25 +58,26 @@ pub enum MoveTarget {
 }
 
 pub struct DiagramCore {
-    pub this: Weak<RefCell<Self>>,
-    pub el_ops: Box<[ElementOpt]>,
     pub nodes: RefCell<Box<[Node]>>,
     pub node_links: RefCell<FxHashMap<usize, Vec<usize>>>,
     pub boxes: RefCell<Box<[Node]>>,
     pub links: RefCell<Box<[LinkSet]>>,
     pub idx: RefCell<ScreenIndex>,
-    pub render_ops: DiagramOpt,
-    pub center: RefCell<Point>,
+    pub center: RefCell<(usize, Point)>,
     pub pending_updates: RefCell<FxHashMap<ScreenSlot, IndexXY>>,
     pub animated: RefCell<usize>,
-
     pub transform: RefCell<Transform>,
+
+    pub this: Weak<RefCell<Self>>,
+    pub el_ops: Box<[ElementOpt]>,
+    pub render_ops: DiagramOpt,
+
     pub img_cache: ImgCache,
     pub render: RefCell<Option<Box<dyn CoreRender>>>,
-    pub timeout: RefCell<Option<Timeout>>,
+    pub timeout: RefCell<Option<Box<Timeout>>>,
     pub current_target: RefCell<CurrentTarget>,
-    pub highlights: RefCell<Option<HighlightTargets>>,
-    pub watcher: RefCell<Option<PointerWatcher>>,
+    pub highlights: RefCell<Option<Box<HighlightTargets>>>,
+    pub watcher: RefCell<Option<Box<PointerWatcher>>>,
 }
 
 #[wasm_bindgen]
@@ -207,7 +208,7 @@ impl DiagramCore {
             el_ops: Box::new([ElementOpt::defaults()]),
             idx: RefCell::new(ScreenIndex::new(render_ops.index_step)),
             render_ops,
-            center: RefCell::new(ZERO_POINT),
+            center: RefCell::new((0, ZERO_POINT)),
             transform: RefCell::new(ZERO_TRANSFORM),
             img_cache: ImgCache::new(Weak::new()),
             pending_updates: RefCell::new(FxHashMap::default()),
@@ -319,10 +320,14 @@ impl DiagramCore {
         self.img_cache.load_images(&self.el_ops);
     }
 
-    fn add_node(&self, id: usize, as_node: bool, node: &Node) {
-        let mut center = self.center.borrow_mut();
-        center.x += node.layout.x;
-        center.y += node.layout.x;
+    fn process_node(&self, id: usize, as_node: bool, node: &Node) {
+        {
+            let mut center = self.center.borrow_mut();
+            let p = node.layout.get_center();
+            center.1.x += p.x;
+            center.1.y += p.y;
+            center.0 += 1;
+        }
 
         let points = node.layout.idx(self.render_ops.index_step);
         let ss = match as_node {
@@ -342,11 +347,11 @@ impl DiagramCore {
         self.clear();
         self.boxes.replace(boxes);
         for (id, node) in self.boxes.borrow().iter().enumerate() {
-            self.add_node(id, false, node);
+            self.process_node(id, false, node);
         }
         self.nodes.replace(nodes);
         for (id, node) in self.nodes.borrow().iter().enumerate() {
-            self.add_node(id, true, &node);
+            self.process_node(id, true, &node);
         }
         let mut animated = 0;
         self.links.replace(links);
@@ -378,6 +383,12 @@ impl DiagramCore {
             };
             link.build_draw_data(src, dst, &self.render_ops)
         };
+        if let Some(cd) = &link.point {
+            let mut center = self.center.borrow_mut();
+            center.1.x += cd.point.x;
+            center.1.y += cd.point.y;
+            center.0 += 1;
+        }
         if self.render_ops.interactive {
             let mut nl = self.node_links.borrow_mut();
             for node_id in [a, b] {
@@ -401,7 +412,7 @@ impl DiagramCore {
     fn clear(&mut self) {
         self.node_links.borrow_mut().clear();
         self.idx.borrow_mut().clear();
-        self.center.replace(ZERO_POINT);
+        self.center.replace((0, ZERO_POINT));
         self.animated.replace(0);
         self.clear_render();
     }
@@ -450,8 +461,8 @@ impl DiagramCore {
         let step = self.render_ops.index_step;
         {
             let mut center = self.center.borrow_mut();
-            center.x += distance.x * node_ids.len() as f32;
-            center.y += distance.y * node_ids.len() as f32;
+            center.1.x += distance.x * node_ids.len() as f32;
+            center.1.y += distance.y * node_ids.len() as f32;
         }
 
         for group in node_ids {
@@ -574,7 +585,7 @@ impl DiagramCore {
         let render = build_render(canvas.clone(), self.this.clone())?;
         if self.render_ops.interactive {
             let watcher = PointerWatcher::new(self.this.clone(), canvas)?;
-            self.watcher.replace(Some(watcher));
+            self.watcher.replace(Some(Box::new(watcher)));
         }
         self.render.replace(Some(render));
         Ok(())
@@ -644,7 +655,7 @@ impl DiagramCore {
                         }
                     };
                     let higlights = this.borrow().get_highlights(&res);
-                    this.borrow().highlights.replace(Some(higlights));
+                    this.borrow().highlights.replace(Some(Box::new(higlights)));
                     let _ = this.borrow().render();
                     this.borrow().run_callback(event, p);
                     *check = CurrentTarget::Highlight;
@@ -658,7 +669,7 @@ impl DiagramCore {
         match Timeout::new(job, self.render_ops.timeout) {
             Err(_) => return,
             Ok(t) => {
-                self.timeout.replace(Some(t));
+                self.timeout.replace(Some(Box::new(t)));
             }
         };
     }
